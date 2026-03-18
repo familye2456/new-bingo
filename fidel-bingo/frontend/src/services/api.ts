@@ -10,15 +10,23 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
-    if (error.response?.status === 401 && !original._retry) {
+    if (!navigator.onLine) return Promise.reject(error);
+    if (
+      error.response?.status === 401 &&
+      !original._retry &&
+      !original.url?.includes('/auth/refresh')
+    ) {
       original._retry = true;
       try {
         await api.post('/auth/refresh');
         return api(original);
       } catch {
-        if (!window.location.pathname.includes('/login')) {
+        // Refresh failed — only redirect if on a protected page
+        const path = window.location.pathname;
+        if (!path.includes('/login')) {
           window.location.href = '/login';
         }
+        return Promise.reject(error);
       }
     }
     return Promise.reject(error);
@@ -69,6 +77,7 @@ export const userApi = {
 
 export const gameApi = {
   list: (status?: string) => api.get('/games', { params: { status } }),
+  myGames: () => api.get('/games/mine'),
   get: (id: string) => api.get(`/games/${id}`),
   create: (data: { cartelaIds: string[]; betAmountPerCartela: number; winPattern?: string }) =>
     api.post('/games', data),
@@ -77,6 +86,7 @@ export const gameApi = {
     api.post(`/games/${gameId}/join`, { cartelaCount }),
   start: (gameId: string) => api.post(`/games/${gameId}/start`),
   callNumber: (gameId: string) => api.post(`/games/${gameId}/call`),
+  finish: (gameId: string) => api.post(`/games/${gameId}/finish`),
   claimBingo: (gameId: string, cartelaId: string) =>
     api.post(`/games/${gameId}/bingo`, { cartelaId }),
   markNumber: (cartelaId: string, number: number) =>

@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 import { authApi } from '../services/api';
+import { offlineAuthApi } from '../services/offlineApi';
+import { dbPut, dbGet } from '../services/db';
+import { api } from '../services/api';
 
 interface User {
   id: string;
@@ -13,42 +16,122 @@ interface User {
   status?: string;
 }
 
+export interface CacheStep {
+  label: string;
+  status: 'pending' | 'loading' | 'done' | 'skipped';
+}
+
 interface AuthState {
   user: User | null;
   loading: boolean;
   initialized: boolean;
+  cacheSteps: CacheStep[];
   login: (identifier: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   fetchMe: () => Promise<void>;
+  adjustUserBalance: (delta: number) => void;
 }
+
+const STEPS: CacheStep[] = [
+  { label: 'Profile',      status: 'pending' },
+  { label: 'Cartelas',     status: 'pending' },
+  { label: 'Games',        status: 'pending' },
+  { label: 'Transactions', status: 'pending' },
+];
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   loading: false,
   initialized: false,
+  cacheSteps: [],
 
   login: async (identifier, password) => {
-    set({ loading: true });
+    set({ loading: true, cacheSteps: [] });
     try {
       const res = await authApi.login({ identifier, password });
-      set({ user: res.data.data.user, loading: false });
+      const user = res.data.data.user;
+      await dbPut('user', user, 'me');
+      set({ user, loading: false });
+
+      if (user.paymentType !== 'prepaid') return;
+
+      const steps: CacheStep[] = STEPS.map(s => ({ ...s }));
+      set({ cacheSteps: steps });
+
+      const mark = (i: number, status: CacheStep['status']) => {
+        steps[i] = { ...steps[i], status };
+        set({ cacheSteps: [...steps] });
+      };
+
+      const fetches: Array<{ url: string; store: string; key?: string }> = [
+        { url: '/users/me',              store: 'user',         key: 'me' },
+        { url: '/cartelas/mine',         store: 'cartelas' },
+        { url: '/games/mine',            store: 'games' },
+        { url: '/users/me/transactions', store: 'transactions' },
+      ];
+
+      for (let i = 0; i < fetches.length; i++) {
+        mark(i, 'loading');
+        try {
+          const r = await api.get(fetches[i].url);
+          const raw = r.data.data;
+          // /users/me returns { data: { data: user } }, lists return { data: { data: [...] } }
+          const data = raw?.data !== undefined ? raw.data : raw;
+          if (fetches[i].key) {
+            await dbPut(fetches[i].store, data, fetches[i].key);
+          } else {
+            for (const item of data ?? []) await dbPut(fetches[i].store, item);
+          }
+          mark(i, 'done');
+        } catch {
+          mark(i, 'skipped');
+        }
+      }
     } catch (err) {
-      set({ loading: false });
+      set({ loading: false, cacheSteps: [] });
       throw err;
     }
   },
 
   logout: async () => {
     await authApi.logout();
-    set({ user: null });
+    set({ user: null, cacheSteps: [] });
+  },
+
+  adjustUserBalance: (delta: number) => {
+    set((state) => {
+      if (!state.user) return state;
+      return { user: { ...state.user, balance: (Number(state.user.balance) || 0) + delta } };
+    });
   },
 
   fetchMe: async () => {
+    // First: instantly load from IndexedDB cache so UI doesn't block
+    const cached = await dbGet<User>('user', 'me');
+    if (cached) {
+      set({ user: cached, initialized: true });
+    }
+
+    // Then: try to refresh from server in background
     try {
-      const res = await authApi.me();
-      set({ user: res.data.data, initialized: true });
+      const res = await offlineAuthApi.me();
+      const fresh = res.data.data as User;
+      if (fresh) {
+        await dbPut('user', fresh, 'me');
+        set({ user: fresh, initialized: true });
+      }
     } catch {
-      set({ user: null, initialized: true });
+      if (!cached) {
+        set({ user: null, initialized: true });
+      }
+    }
+
+    // Listen for sync completing — reload user from IndexedDB so balance updates
+    if (typeof window !== 'undefined') {
+      window.addEventListener('cache-refreshed', async () => {
+        const refreshed = await dbGet<User>('user', 'me');
+        if (refreshed) set({ user: refreshed });
+      });
     }
   },
 }));

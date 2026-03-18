@@ -1,29 +1,53 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login, loading } = useAuthStore();
+  const { login, loading, cacheSteps } = useAuthStore();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [caching, setCaching] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     try {
       await login(identifier, password);
-      navigate('/dashboard');
+      // login() sets cacheSteps if prepaid — wait for them to finish before navigating
     } catch {
       setError('Invalid email/username or password');
     }
   };
 
+  // Show cache overlay as soon as steps appear
+  useEffect(() => {
+    if (cacheSteps.length > 0) setCaching(true);
+  }, [cacheSteps.length]);
+
+  // Navigate once all steps are done/skipped
+  useEffect(() => {
+    if (!caching) return;
+    const allDone = cacheSteps.length > 0 && cacheSteps.every(s => s.status === 'done' || s.status === 'skipped');
+    if (allDone) {
+      const t = setTimeout(() => navigate('/dashboard'), 600);
+      return () => clearTimeout(t);
+    }
+  }, [cacheSteps, caching, navigate]);
+
+  // For non-prepaid users cacheSteps stays empty — navigate right after login
+  useEffect(() => {
+    if (!loading && !caching && useAuthStore.getState().user) {
+      navigate('/dashboard');
+    }
+  }, [loading, caching, navigate]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 to-purple-700 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md relative overflow-hidden">
+
         <h1 className="text-3xl font-bold text-center text-blue-600 mb-2">Fidel Bingo</h1>
         <p className="text-center text-gray-500 mb-6">Sign in to play</p>
 
@@ -73,20 +97,63 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
 
-          {error && (
-            <div role="alert" className="text-red-600 text-sm text-center">{error}</div>
-          )}
+          {error && <div role="alert" className="text-red-600 text-sm text-center">{error}</div>}
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || caching}
             className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
 
+        {/* ── Cache progress overlay ── */}
+        {caching && (
+          <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center gap-4 rounded-2xl px-8">
+            <div className="text-blue-600 font-bold text-lg mb-1">Preparing offline data...</div>
+            <div className="w-full space-y-3">
+              {cacheSteps.map((step, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  {/* Icon */}
+                  <div className="w-6 h-6 flex items-center justify-center shrink-0">
+                    {step.status === 'done'    && <span className="text-green-500 text-lg">✓</span>}
+                    {step.status === 'skipped' && <span className="text-gray-400 text-lg">—</span>}
+                    {step.status === 'loading' && <Spinner />}
+                    {step.status === 'pending' && <span className="w-4 h-4 rounded-full border-2 border-gray-200 inline-block" />}
+                  </div>
+
+                  {/* Label + bar */}
+                  <div className="flex-1">
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className={step.status === 'loading' ? 'text-blue-600 font-medium' : 'text-gray-600'}>
+                        {step.label}
+                      </span>
+                      <span className="text-xs text-gray-400 capitalize">{step.status}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          step.status === 'done'    ? 'w-full bg-green-500' :
+                          step.status === 'loading' ? 'w-2/3 bg-blue-500 animate-pulse' :
+                          step.status === 'skipped' ? 'w-full bg-gray-300' : 'w-0'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
+
+const Spinner = () => (
+  <svg className="animate-spin h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+  </svg>
+);

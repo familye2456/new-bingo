@@ -9,8 +9,8 @@ export const env = {
   // Database
   DATABASE_URL: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/fidelbingo',
 
-  // Redis
-  REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',
+  // Redis — undefined means disabled, empty string also means disabled
+  REDIS_URL: process.env.REDIS_URL || '',
 
   // JWT
   JWT_SECRET: process.env.JWT_SECRET || 'change-me-in-production',

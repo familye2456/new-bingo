@@ -65,7 +65,7 @@ export class GameService {
         winnerIds: [],
         cartelaCount: cartelas.length,
         totalBets: totalCost,
-        prizePool: totalCost * (1 - env.HOUSE_PERCENTAGE / 100),
+        prizePool: totalCost,                              // winner gets full totalBets back
         houseCut: totalCost * (env.HOUSE_PERCENTAGE / 100),
       });
       await manager.save(game);
@@ -85,15 +85,17 @@ export class GameService {
         }));
       }
 
-      await manager.decrement(User, { id: userId }, 'balance', totalCost);
+      // Only deduct houseCut upfront — winner gets totalBets back via claimBingo
+      const houseCut = totalCost * (env.HOUSE_PERCENTAGE / 100);
+      await manager.decrement(User, { id: userId }, 'balance', houseCut);
 
       await manager.save(manager.create(Transaction, {
         userId,
         gameId: game.id,
         transactionType: 'bet',
-        amount: totalCost,
+        amount: houseCut,
         status: 'completed',
-        description: `Bet for game ${game.id}`,
+        description: `House fee for game ${game.id}`,
         processedAt: new Date(),
       }));
 
@@ -155,7 +157,7 @@ export class GameService {
     game.startedAt = new Date();
     await this.gameRepo.save(game);
 
-    await redisClient.setEx(`game:${gameId}`, 3600, JSON.stringify(game));
+    try { await redisClient.setEx(`game:${gameId}`, 3600, JSON.stringify(game)); } catch {}
     logger.info('Game started', { gameId });
     return game;
   }
@@ -174,7 +176,7 @@ export class GameService {
     game.calledNumbers = [...game.calledNumbers, number];
     await this.gameRepo.save(game);
 
-    await redisClient.setEx(`game:${gameId}`, 3600, JSON.stringify(game));
+    try { await redisClient.setEx(`game:${gameId}`, 3600, JSON.stringify(game)); } catch {}
     return { number, remaining: remaining.length - 1 };
   }
 
@@ -222,6 +224,7 @@ export class GameService {
 
     return AppDataSource.transaction(async (manager) => {
       const existingWinners = game.winnerIds.length;
+      // prizePool = totalBets (house cut already taken at game creation)
       const shareAmount = existingWinners === 0 ? game.prizePool : game.prizePool / (existingWinners + 1);
 
       cartela.isWinner = true;
@@ -251,9 +254,28 @@ export class GameService {
     });
   }
 
+  async finishGame(gameId: string, userId: string): Promise<Game> {
+    const game = await this.gameRepo.findOne({ where: { id: gameId } });
+    if (!game) throw new AppError(404, 'GAME_NOT_FOUND', 'Game not found');
+    if (game.creatorId !== userId) throw new AppError(403, 'FORBIDDEN', 'Only creator can finish the game');
+    if (game.status === 'finished' || game.status === 'cancelled')
+      throw new AppError(400, 'INVALID_STATE', 'Game is already ended');
+
+    game.status = 'finished';
+    game.finishedAt = new Date();
+    await this.gameRepo.save(game);
+
+    try { await redisClient.del(`game:${gameId}`); } catch {}
+    activeGames.dec();
+    logger.info('Game finished manually', { gameId, userId });
+    return game;
+  }
+
   async getGame(gameId: string): Promise<Game> {
-    const cached = await redisClient.get(`game:${gameId}`);
-    if (cached) return JSON.parse(cached);
+    try {
+      const cached = await redisClient.get(`game:${gameId}`);
+      if (cached) return JSON.parse(cached);
+    } catch {}
 
     const game = await this.gameRepo.findOne({ where: { id: gameId } });
     if (!game) throw new AppError(404, 'GAME_NOT_FOUND', 'Game not found');

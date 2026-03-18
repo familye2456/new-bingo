@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { userApi, gameApi } from '../../services/api';
+import { offlineUserApi, offlineGameApi } from '../../services/offlineApi';
 
 interface CartelaRecord {
   id: string;
@@ -10,9 +11,13 @@ interface CartelaRecord {
   isActive: boolean;
 }
 
-const PATTERNS = [
-  'Any', 'One Line', 'Two Lines', 'Three Lines',
-  'Four Corners', 'Diagonal', 'Blackout',
+const PATTERNS: { label: string; value: string }[] = [
+  { label: 'Any', value: 'any' },
+  { label: 'One Line (Row)', value: 'row' },
+  { label: 'One Line (Column)', value: 'column' },
+  { label: 'Diagonal', value: 'diagonal' },
+  { label: 'Four Corners', value: 'fourCorners' },
+  { label: 'Blackout', value: 'blackout' },
 ];
 
 const MIN_CARTELAS = 3;
@@ -21,7 +26,7 @@ export const NewGame: React.FC = () => {
   const navigate = useNavigate();
 
   const [bet, setBet] = useState(5);
-  const [pattern, setPattern] = useState('Two Lines');
+  const [pattern, setPattern] = useState('any');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [rememberActive, setRememberActive] = useState(true);
   const [fastIdInput, setFastIdInput] = useState('');
@@ -29,23 +34,26 @@ export const NewGame: React.FC = () => {
 
   const { data: cartelas = [], isLoading } = useQuery<CartelaRecord[]>({
     queryKey: ['my-cartelas'],
-    queryFn: () => userApi.myCartelas().then((r) => r.data.data),
+    queryFn: () => offlineUserApi.myCartelas(),
   });
 
   // Filter: if rememberActive, only show active cartelas
   const visibleCartelas = useMemo(
-    () => rememberActive ? cartelas.filter((c) => c.isActive) : cartelas,
+    () => {
+      const list = rememberActive ? cartelas.filter((c) => c.isActive) : cartelas;
+      return [...list].sort((a, b) => (a.cardNumber ?? 0) - (b.cardNumber ?? 0));
+    },
     [cartelas, rememberActive]
   );
 
   const createMutation = useMutation({
     mutationFn: () =>
-      gameApi.create({
+      offlineGameApi.create({
         cartelaIds: Array.from(selectedIds),
         betAmountPerCartela: bet,
-        winPattern: pattern.toLowerCase().replace(' ', ''),
+        winPattern: pattern,
       }),
-    onSuccess: (res) => navigate(`/dashboard/play?gameId=${res.data.data.id}`),
+    onSuccess: (res) => navigate(`/play?gameId=${res.data.data.id}`),
   });
 
   const toggle = (id: string) =>
@@ -80,10 +88,10 @@ export const NewGame: React.FC = () => {
           {/* Bet */}
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-300">Bet Birr:</span>
-            <button onClick={() => setBet((b) => Math.max(1, b - 1))}
+            <button onClick={() => setBet((b) => Math.max(5, b - 5))}
               className="w-7 h-7 rounded-md bg-red-600 hover:bg-red-500 text-white font-bold text-lg flex items-center justify-center">−</button>
             <span className="w-10 text-center font-bold text-white text-base">{bet}</span>
-            <button onClick={() => setBet((b) => b + 1)}
+            <button onClick={() => setBet((b) => b + 5)}
               className="w-7 h-7 rounded-md bg-green-600 hover:bg-green-500 text-white font-bold text-lg flex items-center justify-center">+</button>
           </div>
 
@@ -102,7 +110,7 @@ export const NewGame: React.FC = () => {
               onChange={(e) => setPattern(e.target.value)}
               className="bg-[#1a2a4a] border border-white/20 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-yellow-400"
             >
-              {PATTERNS.map((p) => <option key={p}>{p}</option>)}
+              {PATTERNS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
           </div>
         </div>
@@ -145,7 +153,7 @@ export const NewGame: React.FC = () => {
 
           {createMutation.isError && (
             <span className="text-red-400 text-xs">
-              {(createMutation.error as any)?.response?.data?.message ?? 'Error'}
+              {(createMutation.error as any)?.response?.data?.error?.message ?? 'Error starting game'}
             </span>
           )}
         </div>

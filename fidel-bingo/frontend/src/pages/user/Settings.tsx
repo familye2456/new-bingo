@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { userApi } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
+import { useGameSettings, VoiceCategory } from '../../store/gameSettingsStore';
 
 export const Settings: React.FC = () => {
   const { user, fetchMe } = useAuthStore();
+  const { voice, autoCallInterval, setVoice, setAutoCallInterval } = useGameSettings();
   const [form, setForm] = useState({
     firstName: user?.firstName ?? '',
     lastName: user?.lastName ?? '',
@@ -61,6 +63,65 @@ export const Settings: React.FC = () => {
             {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
           </button>
           {saved && <span className="text-sm text-green-600">Saved!</span>}
+        </div>
+      </div>
+
+      {/* ── Game Settings ── */}
+      <div className="bg-white rounded-xl shadow p-6 mb-4">
+        <h2 className="font-medium text-gray-700 mb-4">Game Settings</h2>
+        <div className="space-y-5">
+
+          {/* Voice category */}
+          <div>
+            <label className="block text-xs text-gray-500 mb-2">Caller Voice</label>
+            <div className="flex gap-3">
+              {(['boy sound', 'girl sound'] as VoiceCategory[]).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setVoice(v)}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-medium border-2 transition-colors ${
+                    voice === v
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}
+                >
+                  {v === 'boy sound' ? '👦 Boy' : '👧 Girl'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Auto-call interval */}
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <label className="text-xs text-gray-500">Auto Call Interval</label>
+              <span className="text-sm font-semibold text-gray-700">{autoCallInterval}s</span>
+            </div>
+            <input
+              type="range"
+              min={2}
+              max={15}
+              value={autoCallInterval}
+              onChange={(e) => setAutoCallInterval(Number(e.target.value))}
+              className="w-full accent-blue-500"
+            />
+            <div className="flex justify-between text-xs text-gray-400 mt-1">
+              <span>2s (fast)</span>
+              <span>15s (slow)</span>
+            </div>
+          </div>
+
+          {/* Preview sound */}
+          <button
+            onClick={() => {
+              const n = Math.floor(Math.random() * 75) + 1;
+              const audio = new Audio(`/sounds/${encodeURIComponent(voice)}/${n}.wav`);
+              audio.play().catch(() => {});
+            }}
+            className="w-full py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            🔊 Preview Voice
+          </button>
         </div>
       </div>
 

@@ -82,7 +82,11 @@ const start = async () => {
     await AppDataSource.initialize();
     logger.info('Database connected');
 
-    await connectRedis();
+    try {
+      await connectRedis();
+    } catch (err) {
+      logger.warn('Redis unavailable, running without cache', { err });
+    }
 
     httpServer.listen(env.PORT, () => {
       logger.info(`Server running on port ${env.PORT}`);

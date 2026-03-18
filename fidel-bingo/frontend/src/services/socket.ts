@@ -7,6 +7,7 @@ export const getSocket = (token?: string): Socket => {
     socket = io('/', {
       path: '/socket.io',
       transports: ['websocket', 'polling'],
+      withCredentials: true,
       auth: token ? { token } : {},
       reconnection: true,
       reconnectionAttempts: 10,

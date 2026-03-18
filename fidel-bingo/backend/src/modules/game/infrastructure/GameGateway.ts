@@ -16,7 +16,9 @@ export const setupGameGateway = (io: Server) => {
   // Auth middleware
   io.use(async (socket: AuthSocket, next) => {
     try {
-      const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(' ')[1];
+      const token = socket.handshake.auth?.token 
+        || socket.handshake.headers?.authorization?.split(' ')[1]
+        || (socket.handshake.headers?.cookie?.split(';').find((c: string) => c.trim().startsWith('access_token='))?.split('=')[1]);
       if (!token) return next(new Error('Authentication required'));
 
       const payload = jwt.verify(token, env.JWT_SECRET) as { id: string; role: string };
@@ -37,6 +39,16 @@ export const setupGameGateway = (io: Server) => {
     await redisClient.hSet(`user:${userId}`, { socket: socket.id, connected_at: Date.now().toString() });
 
     socket.join(`user:${userId}`);
+
+    // Start game (creator only)
+    socket.on('start_game', async (gameId: string) => {
+      try {
+        const game = await gameService.startGame(gameId, userId);
+        io.to(`game:${gameId}`).emit('game_state', game);
+      } catch (err: unknown) {
+        socket.emit('error', { code: 'START_FAILED', message: err instanceof Error ? err.message : 'Failed to start' });
+      }
+    });
 
     // Join game room
     socket.on('join_game', async (gameId: string) => {

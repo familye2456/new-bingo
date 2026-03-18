@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from './store/authStore';
 import { LoginPage } from './pages/LoginPage';
 import { GamePage } from './pages/GamePage';
@@ -23,40 +23,57 @@ import { CartelaManagement } from './pages/admin/CartelaManagement';
 import { PackageManagement } from './pages/admin/PackageManagement';
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
+  defaultOptions: {
+    queries: {
+      retry: false,
+      staleTime: 30_000,
+      networkMode: 'always', // don't pause queries when offline
+    },
+    mutations: {
+      networkMode: 'always',
+    },
+  },
 });
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean }> = ({ children, adminOnly }) => {
   const { user, initialized } = useAuthStore();
   if (!initialized) return null;
   if (!user) return <Navigate to="/login" replace />;
-  if (adminOnly && user.role !== 'admin') return <Navigate to="/dashboard" replace />;
+  if (adminOnly && user.role !== 'admin') return <Navigate to="/admin" replace />;
   if (!adminOnly && user.role === 'admin') return <Navigate to="/admin" replace />;
   return <>{children}</>;
 };
 
-const App: React.FC = () => {
+// Inner component — lives inside QueryClientProvider so useQueryClient works
+const AppRoutes: React.FC = () => {
   const { fetchMe } = useAuthStore();
+  const qc = useQueryClient();
 
   useEffect(() => {
     fetchMe();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // When sync.ts finishes flushing + refreshing cache, invalidate all queries
+  useEffect(() => {
+    const handler = () => qc.invalidateQueries();
+    window.addEventListener('cache-refreshed', handler);
+    return () => window.removeEventListener('cache-refreshed', handler);
+  }, [qc]);
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Routes>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/game/:gameId" element={<ProtectedRoute><GamePage /></ProtectedRoute>} />
 
-          {/* Player section */}
-          <Route path="/dashboard" element={<ProtectedRoute><UserLayout /></ProtectedRoute>}>
-            <Route index element={<UserDashboard />} />
-            <Route path="play" element={<PlayBingo />} />
-            <Route path="new-game" element={<NewGame />} />
-            <Route path="cartelas" element={<MyCartelas />} />
-            <Route path="balance" element={<BalanceHistory />} />
-            <Route path="settings" element={<Settings />} />
+          {/* Player section — all under UserLayout */}
+          <Route element={<ProtectedRoute><UserLayout /></ProtectedRoute>}>
+            <Route path="/dashboard" element={<UserDashboard />} />
+            <Route path="/play" element={<PlayBingo />} />
+            <Route path="/new-game" element={<NewGame />} />
+            <Route path="/cartelas" element={<MyCartelas />} />
+            <Route path="/balance" element={<BalanceHistory />} />
+            <Route path="/settings" element={<Settings />} />
           </Route>
 
           {/* Admin section */}
@@ -71,8 +88,13 @@ const App: React.FC = () => {
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </BrowserRouter>
-    </QueryClientProvider>
   );
 };
+
+const App: React.FC = () => (
+  <QueryClientProvider client={queryClient}>
+    <AppRoutes />
+  </QueryClientProvider>
+);
 
 export default App;

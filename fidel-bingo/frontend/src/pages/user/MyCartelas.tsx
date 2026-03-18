@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { userApi } from '../../services/api';
+import { offlineUserApi } from '../../services/offlineApi';
 
 const COLS = ['B', 'I', 'N', 'G', 'O'];
 
@@ -60,7 +60,10 @@ const BingoCard: React.FC<{ cartela: CartelaRecord }> = ({ cartela }) => {
 export const MyCartelas: React.FC = () => {
   const { data: cartelas = [], isLoading } = useQuery<CartelaRecord[]>({
     queryKey: ['my-cartelas'],
-    queryFn: () => userApi.myCartelas().then((r) => r.data.data),
+    queryFn: async () => {
+      const list = await offlineUserApi.myCartelas();
+      return [...list].sort((a, b) => (a.cardNumber ?? 0) - (b.cardNumber ?? 0));
+    },
   });
 
   return (

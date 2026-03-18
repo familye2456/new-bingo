@@ -1,18 +1,47 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { gameApi } from '../services/api';
 import { getSocket } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 import { useAuthStore } from '../store/authStore';
+import { useGameSettings } from '../store/gameSettingsStore';
 import { CartelaCard } from '../components/CartelaCard';
 import { NumberBoard } from '../components/NumberBoard';
+
+let _userInteracted = false;
+if (typeof window !== 'undefined') {
+  const markInteracted = () => { _userInteracted = true; };
+  window.addEventListener('click', markInteracted, { once: true });
+  window.addEventListener('keydown', markInteracted, { once: true });
+}
+
+function playNumberSound(number: number, category: string) {
+  if (!_userInteracted) return;
+  const audio = new Audio(`/sounds/${encodeURIComponent(category)}/${number}.wav`);
+  audio.play().catch(() => {});
+}
+
+function playSound(name: string, category: string) {
+  if (!_userInteracted) return;
+  const audio = new Audio(`/sounds/${encodeURIComponent(category)}/${name}`);
+  audio.play().catch(() => {});
+}
 
 export const GamePage: React.FC = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { currentGame, lastCalledNumber, setGame, addCalledNumber, updateCartela, clearGame } = useGameStore();
+
+  const { voice, autoCallInterval } = useGameSettings();
+  const [autoCall, setAutoCall] = useState(false);
+  const autoCallRef = useRef(false);
+  const intervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const voiceRef = useRef(voice);
+  useEffect(() => { voiceRef.current = voice; }, [voice]);
+  const gameStatusRef = useRef(currentGame?.status);
+  useEffect(() => { gameStatusRef.current = currentGame?.status; }, [currentGame?.status]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['game', gameId],
@@ -27,17 +56,31 @@ export const GamePage: React.FC = () => {
   useEffect(() => {
     if (!gameId) return;
     const socket = getSocket();
-
+    console.log('[Socket] state:', socket.connected, socket.id);
+    socket.on('connect', () => console.log('[Socket] connected:', socket.id));
+    socket.on('connect_error', (e) => console.error('[Socket] connect_error:', e.message));
+    socket.on('error', (e) => console.error('[Socket] error:', e));
     socket.emit('join_game', gameId);
-
-    socket.on('game_state', setGame);
-    socket.on('number_called', ({ number }: { number: number }) => addCalledNumber(number));
+    socket.on('game_state', (game: any) => {
+      if (game.status === 'active' && gameStatusRef.current !== 'active') {
+        playSound('start.wav', voiceRef.current);
+      }
+      setGame(game);
+    });
+    socket.on('number_called', ({ number }: { number: number }) => {
+      console.log('[Socket] number_called received:', number, 'voice:', voiceRef.current);
+      addCalledNumber(number);
+      playNumberSound(number, voiceRef.current);
+    });
     socket.on('game_finished', () => {
+      setAutoCall(false);
       setTimeout(() => navigate('/dashboard'), 3000);
     });
-
     return () => {
       socket.emit('leave_game', gameId);
+      socket.off('connect');
+      socket.off('connect_error');
+      socket.off('error');
       socket.off('game_state');
       socket.off('number_called');
       socket.off('game_finished');
@@ -45,13 +88,45 @@ export const GamePage: React.FC = () => {
     };
   }, [gameId, setGame, addCalledNumber, clearGame, navigate]);
 
-  const handleCallNumber = useCallback(async () => {
+  // ── Auto-call logic ──────────────────────────────────────────────────────
+  const doCallNumber = useCallback(() => {
     if (!gameId) return;
-    try {
-      await gameApi.callNumber(gameId);
-    } catch (err) {
-      console.error('Failed to call number', err);
+    const socket = getSocket();
+    socket.emit('call_number', gameId);
+  }, [gameId]);
+
+  useEffect(() => {
+    autoCallRef.current = autoCall;
+  }, [autoCall]);
+
+  useEffect(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (!autoCall || currentGame?.status !== 'active') return;
+
+    // Call immediately then on interval
+    doCallNumber();
+    intervalRef.current = setInterval(() => {
+      if (!autoCallRef.current) {
+        clearInterval(intervalRef.current!);
+        return;
+      }
+      doCallNumber();
+    }, autoCallInterval * 1000);
+
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [autoCall, autoCallInterval, currentGame?.status, doCallNumber]);
+
+  // Stop auto-call when game ends
+  useEffect(() => {
+    if (currentGame?.status === 'finished' || currentGame?.status === 'cancelled') {
+      setAutoCall(false);
     }
+  }, [currentGame?.status]);
+  // ────────────────────────────────────────────────────────────────────────
+
+  const handleCallNumber = useCallback(() => {
+    if (!gameId) return;
+    getSocket().emit('call_number', gameId);
   }, [gameId]);
 
   const handleMarkNumber = useCallback(async (cartelaId: string, number: number) => {
@@ -59,7 +134,6 @@ export const GamePage: React.FC = () => {
       const res = await gameApi.markNumber(cartelaId, number);
       const { isWinner } = res.data.data;
       if (isWinner) {
-        // Update local mask
         const cartela = currentGame?.cartelas.find((c) => c.id === cartelaId);
         if (cartela) {
           const newMask = [...cartela.patternMask];
@@ -82,43 +156,35 @@ export const GamePage: React.FC = () => {
     }
   }, [gameId]);
 
-  const handleStartGame = useCallback(async () => {
+  const handleStartGame = useCallback(() => {
     if (!gameId) return;
-    try {
-      const res = await gameApi.start(gameId);
-      setGame(res.data.data);
-    } catch (err) {
-      console.error('Failed to start game', err);
-    }
-  }, [gameId, setGame]);
+    getSocket().emit('start_game', gameId);
+  }, [gameId]);
 
   if (isLoading) return <div className="flex items-center justify-center h-screen">Loading game...</div>;
   if (!currentGame) return <div className="flex items-center justify-center h-screen">Game not found</div>;
 
   const isCreator = currentGame.creatorId === user?.id;
-  const myCartelas = currentGame.cartelas.filter((c) => (c as unknown as { userId: string }).userId === user?.id);
+  const myCartelas = (currentGame.cartelas ?? []).filter((c) => (c as unknown as { userId: string }).userId === user?.id);
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
-      {/* Screen reader announcer */}
       <div id="game-announcer" className="sr-only" role="status" aria-live="polite" />
 
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-xl shadow p-4 mb-4 flex items-center justify-between">
+        <div className="bg-white rounded-xl shadow p-4 mb-4 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-xl font-bold">Game #{currentGame.id.slice(0, 8)}</h1>
-            <span
-              data-testid="game-status"
-              className={`text-sm px-2 py-0.5 rounded-full ${
-                currentGame.status === 'active' ? 'bg-green-100 text-green-700' :
-                currentGame.status === 'finished' ? 'bg-gray-100 text-gray-600' :
-                'bg-yellow-100 text-yellow-700'
-              }`}
-            >
+            <span className={`text-sm px-2 py-0.5 rounded-full ${
+              currentGame.status === 'active'   ? 'bg-green-100 text-green-700' :
+              currentGame.status === 'finished' ? 'bg-gray-100 text-gray-600' :
+              'bg-yellow-100 text-yellow-700'
+            }`}>
               {currentGame.status.charAt(0).toUpperCase() + currentGame.status.slice(1)}
             </span>
           </div>
+
           <div className="text-right">
             <div className="text-sm text-gray-500">Prize Pool</div>
             <div className="text-2xl font-bold text-green-600">${Number(currentGame.prizePool).toFixed(2)}</div>
@@ -131,26 +197,47 @@ export const GamePage: React.FC = () => {
             <NumberBoard calledNumbers={currentGame.calledNumbers} lastNumber={lastCalledNumber} />
 
             {/* Controls */}
-            {isCreator && (
+            {isCreator && currentGame.status === 'pending' && (
+              <button
+                data-testid="start-game-btn"
+                onClick={handleStartGame}
+                className="mt-4 w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+              >
+                Start Game
+              </button>
+            )}
+
+            {isCreator && currentGame.status === 'active' && (
               <div className="mt-4 space-y-2">
-                {currentGame.status === 'pending' && (
-                  <button
-                    data-testid="start-game-btn"
-                    onClick={handleStartGame}
-                    className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-                  >
-                    Start Game
-                  </button>
-                )}
-                {currentGame.status === 'active' && (
-                  <button
-                    data-testid="call-number-btn"
-                    onClick={handleCallNumber}
-                    className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors"
-                  >
-                    Call Number
-                  </button>
-                )}
+                {/* Manual call */}
+                <button
+                  data-testid="call-number-btn"
+                  onClick={handleCallNumber}
+                  disabled={autoCall}
+                  className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Call Number
+                </button>
+
+                {/* Auto-call toggle */}
+                <div className="bg-white rounded-xl border p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700">Auto Call</span>
+                    <button
+                      onClick={() => setAutoCall((v) => !v)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        autoCall ? 'bg-green-500' : 'bg-gray-300'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                        autoCall ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                  <div className="text-xs text-gray-400 text-center">
+                    Interval: {autoCallInterval}s · Voice: {voice === 'boy sound' ? '👦 Boy' : '👧 Girl'}
+                  </div>
+                </div>
               </div>
             )}
           </div>

@@ -2,7 +2,23 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { gameApi } from '../../services/api';
+import { offlineGameApi } from '../../services/offlineApi';
+import { isOnline } from '../../services/offlineApi';
 import { useAuthStore } from '../../store/authStore';
+import { useGameSettings } from '../../store/gameSettingsStore';
+
+let _userInteracted = false;
+if (typeof window !== 'undefined') {
+  const markInteracted = () => { _userInteracted = true; };
+  window.addEventListener('click', markInteracted, { once: true });
+  window.addEventListener('keydown', markInteracted, { once: true });
+}
+
+function playSound(name: string, category: string) {
+  if (!_userInteracted) return;
+  const audio = new Audio(`/sounds/${encodeURIComponent(category)}/${name}`);
+  audio.play().catch(() => {});
+}
 
 interface Game {
   id: string;
@@ -30,6 +46,9 @@ export const PlayBingo: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuthStore();
+  const { voice } = useGameSettings();
+  const voiceRef = useRef(voice);
+  useEffect(() => { voiceRef.current = voice; }, [voice]);
   const queryClient = useQueryClient();
 
   const [selectedGameId, setSelectedGameId] = useState<string | null>(searchParams.get('gameId'));
@@ -41,7 +60,7 @@ export const PlayBingo: React.FC = () => {
   // ── Data ──────────────────────────────────────────────────────────────────
   const { data: games = [], isLoading } = useQuery<Game[]>({
     queryKey: ['games'],
-    queryFn: () => gameApi.list().then((r) => r.data.data),
+    queryFn: () => offlineGameApi.list(),
     refetchInterval: 3000,
   });
 
@@ -50,30 +69,50 @@ export const PlayBingo: React.FC = () => {
     ? games.find((g) => g.id === selectedGameId) ?? null
     : activeGames[0] ?? null;
 
-  // ── Mutations ─────────────────────────────────────────────────────────────
-  const callMutation = useMutation({
-    mutationFn: () => gameApi.callNumber(game!.id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['games'] }),
-  });
-
-  const finishMutation = useMutation({
-    mutationFn: () => gameApi.start(game!.id), // reuse start as finish trigger — adjust if needed
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['games'] }),
-  });
-
   // ── Auto-call ─────────────────────────────────────────────────────────────
   const stopAuto = useCallback(() => {
     if (autoRef.current) { clearInterval(autoRef.current); autoRef.current = null; }
     setAutoOn(false);
   }, []);
 
+  // ── Mutations ─────────────────────────────────────────────────────────────
+  const callMutation = useMutation({
+    mutationFn: () => offlineGameApi.callNumber(game!.id),
+    onSuccess: () => {
+      // Always invalidate so online mode refreshes from server
+      queryClient.invalidateQueries({ queryKey: ['games'] });
+    },
+    onError: (err: any) => {
+      console.error('[callNumber]', err?.response?.data ?? err.message);
+      stopAuto();
+    },
+  });
+
+  const finishMutation = useMutation({
+    mutationFn: () => offlineGameApi.finish(game!.id),
+    onSuccess: () => {
+      stopAuto();
+      queryClient.invalidateQueries({ queryKey: ['games'] });
+      navigate('/new-game');
+    },
+  });
+
+  // Keep a ref to the latest game so the interval always sees current state
+  const gameRef = useRef(game);
+  useEffect(() => { gameRef.current = game; }, [game]);
+
   const startAuto = useCallback(() => {
     if (!game || game.status !== 'active') return;
     setAutoOn(true);
     autoRef.current = setInterval(() => {
+      const current = gameRef.current;
+      if (!current || current.status !== 'active' || (current.calledNumbers?.length ?? 0) >= 75) {
+        stopAuto();
+        return;
+      }
       callMutation.mutate();
     }, speed * 1000);
-  }, [game, speed, callMutation]);
+  }, [game, speed, callMutation, stopAuto]);
 
   useEffect(() => {
     if (autoOn) { stopAuto(); startAuto(); }
@@ -81,19 +120,40 @@ export const PlayBingo: React.FC = () => {
 
   useEffect(() => () => stopAuto(), [stopAuto]);
 
-  // Stop auto when game ends
+  // Stop auto when game ends or all numbers called
   useEffect(() => {
-    if (game?.status !== 'active' && autoOn) stopAuto();
-  }, [game?.status, autoOn, stopAuto]);
+    if ((game?.status !== 'active' || (game?.calledNumbers?.length ?? 0) >= 75) && autoOn) stopAuto();
+  }, [game?.status, game?.calledNumbers?.length, autoOn, stopAuto]);
 
   const toggleAuto = () => autoOn ? stopAuto() : startAuto();
-
-  // ── Shuffle (re-order display only) ───────────────────────────────────────
-  const [shuffleSeed, setShuffleSeed] = useState(0);
 
   const calledNumbers = game?.calledNumbers ?? [];
   const lastNumber = calledNumbers.length > 0 ? calledNumbers[calledNumbers.length - 1] : null;
   const isCreator = game?.creatorId === user?.id;
+
+  // ── Shuffle (re-order display only) ───────────────────────────────────────
+  const prevCalledRef = useRef<number[]>([]);
+  useEffect(() => {
+    const prev = prevCalledRef.current;
+    const current = game?.calledNumbers ?? [];
+    // Find newly added numbers since last poll
+    const newNumbers = current.filter((n) => !prev.includes(n));
+    if (newNumbers.length > 0) {
+      // Play the last called number sound
+      const latest = newNumbers[newNumbers.length - 1];
+      playSound(`${latest}.wav`, voiceRef.current);
+    }
+    prevCalledRef.current = current;
+  }, [game?.calledNumbers]);
+
+  const [shuffleSeed, setShuffleSeed] = useState(0);
+  const prevStatusRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (game?.status === 'active' && prevStatusRef.current !== 'active') {
+      playSound('start.wav', voiceRef.current);
+    }
+    prevStatusRef.current = game?.status;
+  }, [game?.status]);
 
   return (
     <div className="min-h-full flex flex-col" style={{ background: '#0e1a35' }}>
@@ -141,7 +201,7 @@ export const PlayBingo: React.FC = () => {
               #{g.id.slice(0, 6)}
             </button>
           ))}
-          <button onClick={() => navigate('/dashboard/new-game')}
+          <button onClick={() => navigate('/new-game')}
             className="text-xs bg-yellow-400 text-gray-900 font-bold px-3 py-1.5 rounded-lg hover:bg-yellow-300">
             + New
           </button>
@@ -158,7 +218,7 @@ export const PlayBingo: React.FC = () => {
           <div className="text-center py-20">
             <div className="text-5xl mb-4">🎱</div>
             <div className="text-gray-400 text-lg mb-4">No active game</div>
-            <button onClick={() => navigate('/dashboard/new-game')}
+            <button onClick={() => navigate('/new-game')}
               className="bg-yellow-400 text-gray-900 font-bold px-6 py-3 rounded-xl hover:bg-yellow-300">
               Start New Game
             </button>
@@ -175,22 +235,22 @@ export const PlayBingo: React.FC = () => {
               label={autoOn ? 'Auto On' : 'Auto Off'}
               active={autoOn}
               onClick={toggleAuto}
-              disabled={!isCreator || game.status !== 'active'}
+              disabled={!isCreator || game.status !== 'active' || calledNumbers.length >= 75}
             />
             <CtrlBtn
               label="Next"
               onClick={() => callMutation.mutate()}
-              disabled={!isCreator || game.status !== 'active' || callMutation.isPending}
+              disabled={!isCreator || game.status !== 'active' || callMutation.isPending || calledNumbers.length >= 75}
             />
             <CtrlBtn
-              label="Finish"
-              onClick={() => { stopAuto(); navigate(`/game/${game.id}`); }}
-              disabled={game.status !== 'active'}
+              label={finishMutation.isPending ? 'Finishing...' : 'Finish'}
+              onClick={() => { stopAuto(); finishMutation.mutate(); }}
+              disabled={!isCreator || game.status !== 'active' || finishMutation.isPending}
             />
             <CtrlBtn
               label="🔀 Shuffle"
               purple
-              onClick={() => setShuffleSeed((s) => s + 1)}
+              onClick={() => { setShuffleSeed((s) => s + 1); playSound('shuffle-audio-TfqyAnvz.mp3', voiceRef.current); setTimeout(() => window.location.reload(), 5000); }}
             />
           </div>
 

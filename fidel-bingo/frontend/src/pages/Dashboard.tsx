@@ -20,7 +20,7 @@ export const Dashboard: React.FC = () => {
   });
 
   const createMutation = useMutation({
-    mutationFn: () => gameApi.create({ betAmount: parseFloat(betAmount), cartelaCount }),
+    mutationFn: () => gameApi.create({ betAmountPerCartela: parseFloat(betAmount), cartelaIds: [] }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['games'] });
       navigate(`/game/${res.data.data.id}`);

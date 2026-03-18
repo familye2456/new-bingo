@@ -43,3 +43,8 @@ export const listGames = async (req: AuthRequest, res: Response) => {
   const games = await gameService.listGames(req.query.status as string);
   res.json({ success: true, data: games });
 };
+
+export const finishGame = async (req: AuthRequest, res: Response) => {
+  const game = await gameService.finishGame(req.params.gameId, req.user!.id);
+  res.json({ success: true, data: game });
+};
