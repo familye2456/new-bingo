@@ -47,6 +47,24 @@ async function isPrepaid(): Promise<boolean> {
   return !user.paymentType || user.paymentType === 'prepaid';
 }
 
+/** Fisher-Yates shuffle of numbers 1–75 */
+function shuffleSequence(): number[] {
+  const arr = Array.from({ length: 75 }, (_, i) => i + 1);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/** Safely extract an array from any response shape */
+function toList(data: any): any[] {
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.data)) return data.data;
+  if (data && Array.isArray(data.data?.data)) return data.data.data;
+  return [];
+}
+
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
 export const offlineAuthApi = {
@@ -54,14 +72,14 @@ export const offlineAuthApi = {
     try {
       const result = await tryApi(() => api.get('/users/me'));
       if (result.ok) {
-        await dbPut('user', result.data.data.data, 'me');
+        await dbPut('user', result.data.data.data, 'me'); // axios: .data = AxiosResponse body = { success, data: user }
         return result.data;
       }
     } catch {
       // server up but auth failed — fall through to cache
     }
     const cached = await dbGet<any>('user', 'me');
-    if (cached) return { data: { data: cached } };
+    if (cached) return { data: cached };
     throw new Error('Not authenticated');
   },
 };
@@ -74,7 +92,7 @@ export const offlineUserApi = {
   myCartelas: async (): Promise<any[]> => {
     const result = await tryApi(() => api.get('/cartelas/mine'));
     if (result.ok) {
-      const list = result.data.data.data ?? [];
+      const list = toList(result.data);
       for (const c of list) await dbPut('cartelas', c);
       return list;
     }
@@ -84,7 +102,7 @@ export const offlineUserApi = {
   myTransactions: async (): Promise<any[]> => {
     const result = await tryApi(() => api.get('/users/me/transactions'));
     if (result.ok) {
-      const list = result.data.data.data ?? [];
+      const list = toList(result.data);
       for (const t of list) await dbPut('transactions', t);
       return list;
     }
@@ -100,7 +118,7 @@ export const offlineGameApi = {
       api.get('/games', { params: _status ? { status: _status } : undefined })
     );
     if (result.ok) {
-      const list = result.data.data.data ?? [];
+      const list = toList(result.data);
       for (const g of list) await dbPut('games', g);
       return list;
     }
@@ -110,7 +128,7 @@ export const offlineGameApi = {
   myGames: async (): Promise<any[]> => {
     const result = await tryApi(() => api.get('/games/mine'));
     if (result.ok) {
-      const list = result.data.data.data ?? [];
+      const list = toList(result.data);
       for (const g of list) await dbPut('games', g);
       return list;
     }
@@ -121,7 +139,7 @@ export const offlineGameApi = {
 
   get: async (id: string): Promise<any> => {
     const result = await tryApi(() => api.get(`/games/${id}`));
-    if (result.ok) return result.data.data.data;
+    if (result.ok) return result.data.data.data; // axios: result.data = AxiosResponse, .data = { success, data: game }
     if (await isPrepaid()) return dbGet('games', id);
     return null;
   },
@@ -131,16 +149,16 @@ export const offlineGameApi = {
    * Online  → POST to server, cache result + write bet transactions + deduct balance.
    * Offline → save locally, write bet transactions, deduct balance, enqueue for sync.
    */
-  create: async (data: { cartelaIds: string[]; betAmountPerCartela: number; winPattern?: string }) => {
-    const HOUSE_PCT = 10; // must match backend HOUSE_PERCENTAGE
+  create: async (data: { cartelaIds: string[]; betAmountPerCartela: number; winPattern?: string; housePercentage?: number }) => {
+    const HOUSE_PCT = data.housePercentage ?? 10; // use provided value or fallback
     const result = await tryApi(() => api.post('/games', data));
     if (result.ok) {
       const game = result.data.data.data;
       await dbPut('games', game);
-      await _writeBetTransactions(game.id, data.cartelaIds, data.betAmountPerCartela);
-      // Deduct only houseCut — same as updated server behaviour
-      const houseCut = data.betAmountPerCartela * data.cartelaIds.length * (HOUSE_PCT / 100);
-      await applyBalanceDelta(-houseCut);
+      // Use actual houseCut from server response to keep local balance in sync
+      const actualHouseCut = Number(game.houseCut ?? 0);
+      await _writeBetTransactions(game.id, data.cartelaIds, data.betAmountPerCartela, Number(game.housePercentage ?? HOUSE_PCT));
+      if (actualHouseCut > 0) await applyBalanceDelta(-actualHouseCut);
       return result.data;
     }
 
@@ -164,6 +182,7 @@ export const offlineGameApi = {
       houseCut,
       housePercentage: HOUSE_PCT,
       calledNumbers: [],
+      numberSequence: shuffleSequence(),
       winnerIds: [],
       isWinner: false,
       winPattern: data.winPattern ?? 'any',
@@ -173,7 +192,7 @@ export const offlineGameApi = {
     };
 
     await dbPut('games', game);
-    await _writeBetTransactions(tempId, data.cartelaIds, data.betAmountPerCartela);
+    await _writeBetTransactions(tempId, data.cartelaIds, data.betAmountPerCartela, HOUSE_PCT);
     // Deduct only houseCut from local balance
     await applyBalanceDelta(-houseCut);
     await enqueue({ type: 'createGame', payload: { tempId, ...data } });
@@ -181,14 +200,33 @@ export const offlineGameApi = {
     return { data: { data: game } };
   },
 
+  reset: async (gameId: string) => {
+    const result = await tryApi(() => api.post(`/games/${gameId}/reset`));
+    if (result.ok) {
+      const cached = await dbGet<any>('games', gameId);
+      if (cached) {
+        cached.calledNumbers = [];
+        await dbPut('games', cached);
+      }
+      return result.data;
+    }
+    // Offline: just clear locally
+    const game = await dbGet<any>('games', gameId);
+    if (game) { game.calledNumbers = []; await dbPut('games', game); }
+    return { data: { success: true } };
+  },
+
   callNumber: async (gameId: string) => {
     const result = await tryApi(() => api.post(`/games/${gameId}/call`));
     if (result.ok) {
-      // Keep local game in sync with server response
-      const called = result.data.data.data?.calledNumbers;
-      if (called) {
-        const game = await dbGet<any>('games', gameId);
-        if (game) { game.calledNumbers = called; await dbPut('games', game); }
+      // Backend returns { success, data: { number, remaining } }
+      const num: number | undefined = result.data.data?.data?.number;
+      if (num != null) {
+        const cached = await dbGet<any>('games', gameId);
+        if (cached) {
+          cached.calledNumbers = [...(cached.calledNumbers ?? []), num];
+          await dbPut('games', cached);
+        }
       }
       return result.data;
     }
@@ -199,15 +237,19 @@ export const offlineGameApi = {
     if (!game) return { data: { data: { number: null, remaining: 0 } } };
 
     const called: number[] = game.calledNumbers ?? [];
-    const pool = Array.from({ length: 75 }, (_, i) => i + 1).filter(n => !called.includes(n));
-    if (pool.length === 0) return { data: { data: { number: null, remaining: 0 } } };
+    const nextIndex = called.length;
+    if (nextIndex >= 75) return { data: { data: { number: null, remaining: 0 } } };
 
-    const number = pool[Math.floor(Math.random() * pool.length)];
+    // Use pre-generated sequence; generate one if missing (legacy offline game)
+    if (!game.numberSequence || game.numberSequence.length !== 75) {
+      game.numberSequence = shuffleSequence();
+    }
+
+    const number = game.numberSequence[nextIndex];
     game.calledNumbers = [...called, number];
     await dbPut('games', game);
-    // Don't enqueue individual callNumber — server will re-derive state from finish
 
-    return { data: { data: { number, remaining: pool.length - 1 } } };
+    return { data: { data: { number, remaining: 75 - game.calledNumbers.length } } };
   },
 
   /**
@@ -242,8 +284,8 @@ export const offlineGameApi = {
   claimBingo: async (gameId: string, cartelaId: string) => {
     const result = await tryApi(() => api.post(`/games/${gameId}/bingo`, { cartelaId }));
     if (result.ok) {
-      // Server returns the actual share amount — update local balance
-      const amount = Number(result.data.data.data?.amount ?? 0);
+      // { success, data: { valid, amount } }
+      const amount = Number(result.data.data?.data?.amount ?? 0);
       if (amount > 0) await applyBalanceDelta(amount);
       return result.data;
     }
@@ -292,26 +334,101 @@ export const offlineGameApi = {
 
   getCartelas: async (gameId: string) => {
     const result = await tryApi(() => api.get(`/games/${gameId}/cartelas`));
-    if (result.ok) return result.data;
+    if (result.ok) {
+      // Cache each cartela AND patch the game record with cartelaIds for offline checkCartela
+      const list = toList(result.data);
+      for (const c of list) {
+        if (c.id) await dbPut('cartelas', c);
+      }
+      // Patch cached game with cartelaIds so offline check can verify membership
+      const cachedGame = await dbGet<any>('games', gameId);
+      if (cachedGame) {
+        cachedGame.cartelaIds = list.map((c: any) => c.id).filter(Boolean);
+        await dbPut('games', cachedGame);
+      }
+      return result.data;
+    }
     return { data: { data: [] } };
+  },
+
+  checkCartela: async (gameId: string, cardNumber: number) => {
+    const result = await tryApi(() => api.get(`/games/${gameId}/check/${cardNumber}`));
+    if (result.ok) return result.data.data.data;
+
+    // ── Offline fallback ──────────────────────────────────────────────────────
+    const game = await dbGet<any>('games', gameId);
+    if (!game) return { registered: false, cardNumber, isWinner: false, winPattern: null };
+
+    // Find cartela by cardNumber in IDB
+    const allCartelas = await dbGetAll<any>('cartelas');
+    const cartela = allCartelas.find((c: any) => c.cardNumber === cardNumber);
+    if (!cartela) return { registered: false, cardNumber, isWinner: false, winPattern: null };
+
+    // Verify it belongs to this game — game.cartelaIds is stored on offline games;
+    // for online games cached via getCartelas the cartela is in IDB but we check via game link
+    const inGame: boolean =
+      (Array.isArray(game.cartelaIds) && game.cartelaIds.includes(cartela.id));
+    if (!inGame) return { registered: false, cardNumber, isWinner: false, winPattern: null };
+
+    const called: number[] = game.calledNumbers ?? [];
+    const mask: boolean[] = (cartela.numbers as number[]).map((n, i) =>
+      i === 12 ? true : called.includes(n)
+    );
+
+    // Replicate WinnerDetection — a "line" is any row, column, diagonal, or four corners
+    const countLines = (): number => {
+      let n = 0;
+      for (let r = 0; r < 5; r++) if ([0,1,2,3,4].every(c => mask[r*5+c])) n++;
+      for (let c = 0; c < 5; c++) if ([0,1,2,3,4].every(r => mask[r*5+c])) n++;
+      if ([0,6,12,18,24].every(i => mask[i])) n++;
+      if ([4,8,12,16,20].every(i => mask[i])) n++;
+      if (mask[0] && mask[4] && mask[20] && mask[24]) n++;
+      return n;
+    };
+
+    const checkWin = (pattern: string): boolean => {
+      switch (pattern) {
+        case 'line1': return countLines() >= 1;
+        case 'line2': return countLines() >= 2;
+        case 'line3': return countLines() >= 3;
+        case 'fullhouse': return mask.every(Boolean);
+        case 'fourCorners': return mask[0] && mask[4] && mask[20] && mask[24];
+        default: return countLines() >= 1;
+      }
+    };
+
+    const getWinPattern = (): string | null => {
+      const lines = countLines();
+      if (lines === 0) return null;
+      if (mask.every(Boolean)) return 'fullhouse';
+      if (lines >= 3) return 'line3';
+      if (lines >= 2) return 'line2';
+      return 'line1';
+    };
+
+    const winPattern = getWinPattern();
+    const isWinner = checkWin(game.winPattern ?? 'line1');
+
+    return { registered: true, cardNumber, numbers: cartela.numbers, patternMask: mask, isWinner, winPattern };
   },
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
- * Write a single bet transaction locally (mirrors what the server creates —
- * one transaction for the total bet, not one per cartela).
+ * Write a single bet transaction locally — records only the house cut
+ * (the actual amount deducted from balance), matching backend behaviour.
  */
-async function _writeBetTransactions(gameId: string, cartelaIds: string[], betPerCartela: number) {
+async function _writeBetTransactions(gameId: string, cartelaIds: string[], betPerCartela: number, housePct: number) {
   const user = await dbGet<any>('user', 'me');
   const totalBet = betPerCartela * cartelaIds.length;
+  const houseCut = totalBet * (housePct / 100);
   await dbPut('transactions', {
     id: `tx-bet-${gameId}`,
     transactionType: 'bet',
-    amount: totalBet,
+    amount: houseCut,          // only the house cut is actually deducted
     status: 'completed',
-    description: `Bet for game ${gameId.slice(0, 8)}`,
+    description: `House fee for game ${gameId.slice(0, 8)}`,
     createdAt: new Date().toISOString(),
     userId: user?.id,
   });

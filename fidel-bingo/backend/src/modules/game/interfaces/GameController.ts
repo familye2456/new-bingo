@@ -48,3 +48,15 @@ export const finishGame = async (req: AuthRequest, res: Response) => {
   const game = await gameService.finishGame(req.params.gameId, req.user!.id);
   res.json({ success: true, data: game });
 };
+
+export const resetGame = async (req: AuthRequest, res: Response) => {
+  await gameService.resetGame(req.params.gameId, req.user!.id);
+  res.json({ success: true });
+};
+
+export const checkCartela = async (req: AuthRequest, res: Response) => {
+  const cardNumber = parseInt(req.params.cardNumber, 10);
+  if (isNaN(cardNumber)) throw new Error('Invalid card number');
+  const result = await gameService.checkCartela(req.params.gameId, cardNumber);
+  res.json({ success: true, data: result });
+};

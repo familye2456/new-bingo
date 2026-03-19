@@ -1,6 +1,6 @@
 import {
   Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, ManyToOne, JoinColumn
+  CreateDateColumn, ManyToOne, JoinColumn, Generated
 } from 'typeorm';
 import { User } from '../../user/domain/User';
 
@@ -11,6 +11,10 @@ export type GameType = 'standard' | 'progressive' | 'speed';
 export class Game {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
+
+  @Column({ name: 'game_number' })
+  @Generated('increment')
+  gameNumber!: number;
 
   @Column({ name: 'creator_id' })
   creatorId!: string;
@@ -27,6 +31,10 @@ export class Game {
 
   @Column({ name: 'called_numbers', type: 'int', array: true, default: [] })
   calledNumbers!: number[];
+
+  /** Pre-shuffled sequence of all 75 numbers, generated at game creation */
+  @Column({ name: 'number_sequence', type: 'int', array: true, default: [] })
+  numberSequence!: number[];
 
   @Column({ type: 'decimal', precision: 10, scale: 2, name: 'bet_amount' })
   betAmount!: number;

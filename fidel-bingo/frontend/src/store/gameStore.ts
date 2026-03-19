@@ -32,7 +32,16 @@ export const useGameStore = create<GameState>((set) => ({
   currentGame: null,
   lastCalledNumber: null,
 
-  setGame: (game) => set({ currentGame: game }),
+  setGame: (game) => set((state) => ({
+    currentGame: {
+      ...game,
+      cartelas: game.cartelas?.length ? game.cartelas : (state.currentGame?.cartelas ?? []),
+      calledNumbers: game.calledNumbers ?? [],
+    },
+    lastCalledNumber: (game.calledNumbers?.length ?? 0) > 0
+      ? game.calledNumbers[game.calledNumbers.length - 1]
+      : state.lastCalledNumber,
+  })),
 
   addCalledNumber: (number) =>
     set((state) => ({

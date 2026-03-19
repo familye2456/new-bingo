@@ -56,13 +56,15 @@ export const NumberBoard: React.FC<Props> = ({ calledNumbers, lastNumber }) => {
                   background: isLast
                     ? 'linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%)'
                     : called
-                    ? 'linear-gradient(180deg, #7f1d1d 0%, #450a0a 100%)'
+                    ? 'linear-gradient(180deg, #ca8a04 0%, #a16207 100%)'
                     : 'linear-gradient(180deg, #991b1b 0%, #7f1d1d 100%)',
-                  color: isLast ? '#1a1a1a' : called ? '#fca5a5' : '#fff',
+                  color: isLast ? '#1a1a1a' : called ? '#1a1a1a' : '#fff',
                   boxShadow: isLast
                     ? '0 0 12px rgba(251,191,36,0.7)'
+                    : called
+                    ? '0 0 8px rgba(202,138,4,0.5)'
                     : '0 2px 4px rgba(0,0,0,0.4)',
-                  border: isLast ? '2px solid #fbbf24' : '1px solid rgba(0,0,0,0.3)',
+                  border: isLast ? '2px solid #fbbf24' : called ? '1px solid #fbbf24' : '1px solid rgba(0,0,0,0.3)',
                   transform: isLast ? 'scale(1.1)' : 'scale(1)',
                 }}
               >

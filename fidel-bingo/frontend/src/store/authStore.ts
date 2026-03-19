@@ -74,13 +74,12 @@ export const useAuthStore = create<AuthState>((set) => ({
         mark(i, 'loading');
         try {
           const r = await api.get(fetches[i].url);
-          const raw = r.data.data;
-          // /users/me returns { data: { data: user } }, lists return { data: { data: [...] } }
-          const data = raw?.data !== undefined ? raw.data : raw;
+          // All endpoints: { success, data: value } — single wrap
+          const data = r.data.data;
           if (fetches[i].key) {
             await dbPut(fetches[i].store, data, fetches[i].key);
           } else {
-            for (const item of data ?? []) await dbPut(fetches[i].store, item);
+            for (const item of (data ?? [])) await dbPut(fetches[i].store, item);
           }
           mark(i, 'done');
         } catch {
@@ -115,8 +114,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     // Then: try to refresh from server in background
     try {
       const res = await offlineAuthApi.me();
-      const fresh = res.data.data as User;
-      if (fresh) {
+      // offlineAuthApi.me() returns the full axios response object,
+      // so res.data = { success, data: user } — we need res.data.data
+      const fresh = (res.data?.data ?? res.data) as User;
+      if (fresh?.id) {
         await dbPut('user', fresh, 'me');
         set({ user: fresh, initialized: true });
       }

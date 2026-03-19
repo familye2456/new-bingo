@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate, authorize } from '../../../shared/middleware/authMiddleware';
-import { createGame, joinGame, startGame, callNumber, markNumber, claimBingo, getGame, listGames, finishGame } from './GameController';
+import { createGame, joinGame, startGame, callNumber, markNumber, claimBingo, getGame, listGames, finishGame, resetGame, checkCartela } from './GameController';
 import { AppDataSource } from '../../../config/database';
 import { GameCartela } from '../domain/GameCartela';
 import { Game } from '../domain/Game';
@@ -62,6 +62,8 @@ router.get('/:gameId', getGame);
 router.post('/:gameId/join', joinGame);
 router.post('/:gameId/start', startGame);
 router.post('/:gameId/call', callNumber);
+router.post('/:gameId/reset', resetGame);
+router.get('/:gameId/check/:cardNumber', checkCartela);
 router.post('/:gameId/finish', finishGame);
 router.post('/:gameId/bingo', claimBingo);
 router.post('/cartelas/:cartelaId/mark', markNumber);

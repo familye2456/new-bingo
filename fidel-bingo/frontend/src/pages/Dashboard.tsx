@@ -111,7 +111,7 @@ export const Dashboard: React.FC = () => {
               {games?.map((game: { id: string; status: string; betAmount: number; prizePool: number; cartelaCount: number; creatorId: string }) => (
                 <div key={game.id} className="border rounded-lg p-4 flex items-center justify-between">
                   <div>
-                    <div className="font-medium">Game #{game.id.slice(0, 8)}</div>
+                    <div className="font-medium">Game #{game.gameNumber ?? game.id.slice(0, 8)}</div>
                     <div className="text-sm text-gray-500">
                       Bet: ${Number(game.betAmount).toFixed(2)} · Pool: ${Number(game.prizePool).toFixed(2)} · {game.cartelaCount} cartelas
                     </div>

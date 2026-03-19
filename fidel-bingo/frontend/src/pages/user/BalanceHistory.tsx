@@ -107,7 +107,7 @@ export const BalanceHistory: React.FC = () => {
                   return (
                     <tr key={g.id} className="hover:bg-gray-50">
                       {/* Game number (newest = #1) */}
-                      <td className="px-4 py-3 font-mono text-gray-500 text-xs">{i + 1}</td>
+                      <td className="px-4 py-3 font-mono text-gray-500 text-xs">#{g.gameNumber ?? (i + 1)}</td>
 
                       {/* Bet per cartela */}
                       <td className="px-4 py-3 font-semibold text-gray-800">

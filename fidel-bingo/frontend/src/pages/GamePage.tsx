@@ -32,7 +32,7 @@ export const GamePage: React.FC = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { currentGame, lastCalledNumber, setGame, addCalledNumber, updateCartela, clearGame } = useGameStore();
+  const { currentGame, lastCalledNumber, setGame, addCalledNumber, updateCartela } = useGameStore();
 
   const { voice, autoCallInterval } = useGameSettings();
   const [autoCall, setAutoCall] = useState(false);
@@ -49,18 +49,35 @@ export const GamePage: React.FC = () => {
     enabled: !!gameId,
   });
 
+  const { data: cartelasData } = useQuery({
+    queryKey: ['game-cartelas', gameId],
+    queryFn: () => gameApi.getCartelas(gameId!).then((r) => r.data.data),
+    enabled: !!gameId,
+  });
+
   useEffect(() => {
-    if (data) setGame(data);
-  }, [data, setGame]);
+    if (data) setGame({ ...data, cartelas: cartelasData ?? data.cartelas ?? [] });
+  }, [data, cartelasData, setGame]);
 
   useEffect(() => {
     if (!gameId) return;
     const socket = getSocket();
     console.log('[Socket] state:', socket.connected, socket.id);
-    socket.on('connect', () => console.log('[Socket] connected:', socket.id));
+
+    const joinGame = () => {
+      console.log('[Socket] joining game:', gameId);
+      socket.emit('join_game', gameId);
+    };
+
+    socket.on('connect', () => {
+      console.log('[Socket] connected:', socket.id);
+      joinGame(); // re-join after reconnect/fresh connect
+    });
     socket.on('connect_error', (e) => console.error('[Socket] connect_error:', e.message));
     socket.on('error', (e) => console.error('[Socket] error:', e));
-    socket.emit('join_game', gameId);
+
+    // If already connected, join immediately
+    if (socket.connected) joinGame();
     socket.on('game_state', (game: any) => {
       if (game.status === 'active' && gameStatusRef.current !== 'active') {
         playSound('start.wav', voiceRef.current);
@@ -84,9 +101,8 @@ export const GamePage: React.FC = () => {
       socket.off('game_state');
       socket.off('number_called');
       socket.off('game_finished');
-      clearGame();
     };
-  }, [gameId, setGame, addCalledNumber, clearGame, navigate]);
+  }, [gameId, setGame, addCalledNumber, navigate]);
 
   // ── Auto-call logic ──────────────────────────────────────────────────────
   const doCallNumber = useCallback(() => {
@@ -175,7 +191,7 @@ export const GamePage: React.FC = () => {
         {/* Header */}
         <div className="bg-white rounded-xl shadow p-4 mb-4 flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-xl font-bold">Game #{currentGame.id.slice(0, 8)}</h1>
+            <h1 className="text-xl font-bold">Game #{currentGame.gameNumber ?? currentGame.id.slice(0, 8)}</h1>
             <span className={`text-sm px-2 py-0.5 rounded-full ${
               currentGame.status === 'active'   ? 'bg-green-100 text-green-700' :
               currentGame.status === 'finished' ? 'bg-gray-100 text-gray-600' :

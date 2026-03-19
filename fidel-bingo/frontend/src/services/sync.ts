@@ -25,18 +25,20 @@ export async function refreshCache() {
       api.get('/users/me/transactions'),
     ]);
 
-    // Store fresh user (balance included)
-    await dbPut('user', meRes.data.data.data, 'me');
+    // Store fresh user (balance included) — /users/me: { success, data: user }
+    const meData = meRes.data?.data ?? meRes.data;
+    await dbPut('user', meData, 'me');
 
-    // Replace cartelas, games, transactions with fresh server data
+    const toList = (d: any) => Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : Array.isArray(d?.data?.data) ? d.data.data : [];
+
     await dbClear('cartelas');
-    for (const c of (cartelasRes.data.data.data ?? [])) await dbPut('cartelas', c);
+    for (const c of toList(cartelasRes.data)) await dbPut('cartelas', c);
 
     await dbClear('games');
-    for (const g of (gamesRes.data.data.data ?? [])) await dbPut('games', g);
+    for (const g of toList(gamesRes.data)) await dbPut('games', g);
 
     await dbClear('transactions');
-    for (const t of (txRes.data.data.data ?? [])) await dbPut('transactions', t);
+    for (const t of toList(txRes.data)) await dbPut('transactions', t);
 
     // Signal React Query to invalidate its cache
     window.dispatchEvent(new CustomEvent('cache-refreshed'));
@@ -67,7 +69,7 @@ export async function flushQueue() {
             betAmountPerCartela: p.betAmountPerCartela,
             winPattern: p.winPattern,
           });
-          const realGame = res.data.data.data;
+          const realGame = res.data.data; // single wrap: { success, data: game }
 
           // Replace the temp game with the real one
           if (p.tempId) {

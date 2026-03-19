@@ -3,18 +3,26 @@ import { io, Socket } from 'socket.io-client';
 let socket: Socket | null = null;
 
 export const getSocket = (token?: string): Socket => {
-  if (!socket || !socket.connected) {
-    socket = io('/', {
-      path: '/socket.io',
-      transports: ['websocket', 'polling'],
-      withCredentials: true,
-      auth: token ? { token } : {},
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 10000,
-    });
+  if (socket && socket.connected) return socket;
+
+  // If we have an existing disconnected socket, clean it up
+  if (socket) {
+    socket.removeAllListeners();
+    socket.disconnect();
+    socket = null;
   }
+
+  socket = io('/', {
+    path: '/socket.io',
+    transports: ['websocket', 'polling'],
+    withCredentials: true,
+    auth: token ? { token } : {},
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 10000,
+  });
+
   return socket;
 };
 

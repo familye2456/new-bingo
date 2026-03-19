@@ -18,6 +18,7 @@ export interface CreateGameDTO {
   cartelaIds: string[];
   betAmountPerCartela: number;
   winPattern?: string;
+  housePercentage?: number;
 }
 
 export class GameService {
@@ -28,6 +29,16 @@ export class GameService {
   private userRepo = AppDataSource.getRepository(User);
   private generator = new CartelaGenerator();
   private winDetector = new WinnerDetection();
+
+  /** Fisher-Yates shuffle — returns a new shuffled array */
+  private shuffleNumbers(): number[] {
+    const arr = Array.from({ length: 75 }, (_, i) => i + 1);
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
 
   async createGame(userId: string, dto: CreateGameDTO): Promise<Game> {
     if (!dto.cartelaIds || dto.cartelaIds.length === 0)
@@ -55,18 +66,23 @@ export class GameService {
     }
 
     return AppDataSource.transaction(async (manager) => {
+      const HOUSE_PCT = (dto.housePercentage != null && dto.housePercentage >= 10 && dto.housePercentage <= 45)
+        ? dto.housePercentage
+        : env.HOUSE_PERCENTAGE;
+
       const game = manager.create(Game, {
         creatorId: userId,
         betAmount: dto.betAmountPerCartela,
-        housePercentage: env.HOUSE_PERCENTAGE,
+        housePercentage: HOUSE_PCT,
         winPattern: dto.winPattern ?? 'any',
         status: 'active',
         calledNumbers: [],
+        numberSequence: this.shuffleNumbers(),
         winnerIds: [],
         cartelaCount: cartelas.length,
         totalBets: totalCost,
         prizePool: totalCost,                              // winner gets full totalBets back
-        houseCut: totalCost * (env.HOUSE_PERCENTAGE / 100),
+        houseCut: totalCost * (HOUSE_PCT / 100),
       });
       await manager.save(game);
 
@@ -86,7 +102,7 @@ export class GameService {
       }
 
       // Only deduct houseCut upfront — winner gets totalBets back via claimBingo
-      const houseCut = totalCost * (env.HOUSE_PERCENTAGE / 100);
+      const houseCut = totalCost * (HOUSE_PCT / 100);
       await manager.decrement(User, { id: userId }, 'balance', houseCut);
 
       await manager.save(manager.create(Transaction, {
@@ -162,22 +178,80 @@ export class GameService {
     return game;
   }
 
+  async resetGame(gameId: string, userId: string): Promise<void> {
+    const game = await this.gameRepo.findOne({ where: { id: gameId } });
+    if (!game) throw new AppError(404, 'GAME_NOT_FOUND', 'Game not found');
+    if (game.creatorId !== userId) throw new AppError(403, 'FORBIDDEN', 'Only creator can reset the game');
+    if (game.status !== 'active') throw new AppError(400, 'INVALID_STATE', 'Game is not active');
+
+    game.calledNumbers = [];
+    // Keep numberSequence intact — restart from index 0 of the same shuffle
+    await this.gameRepo.save(game);
+    try { await redisClient.setEx(`game:${gameId}`, 3600, JSON.stringify(game)); } catch {}
+  }
+
+  /**
+   * Check if a cartela (by card number) is registered in this game and whether it has won.
+   * Returns: registered, cartela data, and win status against current calledNumbers.
+   */
+  async checkCartela(gameId: string, cardNumber: number): Promise<{
+    registered: boolean;
+    cardNumber: number;
+    numbers?: number[];
+    patternMask?: boolean[];
+    isWinner: boolean;
+    winPattern: string | null;
+  }> {
+    const game = await this.gameRepo.findOne({ where: { id: gameId } });
+    if (!game) throw new AppError(404, 'GAME_NOT_FOUND', 'Game not found');
+
+    // Find cartela by card number
+    const cartela = await this.cartelaRepo.findOne({ where: { cardNumber } });
+    if (!cartela) return { registered: false, cardNumber, isWinner: false, winPattern: null };
+
+    // Check if this cartela is linked to this game
+    const link = await this.gcRepo.findOne({ where: { gameId, cartelaId: cartela.id } });
+    if (!link) return { registered: false, cardNumber, isWinner: false, winPattern: null };
+
+    // Build pattern mask from current called numbers
+    const mask = cartela.numbers.map((n, i) =>
+      i === 12 ? true : game.calledNumbers.includes(n) // center is always free
+    );
+
+    const winPattern = this.winDetector.getWinPattern(mask);
+    const isWinner = this.winDetector.checkWin(mask, game.winPattern);
+
+    return {
+      registered: true,
+      cardNumber,
+      numbers: cartela.numbers,
+      patternMask: mask,
+      isWinner,
+      winPattern,
+    };
+  }
+
   async callNumber(gameId: string, userId: string): Promise<{ number: number; remaining: number }> {
     const game = await this.gameRepo.findOne({ where: { id: gameId } });
     if (!game) throw new AppError(404, 'GAME_NOT_FOUND', 'Game not found');
     if (game.creatorId !== userId) throw new AppError(403, 'FORBIDDEN', 'Only creator can call numbers');
     if (game.status !== 'active') throw new AppError(400, 'INVALID_STATE', 'Game is not active');
 
-    const allNumbers = Array.from({ length: 75 }, (_, i) => i + 1);
-    const remaining = allNumbers.filter((n) => !game.calledNumbers.includes(n));
-    if (remaining.length === 0) throw new AppError(400, 'NO_NUMBERS_LEFT', 'All numbers have been called');
+    const nextIndex = game.calledNumbers.length;
+    if (nextIndex >= 75) throw new AppError(400, 'NO_NUMBERS_LEFT', 'All numbers have been called');
 
-    const number = remaining[Math.floor(Math.random() * remaining.length)];
+    // Use pre-generated sequence; fall back to random if sequence missing (legacy games)
+    const sequence = game.numberSequence?.length === 75
+      ? game.numberSequence
+      : this.shuffleNumbers();
+
+    const number = sequence[nextIndex];
     game.calledNumbers = [...game.calledNumbers, number];
+    if (game.numberSequence?.length !== 75) game.numberSequence = sequence;
     await this.gameRepo.save(game);
 
     try { await redisClient.setEx(`game:${gameId}`, 3600, JSON.stringify(game)); } catch {}
-    return { number, remaining: remaining.length - 1 };
+    return { number, remaining: 75 - game.calledNumbers.length };
   }
 
   async markNumber(cartelaId: string, userId: string, number: number): Promise<{ isWinner: boolean; pattern: string | null }> {
