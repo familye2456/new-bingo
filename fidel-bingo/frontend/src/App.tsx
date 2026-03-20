@@ -46,19 +46,25 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean 
 
 // Inner component — lives inside QueryClientProvider so useQueryClient works
 const AppRoutes: React.FC = () => {
-  const { fetchMe } = useAuthStore();
+  const { fetchMe, refreshBalance } = useAuthStore();
   const qc = useQueryClient();
 
   useEffect(() => {
     fetchMe();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Poll balance every 5 seconds when online
+  useEffect(() => {
+    const id = setInterval(() => refreshBalance(), 5000);
+    return () => clearInterval(id);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // When sync.ts finishes flushing + refreshing cache, invalidate all queries
   useEffect(() => {
-    const handler = () => qc.invalidateQueries();
+    const handler = () => { qc.invalidateQueries(); refreshBalance(); };
     window.addEventListener('cache-refreshed', handler);
     return () => window.removeEventListener('cache-refreshed', handler);
-  }, [qc]);
+  }, [qc]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

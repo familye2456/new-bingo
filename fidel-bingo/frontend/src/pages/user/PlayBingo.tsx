@@ -41,6 +41,7 @@ export const PlayBingo: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuthStore();
+  const { refreshBalance } = useAuthStore();
   const { voice } = useGameSettings();
   const voiceRef = useRef(voice);
   useEffect(() => { voiceRef.current = voice; }, [voice]);
@@ -112,7 +113,12 @@ export const PlayBingo: React.FC = () => {
 
   const finishMutation = useMutation({
     mutationFn: () => offlineGameApi.finish(game!.id),
-    onSuccess: () => { stopAuto(); queryClient.invalidateQueries({ queryKey: ['games'] }); navigate('/new-game'); },
+    onSuccess: () => {
+      stopAuto();
+      queryClient.invalidateQueries({ queryKey: ['games'] });
+      refreshBalance();
+      navigate('/new-game');
+    },
   });
 
   const gameRef = useRef(game);

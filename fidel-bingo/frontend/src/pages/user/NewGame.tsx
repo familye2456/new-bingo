@@ -51,6 +51,7 @@ export const NewGame: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { voice } = useGameSettings();
+  const { refreshBalance } = useAuthStore();
   const voiceRef = useRef(voice);
   useEffect(() => { voiceRef.current = voice; }, [voice]);
 
@@ -89,6 +90,7 @@ export const NewGame: React.FC = () => {
       const id = game?.id;
       if (id) {
         queryClient.invalidateQueries({ queryKey: ['games'] });
+        refreshBalance();
         navigate(`/play?gameId=${id}`);
       }
     },

@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { authApi } from '../services/api';
-import { offlineAuthApi } from '../services/offlineApi';
 import { dbPut, dbGet, dbClear } from '../services/db';
 import { api } from '../services/api';
 
@@ -29,6 +28,7 @@ interface AuthState {
   login: (identifier: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   fetchMe: () => Promise<void>;
+  refreshBalance: () => Promise<void>;
   adjustUserBalance: (delta: number) => void;
 }
 
@@ -54,7 +54,6 @@ export const useAuthStore = create<AuthState>((set) => ({
       await dbPut('user', user, 'me');
       set({ user, loading: false, initialized: true });
 
-      // Prepaid: cache everything in IndexedDB for offline use
       if (user.paymentType === 'prepaid') {
         const steps: CacheStep[] = STEPS.map(s => ({ ...s }));
         set({ cacheSteps: steps });
@@ -107,6 +106,21 @@ export const useAuthStore = create<AuthState>((set) => ({
     window.location.href = '/login';
   },
 
+  /** Lightweight balance-only refresh — hits /users/me and updates just the balance field */
+  refreshBalance: async () => {
+    if (!navigator.onLine) return;
+    try {
+      const res = await api.get('/users/me');
+      const fresh = res.data?.data as User;
+      if (fresh?.id) {
+        await dbPut('user', fresh, 'me');
+        set((state) => ({
+          user: state.user ? { ...state.user, balance: fresh.balance } : fresh,
+        }));
+      }
+    } catch {}
+  },
+
   adjustUserBalance: (delta: number) => {
     set((state) => {
       if (!state.user) return state;
@@ -115,13 +129,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   fetchMe: async () => {
-    // First: instantly load from IndexedDB cache so UI doesn't block
     const cached = await dbGet<User>('user', 'me');
     if (cached) {
       set({ user: cached, initialized: true });
     }
 
-    // Always refresh from server — postpaid users have no IDB cache
     try {
       const res = await api.get('/users/me');
       const fresh = res.data?.data as User;
