@@ -8,6 +8,13 @@ export const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+// Attach stored token to every request (needed for cross-domain where cookies are blocked)
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('access_token');
+  if (token) config.headers['Authorization'] = `Bearer ${token}`;
+  return config;
+});
+
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
@@ -20,10 +27,12 @@ api.interceptors.response.use(
     ) {
       original._retry = true;
       try {
-        await api.post('/auth/refresh');
+        const res = await api.post('/auth/refresh');
+        const newToken = res.data?.data?.accessToken;
+        if (newToken) localStorage.setItem('access_token', newToken);
         return api(original);
       } catch {
-        // Refresh failed — only redirect if on a protected page
+        localStorage.removeItem('access_token');
         const path = window.location.pathname;
         if (!path.includes('/login')) {
           window.location.href = '/login';

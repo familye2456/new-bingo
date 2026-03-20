@@ -49,7 +49,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ loading: true, cacheSteps: [] });
     try {
       const res = await authApi.login({ identifier, password });
-      const user = res.data.data.user;
+      const { user, accessToken } = res.data.data;
+      // Store token for cross-domain auth (cookie may be blocked)
+      if (accessToken) localStorage.setItem('access_token', accessToken);
       await dbPut('user', user, 'me');
       set({ user, loading: false });
 
@@ -93,8 +95,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: async () => {
-    await authApi.logout();
-    // Clear all cached data so next user doesn't see stale data
+    try { await authApi.logout(); } catch {}
+    localStorage.removeItem('access_token');
     await Promise.all([
       dbClear('user'),
       dbClear('cartelas'),

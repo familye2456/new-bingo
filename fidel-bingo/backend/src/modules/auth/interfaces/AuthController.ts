@@ -6,8 +6,8 @@ const authService = new AuthService();
 
 const cookieOptions = (maxAge: number) => ({
   httpOnly: true,
-  secure: env.NODE_ENV === 'production',
-  sameSite: 'strict' as const,
+  secure: true,
+  sameSite: 'none' as const,
   maxAge,
 });
 
@@ -26,7 +26,7 @@ export const login = async (req: Request, res: Response) => {
   res.cookie('access_token', accessToken, cookieOptions(15 * 60 * 1000));
   res.cookie('refresh_token', refreshToken, { ...cookieOptions(7 * 24 * 60 * 60 * 1000), path: '/api/auth/refresh' });
 
-  res.json({ success: true, data: { user } });
+  res.json({ success: true, data: { user, accessToken } });
 };
 
 export const refresh = async (req: Request, res: Response) => {
