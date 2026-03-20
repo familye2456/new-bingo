@@ -36,10 +36,17 @@ function calcStats(games: Game[], days: number) {
   }
   const filteredGames = games.filter((g) => new Date(g.createdAt) >= cutoff);
 
-  const totalBet = filteredGames.reduce((s, g) => s + Math.round(Number(g.totalBets ?? (g.betAmount * g.cartelaCount))), 0);
+  const totalBet = filteredGames.reduce((s, g) =>
+    s + Math.round(Number(g.totalBets ?? (g.betAmount * g.cartelaCount))), 0);
+
   const gamesCount = filteredGames.length;
 
+  // Use houseCut directly from the game object (same as the table does)
+  // Fall back to calculating only if houseCut is missing
   const houseCut = filteredGames.reduce((s, g) => {
+    if (g.houseCut != null && Number(g.houseCut) > 0) {
+      return s + Math.round(Number(g.houseCut));
+    }
     const tb = Math.round(Number(g.totalBets ?? (g.betAmount * g.cartelaCount)));
     const hp = Number(g.housePercentage ?? 10);
     return s + Math.round(tb * hp / 100);
