@@ -29,11 +29,11 @@ interface Game {
 function calcStats(games: Game[], days: number) {
   const cutoff = new Date();
   if (days === 1) {
-    // "Today" = from 6:00 AM of the current day (or yesterday's 6AM if before 6AM now)
-    cutoff.setHours(6, 0, 0, 0);
-    if (new Date() < cutoff) cutoff.setDate(cutoff.getDate() - 1);
+    // "Today" = from midnight of the current day
+    cutoff.setHours(0, 0, 0, 0);
   } else {
     cutoff.setDate(cutoff.getDate() - days);
+    cutoff.setHours(0, 0, 0, 0);
   }
   const filteredGames = games.filter((g) => new Date(g.createdAt) >= cutoff);
 
@@ -99,12 +99,16 @@ export const UserDashboard: React.FC = () => {
     queryKey: ['my-transactions'],
     queryFn: () => offlineUserApi.myTransactions(),
     refetchInterval: 5000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   const { data: games = [], isLoading: gamesLoading } = useQuery<Game[]>({
     queryKey: ['my-games'],
     queryFn: () => offlineGameApi.myGames(),
     refetchInterval: 5000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   const daily   = calcStats(games, 1);

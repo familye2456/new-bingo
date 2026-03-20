@@ -25,6 +25,8 @@ async function tryApi<T>(fn: () => Promise<T>): Promise<{ ok: true; data: T } | 
     _serverDown = true;
     return { ok: false };
   }
+  // Always try the server when online — don't short-circuit on _serverDown
+  // so stale IDB data never gets stuck after a brief hiccup
   try {
     const data = await fn();
     _serverDown = false;
