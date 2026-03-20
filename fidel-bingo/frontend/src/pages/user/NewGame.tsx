@@ -89,11 +89,10 @@ export const NewGame: React.FC = () => {
       const game = res?.data?.data?.data ?? res?.data?.data ?? res?.data;
       const id = game?.id;
       if (id) {
+        // Refetch dashboard data immediately so stats reflect the new game
         await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['games'] }),
-          queryClient.invalidateQueries({ queryKey: ['my-games'] }),
-          queryClient.invalidateQueries({ queryKey: ['my-transactions'] }),
           queryClient.refetchQueries({ queryKey: ['my-games'] }),
+          queryClient.refetchQueries({ queryKey: ['my-transactions'] }),
         ]);
         refreshBalance();
         navigate(`/play?gameId=${id}`);

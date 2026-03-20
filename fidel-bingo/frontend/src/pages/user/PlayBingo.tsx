@@ -113,15 +113,9 @@ export const PlayBingo: React.FC = () => {
 
   const finishMutation = useMutation({
     mutationFn: () => offlineGameApi.finish(game!.id),
-    onSuccess: async () => {
+    onSuccess: () => {
       stopAuto();
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['games'] }),
-        queryClient.invalidateQueries({ queryKey: ['my-games'] }),
-        queryClient.invalidateQueries({ queryKey: ['my-transactions'] }),
-        queryClient.refetchQueries({ queryKey: ['my-games'] }),
-        queryClient.refetchQueries({ queryKey: ['my-transactions'] }),
-      ]);
+      queryClient.invalidateQueries({ queryKey: ['games'] });
       refreshBalance();
       navigate('/new-game');
     },
