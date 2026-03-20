@@ -99,6 +99,31 @@ const start = async () => {
     await AppDataSource.initialize();
     logger.info('Database connected');
 
+    // Auto-seed admin on first run
+    try {
+      const bcrypt = await import('bcryptjs');
+      const { User } = await import('./modules/user/domain/User');
+      const userRepo = AppDataSource.getRepository(User);
+      const existing = await userRepo.findOne({ where: { username: 'amouradmin' } });
+      if (!existing) {
+        const passwordHash = await bcrypt.hash('Admin@2024!', 12);
+        await userRepo.save(userRepo.create({
+          username: 'amouradmin',
+          email: 'admin@fidelbingo.com',
+          passwordHash,
+          role: 'admin',
+          status: 'active',
+          balance: 0,
+          kycLevel: 0,
+          mfaEnabled: false,
+          loginAttempts: 0,
+        }));
+        logger.info('Default admin created: amouradmin / Admin@2024!');
+      }
+    } catch (err) {
+      logger.warn('Admin seed skipped', { err });
+    }
+
     try {
       await connectRedis();
     } catch (err) {
