@@ -29,7 +29,6 @@ interface Game {
 function calcStats(games: Game[], days: number) {
   const cutoff = new Date();
   if (days === 1) {
-    // "Today" = from midnight of the current day
     cutoff.setHours(0, 0, 0, 0);
   } else {
     cutoff.setDate(cutoff.getDate() - days);
@@ -37,13 +36,13 @@ function calcStats(games: Game[], days: number) {
   }
   const filteredGames = games.filter((g) => new Date(g.createdAt) >= cutoff);
 
-  const totalBet = filteredGames.reduce((s, g) => s + Number(g.totalBets ?? (g.betAmount * g.cartelaCount)), 0);
+  const totalBet = filteredGames.reduce((s, g) => s + Math.round(Number(g.totalBets ?? (g.betAmount * g.cartelaCount))), 0);
   const gamesCount = filteredGames.length;
 
   const houseCut = filteredGames.reduce((s, g) => {
-    const tb = Number(g.totalBets ?? (g.betAmount * g.cartelaCount));
+    const tb = Math.round(Number(g.totalBets ?? (g.betAmount * g.cartelaCount)));
     const hp = Number(g.housePercentage ?? 10);
-    return s + tb * hp / 100;
+    return s + Math.round(tb * hp / 100);
   }, 0);
 
   return { totalBet, houseCut, games: gamesCount };
@@ -120,12 +119,12 @@ export const UserDashboard: React.FC = () => {
   const fifteen = calcStats(games, 15);
 
   const cards: StatCardProps[] = [
-    { label: 'Daily Profit',   value: `${daily.houseCut.toFixed(0)} Birr`,    icon: <IconDollar /> },
-    { label: 'Daily Total',    value: `${daily.totalBet.toFixed(0)} Birr`,    icon: <IconTrend /> },
-    { label: 'Games Today',    value: `${daily.games}`,                       icon: <IconClock /> },
-    { label: 'Weekly Total',   value: `${weekly.totalBet.toFixed(0)} Birr`,   icon: <IconCalendar /> },
-    { label: 'Weekly Profit',  value: `${weekly.houseCut.toFixed(0)} Birr`,   icon: <IconCard /> },
-    { label: '15 Day Profit',  value: `${fifteen.houseCut.toFixed(0)} Birr`,  icon: <IconCard /> },
+    { label: 'Daily Profit',   value: `${daily.houseCut.toLocaleString()} Birr`,    icon: <IconDollar /> },
+    { label: 'Daily Total',    value: `${daily.totalBet.toLocaleString()} Birr`,    icon: <IconTrend /> },
+    { label: 'Games Today',    value: `${daily.games}`,                             icon: <IconClock /> },
+    { label: 'Weekly Total',   value: `${weekly.totalBet.toLocaleString()} Birr`,   icon: <IconCalendar /> },
+    { label: 'Weekly Profit',  value: `${weekly.houseCut.toLocaleString()} Birr`,   icon: <IconCard /> },
+    { label: '15 Day Profit',  value: `${fifteen.houseCut.toLocaleString()} Birr`,  icon: <IconCard /> },
   ];
 
   const recentGames = [...games]
