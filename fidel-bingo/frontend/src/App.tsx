@@ -26,8 +26,9 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: false,
-      staleTime: 30_000,
-      networkMode: 'always', // don't pause queries when offline
+      staleTime: 0,          // always consider data stale — refetch on focus/mount
+      refetchOnWindowFocus: true,
+      networkMode: 'always',
     },
     mutations: {
       networkMode: 'always',

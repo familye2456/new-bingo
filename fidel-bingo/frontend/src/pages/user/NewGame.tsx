@@ -90,6 +90,8 @@ export const NewGame: React.FC = () => {
       const id = game?.id;
       if (id) {
         queryClient.invalidateQueries({ queryKey: ['games'] });
+        queryClient.invalidateQueries({ queryKey: ['my-games'] });
+        queryClient.invalidateQueries({ queryKey: ['my-transactions'] });
         refreshBalance();
         navigate(`/play?gameId=${id}`);
       }
