@@ -106,7 +106,9 @@ export const offlineUserApi = {
       for (const t of list) await dbPut('transactions', t);
       return list;
     }
-    return dbGetAll<any>('transactions');
+    // Only fall back to IDB for prepaid users
+    if (await isPrepaid()) return dbGetAll<any>('transactions');
+    return [];
   },
 };
 
@@ -132,9 +134,12 @@ export const offlineGameApi = {
       for (const g of list) await dbPut('games', g);
       return list;
     }
-    const user = await dbGet<any>('user', 'me');
-    const all = await dbGetAll<any>('games');
-    return user ? all.filter((g: any) => g.creatorId === user.id) : all;
+    if (await isPrepaid()) {
+      const user = await dbGet<any>('user', 'me');
+      const all = await dbGetAll<any>('games');
+      return user ? all.filter((g: any) => g.creatorId === user.id) : all;
+    }
+    return [];
   },
 
   get: async (id: string): Promise<any> => {
