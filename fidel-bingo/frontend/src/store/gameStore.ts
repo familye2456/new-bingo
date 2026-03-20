@@ -10,6 +10,7 @@ export interface Cartela {
 
 export interface Game {
   id: string;
+  gameNumber?: number;
   status: 'pending' | 'active' | 'finished' | 'cancelled';
   betAmount: number;
   prizePool: number;

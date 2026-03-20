@@ -108,7 +108,7 @@ export const Dashboard: React.FC = () => {
             <div className="text-center py-8 text-gray-500">No games available. Create one!</div>
           ) : (
             <div className="space-y-3">
-              {games?.map((game: { id: string; status: string; betAmount: number; prizePool: number; cartelaCount: number; creatorId: string }) => (
+              {games?.map((game: { id: string; status: string; betAmount: number; prizePool: number; cartelaCount: number; creatorId: string; gameNumber?: number }) => (
                 <div key={game.id} className="border rounded-lg p-4 flex items-center justify-between">
                   <div>
                     <div className="font-medium">Game #{game.gameNumber ?? game.id.slice(0, 8)}</div>

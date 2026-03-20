@@ -14,6 +14,7 @@ interface Transaction {
 
 interface GameHistory {
   id: string;
+  gameNumber?: number;
   status: string;
   betAmount: number;
   myBet: number;
