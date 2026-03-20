@@ -102,13 +102,16 @@ export const offlineUserApi = {
   },
 
   myTransactions: async (): Promise<any[]> => {
-    const result = await tryApi(() => api.get('/users/me/transactions'));
-    if (result.ok) {
-      const list = toList(result.data);
-      for (const t of list) await dbPut('transactions', t);
-      return list;
+    if (navigator.onLine) {
+      try {
+        const res = await api.get('/users/me/transactions');
+        const list = toList(res.data);
+        for (const t of list) await dbPut('transactions', t);
+        return list;
+      } catch (err: any) {
+        if (err?.response?.status) throw err;
+      }
     }
-    // Only fall back to IDB for prepaid users
     if (await isPrepaid()) return dbGetAll<any>('transactions');
     return [];
   },
@@ -130,12 +133,20 @@ export const offlineGameApi = {
   },
 
   myGames: async (): Promise<any[]> => {
-    const result = await tryApi(() => api.get('/games/mine'));
-    if (result.ok) {
-      const list = toList(result.data);
-      for (const g of list) await dbPut('games', g);
-      return list;
+    // Always try server first — never serve stale IDB when online
+    if (navigator.onLine) {
+      try {
+        const res = await api.get('/games/mine');
+        const list = toList(res.data);
+        for (const g of list) await dbPut('games', g);
+        return list;
+      } catch (err: any) {
+        // HTTP error (401 etc) — rethrow, don't fall back to IDB
+        if (err?.response?.status) throw err;
+        // Network error — fall through to IDB
+      }
     }
+    // Offline fallback
     if (await isPrepaid()) {
       const user = await dbGet<any>('user', 'me');
       const all = await dbGetAll<any>('games');

@@ -84,14 +84,17 @@ export const NewGame: React.FC = () => {
         winPattern: pattern,
         housePercentage: houseCut as number,
       }),
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
       playSound('start.wav', voiceRef.current);
       const game = res?.data?.data?.data ?? res?.data?.data ?? res?.data;
       const id = game?.id;
       if (id) {
-        queryClient.invalidateQueries({ queryKey: ['games'] });
-        queryClient.invalidateQueries({ queryKey: ['my-games'] });
-        queryClient.invalidateQueries({ queryKey: ['my-transactions'] });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['games'] }),
+          queryClient.invalidateQueries({ queryKey: ['my-games'] }),
+          queryClient.invalidateQueries({ queryKey: ['my-transactions'] }),
+          queryClient.refetchQueries({ queryKey: ['my-games'] }),
+        ]);
         refreshBalance();
         navigate(`/play?gameId=${id}`);
       }
