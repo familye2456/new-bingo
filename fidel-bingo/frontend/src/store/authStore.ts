@@ -104,6 +104,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       dbClear('syncQueue'),
     ]);
     set({ user: null, cacheSteps: [], initialized: false });
+    window.location.href = '/login';
   },
 
   adjustUserBalance: (delta: number) => {
