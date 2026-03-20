@@ -43,7 +43,21 @@ app.use(helmet({
   hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
 }));
 
-app.use(cors({ origin: env.FRONTEND_URL, credentials: true, maxAge: 600 }));
+const allowedOrigins = [
+  env.FRONTEND_URL,
+  'https://fidel-bingo1.netlify.app',
+  'http://localhost:5173',
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, cb) => {
+    // allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error(`CORS: origin ${origin} not allowed`));
+  },
+  credentials: true,
+  maxAge: 600,
+}));
 app.use(compression());
 app.use(express.json({ limit: '10kb' }));
 app.use(cookieParser());

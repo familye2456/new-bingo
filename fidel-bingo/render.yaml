@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: fidel-bingo-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: DATABASE_URL
+        sync: false   # set manually in Render dashboard
+      - key: JWT_SECRET
+        sync: false   # set manually in Render dashboard
+      - key: JWT_ACCESS_EXPIRES
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES
+        value: 7d
+      - key: ENCRYPTION_KEY
+        sync: false   # set manually in Render dashboard
+      - key: FRONTEND_URL
+        value: https://fidel-bingo1.netlify.app
+      - key: REDIS_URL
+        value: ""
+      - key: HOUSE_PERCENTAGE
+        value: "10"
