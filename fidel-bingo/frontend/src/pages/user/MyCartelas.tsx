@@ -67,8 +67,8 @@ export const MyCartelas: React.FC = () => {
   });
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 sm:p-6">
+      <div className="flex items-center justify-between mb-4 sm:mb-6 gap-2 flex-wrap">
         <h1 className="text-xl font-semibold">My Cartelas</h1>
         <span className="text-sm text-gray-500">{cartelas.length} cards assigned</span>
       </div>

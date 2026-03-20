@@ -146,13 +146,13 @@ export const UserDashboard: React.FC = () => {
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
+      <div className="flex items-center justify-between mb-4 sm:mb-6 gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-semibold text-white">Dashboard</h1>
           <p className="text-sm text-gray-400 mt-0.5">Welcome back, {user?.username}</p>
         </div>
-        <div className="bg-[#1e2235] rounded-xl px-4 py-2 text-right border border-[#2a2f45]">
+        <div className="bg-[#1e2235] rounded-xl px-3 sm:px-4 py-2 text-right border border-[#2a2f45]">
           <div className="text-xs text-gray-400">Balance</div>
           <div className="text-yellow-400 font-bold text-lg">{Number(user?.balance ?? 0).toFixed(2)} Birr</div>
         </div>
@@ -189,8 +189,8 @@ export const UserDashboard: React.FC = () => {
         </div>
       ) : (
         <div className="rounded-xl border border-[#2a2f45] overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto -mx-0">
+            <table className="w-full text-sm min-w-[500px]">
               <thead>
                 <tr style={{ background: '#161929', borderBottom: '1px solid #2a2f45' }}>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>

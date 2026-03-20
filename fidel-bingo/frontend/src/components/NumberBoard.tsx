@@ -17,21 +17,21 @@ const ROWS = [
 export const NumberBoard: React.FC<Props> = ({ calledNumbers, lastNumber }) => {
   return (
     <div
-      className="rounded-2xl overflow-hidden"
-      style={{ background: '#0d0d0d', padding: '10px' }}
+      className="rounded-2xl overflow-hidden w-full"
+      style={{ background: '#0d0d0d', padding: '8px' }}
       role="region"
       aria-label="Bingo number board"
     >
       {ROWS.map(({ letter, start }) => (
-        <div key={letter} className="flex items-center gap-1 mb-1 last:mb-0">
+        <div key={letter} className="flex items-center gap-0.5 sm:gap-1 mb-0.5 sm:mb-1 last:mb-0">
           {/* Letter chip */}
           <div
             className="flex items-center justify-center font-extrabold text-gray-900 rounded-lg shrink-0"
             style={{
-              width: 44,
-              height: 44,
+              width: 'clamp(26px, 5vw, 44px)',
+              height: 'clamp(26px, 5vw, 44px)',
               background: 'linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%)',
-              fontSize: 22,
+              fontSize: 'clamp(12px, 2.5vw, 22px)',
               boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
             }}
           >
@@ -48,11 +48,9 @@ export const NumberBoard: React.FC<Props> = ({ calledNumbers, lastNumber }) => {
               <div
                 key={num}
                 aria-label={`${num}${called ? ' called' : ''}`}
-                className="flex items-center justify-center font-bold rounded-lg transition-all duration-300"
+                className="flex items-center justify-center font-bold rounded-md transition-all duration-300 flex-1 aspect-square"
                 style={{
-                  width: 44,
-                  height: 44,
-                  fontSize: 15,
+                  fontSize: 'clamp(7px, 1.5vw, 15px)',
                   background: isLast
                     ? 'linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%)'
                     : called

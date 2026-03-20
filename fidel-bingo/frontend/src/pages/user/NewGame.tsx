@@ -112,7 +112,7 @@ export const NewGame: React.FC = () => {
     <div className="min-h-full flex flex-col" style={{ background: '#0a1220', color: '#fff' }}>
 
       {/* ── Header ── */}
-      <div className="px-5 pt-5 pb-4 shrink-0"
+      <div className="px-4 sm:px-5 pt-4 sm:pt-5 pb-4 shrink-0"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.2)' }}>
 
         <div className="flex items-center justify-between mb-4">
@@ -200,7 +200,7 @@ export const NewGame: React.FC = () => {
       </div>
 
       {/* ── Selection bar ── */}
-      <div className="px-5 py-2.5 flex items-center gap-3 shrink-0"
+      <div className="px-4 sm:px-5 py-2.5 flex items-center gap-3 shrink-0"
         style={{ background: 'rgba(0,0,0,0.15)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
 
         <div className="flex items-center gap-2 flex-1">
@@ -233,7 +233,7 @@ export const NewGame: React.FC = () => {
       </div>
 
       {/* ── Card Grid ── */}
-      <div className="flex-1 overflow-auto px-4 py-4">
+      <div className="flex-1 overflow-auto px-3 sm:px-4 py-4">
         {isLoading ? (
           <div className="flex items-center justify-center py-24">
             <div className="text-center">

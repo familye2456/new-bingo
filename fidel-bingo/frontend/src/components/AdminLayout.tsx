@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 
@@ -52,7 +52,11 @@ const navItems = [
 export const AdminLayout: React.FC = () => {
   const { user, logout } = useAuthStore();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+
+  // Close mobile sidebar on route change
+  useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
   const pageTitle = navItems.find(n =>
     n.end ? location.pathname === n.to : location.pathname.startsWith(n.to)
@@ -60,9 +64,23 @@ export const AdminLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen flex bg-[#f0f2f5]">
+      {/* Mobile backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <aside
-        className={`${collapsed ? 'w-[68px]' : 'w-60'} bg-[#0f172a] flex flex-col transition-all duration-200 shrink-0 relative`}
+        className={`
+          fixed lg:static inset-y-0 left-0 z-40
+          ${collapsed ? 'w-[68px]' : 'w-60'}
+          bg-[#0f172a] flex flex-col transition-all duration-200 shrink-0 relative
+          ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        `}
+        style={{ transition: 'transform 0.2s, width 0.2s' }}
       >
         {/* Logo */}
         <div className={`flex items-center ${collapsed ? 'justify-center px-0' : 'px-5'} h-16 border-b border-white/10`}>
@@ -138,10 +156,20 @@ export const AdminLayout: React.FC = () => {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center px-6 shrink-0">
+        <header className="h-16 bg-white border-b border-gray-200 flex items-center px-4 sm:px-6 shrink-0">
+          {/* Mobile hamburger */}
+          <button
+            onClick={() => setMobileOpen(true)}
+            className="lg:hidden mr-3 p-1.5 rounded-lg text-gray-500 hover:bg-gray-100"
+            aria-label="Open sidebar"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
           <h1 className="text-gray-800 font-semibold text-base">{pageTitle}</h1>
           <div className="ml-auto flex items-center gap-3">
-            <span className="text-xs text-gray-400">{new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+            <span className="text-xs text-gray-400 hidden sm:block">{new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
               {user?.username?.[0]?.toUpperCase() ?? 'A'}
             </div>

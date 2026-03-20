@@ -439,20 +439,21 @@ const CartelaPreviewModal: React.FC<{
   lastCalledNumber: number | null;
   onClose: () => void;
 }> = ({ cardNumber, numbers, patternMask, winPattern, lastCalledNumber, onClose }) => {
-  const CELL = 52;
-  const GAP = 6;
-  const GRID = 5 * CELL + 4 * GAP; // total grid width/height
+  // Responsive cell size: smaller on mobile
+  const CELL = typeof window !== 'undefined' && window.innerWidth < 400 ? 42 : 52;
+  const GAP = 5;
+  const GRID = 5 * CELL + 4 * GAP;
 
   const winIndices = getWinIndices(patternMask, winPattern);
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
       style={{ background: 'rgba(0,0,0,0.75)' }}
       onClick={onClose}
     >
       <div
-        className="rounded-2xl p-5 flex flex-col items-center gap-3"
+        className="rounded-2xl p-4 sm:p-5 flex flex-col items-center gap-3 my-auto"
         style={{ background: '#0f1e35', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 40px rgba(0,0,0,0.7)' }}
         onClick={e => e.stopPropagation()}
       >

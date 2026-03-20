@@ -156,7 +156,8 @@ export const UserManagement: React.FC = () => {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
+      {/* ... modals unchanged ... */}
       {(modal === 'create' || modal === 'edit') && (
         <ModalWrap title={modal === 'edit' ? `Edit — ${editUser?.username}` : 'Create New User'} onClose={closeModal}>
           <div className="space-y-4">
@@ -337,7 +338,7 @@ export const UserManagement: React.FC = () => {
 
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4 sm:mb-6">
         <p className="text-sm text-gray-500">{users.length} total users</p>
         <button
           onClick={() => { setModal('create'); setForm(emptyForm); }}
@@ -351,7 +352,7 @@ export const UserManagement: React.FC = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4 flex flex-wrap gap-3 items-center">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4 mb-4 flex flex-wrap gap-2 sm:gap-3 items-center">
         <div className="relative flex-1 min-w-[200px]">
           <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
