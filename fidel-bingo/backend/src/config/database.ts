@@ -14,8 +14,8 @@ export const AppDataSource = new DataSource({
   type: 'postgres',
   url: env.DATABASE_URL.replace('?sslmode=require', ''),
   ssl: { rejectUnauthorized: false },
-  synchronize: env.NODE_ENV === 'development',
-  logging: env.NODE_ENV === 'development',
+  synchronize: true,
+  logging: false,
   entities: [User, Game, Cartela, UserCartela, GameCartela, Transaction, Account, AuditLog, RefreshToken],
   migrations: ['dist/migrations/*.js'],
 });
