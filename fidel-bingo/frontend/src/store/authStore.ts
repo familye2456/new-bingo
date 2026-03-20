@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { authApi } from '../services/api';
 import { offlineAuthApi } from '../services/offlineApi';
-import { dbPut, dbGet } from '../services/db';
+import { dbPut, dbGet, dbClear } from '../services/db';
 import { api } from '../services/api';
 
 interface User {
@@ -94,7 +94,15 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     await authApi.logout();
-    set({ user: null, cacheSteps: [] });
+    // Clear all cached data so next user doesn't see stale data
+    await Promise.all([
+      dbClear('user'),
+      dbClear('cartelas'),
+      dbClear('games'),
+      dbClear('transactions'),
+      dbClear('syncQueue'),
+    ]);
+    set({ user: null, cacheSteps: [], initialized: false });
   },
 
   adjustUserBalance: (delta: number) => {

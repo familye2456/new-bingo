@@ -63,7 +63,9 @@ export const cartelaAdminApi = {
   assign: (data: { userId: string; cardNumber: number }) => api.post('/cartelas/assign', data),
   assignRange: (data: { fromCard: number; toCard: number; userId: string }) =>
     api.post('/cartelas/assign-range', data),
-  unassign: (id: string) => api.patch(`/cartelas/${id}/unassign`),
+  unassign: (id: string, userId: string) => api.patch(`/cartelas/${id}/unassign`, { userId }),
+  unassignRange: (data: { fromCard: number; toCard: number; userId: string }) =>
+    api.post('/cartelas/unassign-range', data),
   update: (id: string, data: { isActive?: boolean; userId?: string; numbers?: number[] }) =>
     api.patch(`/cartelas/${id}`, data),
 };

@@ -76,33 +76,37 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
   const [cartelas, total] = await qb.getManyAndCount();
 
-  // Enrich with assignment info
+  // Count assignments per cartela (multiple users can share a card)
   const allAssignments = await ucRepo.find({
-    where: cartelaIds
-      ? cartelaIds.map((id) => ({ cartelaId: id }))
-      : undefined,
+    where: cartelaIds ? cartelaIds.map((id) => ({ cartelaId: id })) : undefined,
     relations: ['user'],
   });
-  const assignMap = new Map(allAssignments.map((a) => [a.cartelaId, a]));
+  const assignMap = new Map<string, { userId: string; username: string }[]>();
+  for (const a of allAssignments) {
+    if (!assignMap.has(a.cartelaId)) assignMap.set(a.cartelaId, []);
+    assignMap.get(a.cartelaId)!.push({ userId: a.userId, username: a.user?.username ?? '' });
+  }
 
   const data = cartelas.map((c) => {
-    const assignment = assignMap.get(c.id);
+    const users = assignMap.get(c.id) ?? [];
     return {
       ...c,
-      userId: assignment?.userId ?? null,
-      user: assignment?.user ? { username: assignment.user.username } : null,
+      // keep legacy single-user fields for backward compat
+      userId: users[0]?.userId ?? null,
+      user: users[0] ? { username: users[0].username } : null,
+      assignedCount: users.length,
     };
   });
 
   res.json({ success: true, data, total });
 });
 
-// Get single cartela with assignment info
+// Get single cartela with ALL assignment info (multiple users can have same card)
 router.get('/:id', async (req: AuthRequest, res: Response) => {
   const cartela = await AppDataSource.getRepository(Cartela).findOne({ where: { id: req.params.id } });
   if (!cartela) throw new AppError(404, 'NOT_FOUND', 'Cartela not found');
 
-  const assignment = await AppDataSource.getRepository(UserCartela).findOne({
+  const assignments = await AppDataSource.getRepository(UserCartela).find({
     where: { cartelaId: req.params.id },
     relations: ['user'],
   });
@@ -111,8 +115,11 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
     success: true,
     data: {
       ...cartela,
-      userId: assignment?.userId ?? null,
-      user: assignment?.user ? { username: assignment.user.username } : null,
+      assignments: assignments.map(a => ({
+        userId: a.userId,
+        username: a.user.username,
+        assignedAt: a.assignedAt,
+      })),
     },
   });
 });
@@ -128,11 +135,12 @@ router.post('/assign', async (req: AuthRequest, res: Response) => {
   const cartela = await cartelaRepo.findOne({ where: { cardNumber } });
   if (!cartela) throw new AppError(404, 'NOT_FOUND', `Card #${cardNumber} not found`);
 
-  const existing = await ucRepo.findOne({ where: { cartelaId: cartela.id } });
-  if (existing) throw new AppError(409, 'ALREADY_ASSIGNED', `Card #${cardNumber} is already assigned`);
-
   const user = await AppDataSource.getRepository(User).findOne({ where: { id: userId } });
   if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'User not found');
+
+  // Only block if this exact user already has this card
+  const existing = await ucRepo.findOne({ where: { cartelaId: cartela.id, userId } });
+  if (existing) throw new AppError(409, 'ALREADY_ASSIGNED', `Card #${cardNumber} is already assigned to this user`);
 
   const assignment = ucRepo.create({ userId, cartelaId: cartela.id });
   await ucRepo.save(assignment);
@@ -157,26 +165,27 @@ router.post('/assign-range', async (req: AuthRequest, res: Response) => {
   const cartelaRepo = AppDataSource.getRepository(Cartela);
   const ucRepo = AppDataSource.getRepository(UserCartela);
 
-  // Find already-assigned card IDs in this range
-  const assignedInRange = await ucRepo
+  // Find cards in range already assigned to this user (avoid duplicates)
+  const alreadyOwned = await ucRepo
     .createQueryBuilder('uc')
     .innerJoin('uc.cartela', 'c')
     .where('c.cardNumber >= :fromCard AND c.cardNumber <= :toCard', { fromCard, toCard })
+    .andWhere('uc.userId = :userId', { userId })
     .select('uc.cartelaId')
     .getMany();
-  const assignedIds = assignedInRange.map((a) => a.cartelaId);
+  const ownedIds = new Set(alreadyOwned.map((a) => a.cartelaId));
 
-  const qb = cartelaRepo.createQueryBuilder('c')
+  const cards = await cartelaRepo.createQueryBuilder('c')
     .where('c.cardNumber >= :fromCard AND c.cardNumber <= :toCard', { fromCard, toCard })
-    .orderBy('c.cardNumber', 'ASC');
-  if (assignedIds.length > 0) qb.andWhere('c.id NOT IN (:...assignedIds)', { assignedIds });
+    .orderBy('c.cardNumber', 'ASC')
+    .getMany();
 
-  const cards = await qb.getMany();
   if (cards.length === 0)
-    throw new AppError(404, 'NO_CARDS', `No unassigned cards found in range #${fromCard}–#${toCard}`);
+    throw new AppError(404, 'NO_CARDS', `No cards found in range #${fromCard}–#${toCard}`);
 
   let assigned = 0;
   for (const card of cards) {
+    if (ownedIds.has(card.id)) continue; // already assigned to this user
     await ucRepo.save(ucRepo.create({ userId, cartelaId: card.id }));
     assigned++;
   }
@@ -184,11 +193,39 @@ router.post('/assign-range', async (req: AuthRequest, res: Response) => {
   res.status(200).json({ success: true, data: { cardsAssigned: assigned, username: user.username } });
 });
 
-// Unassign a cartela
-router.patch('/:id/unassign', async (req: AuthRequest, res: Response) => {
+// Bulk unassign a range of cards from a user
+router.post('/unassign-range', async (req: AuthRequest, res: Response) => {
+  const { fromCard, toCard, userId } = req.body as { fromCard: number; toCard: number; userId: string };
+
+  if (!fromCard || !toCard || fromCard > toCard)
+    throw new AppError(400, 'INVALID_CARD_RANGE', 'fromCard and toCard required, fromCard <= toCard');
+  if (!userId)
+    throw new AppError(400, 'MISSING_USER', 'userId is required');
+
   const ucRepo = AppDataSource.getRepository(UserCartela);
-  const assignment = await ucRepo.findOne({ where: { cartelaId: req.params.id } });
-  if (!assignment) throw new AppError(404, 'NOT_ASSIGNED', 'Cartela is not assigned');
+
+  const assignments = await ucRepo
+    .createQueryBuilder('uc')
+    .innerJoin('uc.cartela', 'c')
+    .where('uc.userId = :userId', { userId })
+    .andWhere('c.cardNumber >= :fromCard AND c.cardNumber <= :toCard', { fromCard, toCard })
+    .getMany();
+
+  if (assignments.length === 0)
+    return res.json({ success: true, data: { cardsUnassigned: 0 } });
+
+  await ucRepo.remove(assignments);
+  res.json({ success: true, data: { cardsUnassigned: assignments.length } });
+});
+
+// Unassign a cartela from a specific user
+router.patch('/:id/unassign', async (req: AuthRequest, res: Response) => {
+  const { userId } = req.body as { userId?: string };
+  if (!userId) throw new AppError(400, 'MISSING_USER', 'userId is required to unassign');
+
+  const ucRepo = AppDataSource.getRepository(UserCartela);
+  const assignment = await ucRepo.findOne({ where: { cartelaId: req.params.id, userId } });
+  if (!assignment) throw new AppError(404, 'NOT_ASSIGNED', 'Cartela is not assigned to this user');
   await ucRepo.remove(assignment);
   res.json({ success: true, message: 'Cartela unassigned' });
 });
@@ -213,30 +250,30 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
 
   await cartelaRepo.save(cartela);
 
-  // Handle assignment change
+  // Handle assignment change — userId here means reassign ALL or add one
   if (userId !== undefined) {
-    const existing = await ucRepo.findOne({ where: { cartelaId: cartela.id } });
     if (userId === '') {
-      if (existing) await ucRepo.remove(existing);
+      // Remove all assignments for this cartela
+      const existing = await ucRepo.find({ where: { cartelaId: cartela.id } });
+      if (existing.length) await ucRepo.remove(existing);
     } else {
       const user = await AppDataSource.getRepository(User).findOne({ where: { id: userId } });
       if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'User not found');
-      if (existing) {
-        existing.userId = userId;
-        await ucRepo.save(existing);
-      } else {
+      const existing = await ucRepo.findOne({ where: { cartelaId: cartela.id, userId } });
+      if (!existing) {
         await ucRepo.save(ucRepo.create({ userId, cartelaId: cartela.id }));
       }
     }
   }
 
-  const assignment = await ucRepo.findOne({ where: { cartelaId: cartela.id }, relations: ['user'] });
+  const assignments = await ucRepo.find({ where: { cartelaId: cartela.id }, relations: ['user'] });
   res.json({
     success: true,
     data: {
       ...cartela,
-      userId: assignment?.userId ?? null,
-      user: assignment?.user ? { username: assignment.user.username } : null,
+      userId: assignments[0]?.userId ?? null,
+      user: assignments[0]?.user ? { username: assignments[0].user.username } : null,
+      assignedCount: assignments.length,
     },
   });
 });

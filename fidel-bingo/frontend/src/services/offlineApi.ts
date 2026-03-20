@@ -72,7 +72,7 @@ export const offlineAuthApi = {
     try {
       const result = await tryApi(() => api.get('/users/me'));
       if (result.ok) {
-        await dbPut('user', result.data.data.data, 'me'); // axios: .data = AxiosResponse body = { success, data: user }
+        await dbPut('user', result.data.data, 'me'); // result.data = { success, data: user }
         return result.data;
       }
     } catch {
@@ -155,10 +155,9 @@ export const offlineGameApi = {
     if (result.ok) {
       const game = result.data.data.data;
       await dbPut('games', game);
-      // Use actual houseCut from server response to keep local balance in sync
-      const actualHouseCut = Number(game.houseCut ?? 0);
+      const houseCut = data.betAmountPerCartela * data.cartelaIds.length * (HOUSE_PCT / 100);
       await _writeBetTransactions(game.id, data.cartelaIds, data.betAmountPerCartela, Number(game.housePercentage ?? HOUSE_PCT));
-      if (actualHouseCut > 0) await applyBalanceDelta(-actualHouseCut);
+      await applyBalanceDelta(-houseCut);
       return result.data;
     }
 
@@ -169,8 +168,7 @@ export const offlineGameApi = {
     const now = new Date().toISOString();
     const totalBet = data.betAmountPerCartela * data.cartelaIds.length;
     const houseCut = totalBet * (HOUSE_PCT / 100);
-    // prizePool = totalBets (house cut already taken upfront)
-    const prizePool = totalBet;
+    const prizePool = totalBet - houseCut;  // winner gets totalBet minus house cut
 
     const game = {
       id: tempId,
@@ -193,7 +191,7 @@ export const offlineGameApi = {
 
     await dbPut('games', game);
     await _writeBetTransactions(tempId, data.cartelaIds, data.betAmountPerCartela, HOUSE_PCT);
-    // Deduct only houseCut from local balance
+    // Deduct only house cut from balance
     await applyBalanceDelta(-houseCut);
     await enqueue({ type: 'createGame', payload: { tempId, ...data } });
 
@@ -415,10 +413,6 @@ export const offlineGameApi = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/**
- * Write a single bet transaction locally — records only the house cut
- * (the actual amount deducted from balance), matching backend behaviour.
- */
 async function _writeBetTransactions(gameId: string, cartelaIds: string[], betPerCartela: number, housePct: number) {
   const user = await dbGet<any>('user', 'me');
   const totalBet = betPerCartela * cartelaIds.length;
@@ -426,7 +420,7 @@ async function _writeBetTransactions(gameId: string, cartelaIds: string[], betPe
   await dbPut('transactions', {
     id: `tx-bet-${gameId}`,
     transactionType: 'bet',
-    amount: houseCut,          // only the house cut is actually deducted
+    amount: houseCut,
     status: 'completed',
     description: `House fee for game ${gameId.slice(0, 8)}`,
     createdAt: new Date().toISOString(),

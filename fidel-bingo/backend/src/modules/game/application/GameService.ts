@@ -81,7 +81,7 @@ export class GameService {
         winnerIds: [],
         cartelaCount: cartelas.length,
         totalBets: totalCost,
-        prizePool: totalCost,                              // winner gets full totalBets back
+        prizePool: totalCost * (1 - HOUSE_PCT / 100),   // totalBets - houseCut
         houseCut: totalCost * (HOUSE_PCT / 100),
       });
       await manager.save(game);
@@ -97,11 +97,12 @@ export class GameService {
         await manager.save(manager.create(GameCartela, {
           gameId: game.id,
           cartelaId: cartela.id,
+          userId,
           betAmount: dto.betAmountPerCartela,
         }));
       }
 
-      // Only deduct houseCut upfront — winner gets totalBets back via claimBingo
+      // Deduct only house cut from balance — prize pool stays in the system for the winner
       const houseCut = totalCost * (HOUSE_PCT / 100);
       await manager.decrement(User, { id: userId }, 'balance', houseCut);
 
@@ -145,6 +146,12 @@ export class GameService {
         });
         const saved = await manager.save(cartela);
         await manager.save(manager.create(UserCartela, { userId, cartelaId: saved.id }));
+        await manager.save(manager.create(GameCartela, {
+          gameId,
+          cartelaId: saved.id,
+          userId,
+          betAmount: game.betAmount,
+        }));
         cartelas.push(saved);
       }
 
@@ -158,6 +165,16 @@ export class GameService {
         updatedGame.houseCut = updatedGame.totalBets * (updatedGame.housePercentage / 100);
         await manager.save(updatedGame);
       }
+
+      await manager.save(manager.create(Transaction, {
+        userId,
+        gameId,
+        transactionType: 'bet',
+        amount: totalCost,
+        status: 'completed',
+        description: `Joined game ${gameId}`,
+        processedAt: new Date(),
+      }));
 
       return cartelas;
     });

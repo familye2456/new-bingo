@@ -58,12 +58,14 @@ export const PlayBingo: React.FC = () => {
   const autoRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [sessionCalledNumbers, setSessionCalledNumbers] = useState<number[]>([]);
 
-  const { data: games = [], isLoading } = useQuery<Game[]>({
+  const { data: allGames = [], isLoading } = useQuery<Game[]>({
     queryKey: ['games'],
     queryFn: () => offlineGameApi.list(),
     refetchInterval: 3000,
   });
 
+  // Only show games belonging to the current user
+  const games = allGames.filter((g) => g.creatorId === user?.id);
   const activeGames = games.filter((g) => g.status === 'active');
   const game = selectedGameId
     ? games.find((g) => g.id === selectedGameId) ?? null

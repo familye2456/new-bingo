@@ -4,6 +4,7 @@ import {
 } from 'typeorm';
 import { Game } from './Game';
 import { Cartela } from './Cartela';
+import { User } from '../../user/domain/User';
 
 @Entity('game_cartelas')
 @Unique(['gameId', 'cartelaId'])
@@ -24,6 +25,13 @@ export class GameCartela {
   @ManyToOne(() => Cartela, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'cartela_id' })
   cartela!: Cartela;
+
+  @Column({ name: 'user_id', nullable: true })
+  userId!: string;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE', nullable: true })
+  @JoinColumn({ name: 'user_id' })
+  user!: User;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, name: 'bet_amount' })
   betAmount!: number;
