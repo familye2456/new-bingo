@@ -51,12 +51,21 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, cb) => {
-    // allow requests with no origin (mobile apps, curl, etc.)
+    // allow requests with no origin (mobile apps, curl, Render health checks)
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
     cb(new Error(`CORS: origin ${origin} not allowed`));
   },
   credentials: true,
   maxAge: 600,
+}));
+
+// Handle preflight for all routes
+app.options('*', cors({
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error(`CORS: origin ${origin} not allowed`));
+  },
+  credentials: true,
 }));
 app.use(compression());
 app.use(express.json({ limit: '10kb' }));
