@@ -84,16 +84,32 @@ export const NewGame: React.FC = () => {
         winPattern: pattern,
         housePercentage: houseCut as number,
       }),
-    onSuccess: async (res) => {
+    onSuccess: (res) => {
       playSound('start.wav', voiceRef.current);
       const game = res?.data?.data?.data ?? res?.data?.data ?? res?.data;
       const id = game?.id;
       if (id) {
-        // Refetch dashboard data immediately so stats reflect the new game
-        await Promise.all([
-          queryClient.refetchQueries({ queryKey: ['my-games'] }),
-          queryClient.refetchQueries({ queryKey: ['my-transactions'] }),
-        ]);
+        // Optimistically inject the new game into the cached list immediately
+        const hc = typeof houseCut === 'number' ? houseCut : 10;
+        const totalBets = bet * selectedIds.size;
+        const houseCutAmt = totalBets * hc / 100;
+        const newGame = {
+          ...game,
+          betAmount: bet,
+          cartelaCount: selectedIds.size,
+          totalBets,
+          houseCut: houseCutAmt,
+          housePercentage: hc,
+          prizePool: totalBets - houseCutAmt,
+          winPattern: pattern,
+          status: game.status ?? 'active',
+          createdAt: game.createdAt ?? new Date().toISOString(),
+        };
+        queryClient.setQueryData(['my-games'], (old: any[] = []) =>
+          old.some((g) => g.id === newGame.id) ? old : [newGame, ...old]
+        );
+        // Background refetch to sync with server
+        queryClient.invalidateQueries({ queryKey: ['my-games'] });
         refreshBalance();
         navigate(`/play?gameId=${id}`);
       }
