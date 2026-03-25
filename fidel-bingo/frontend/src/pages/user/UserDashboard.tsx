@@ -105,8 +105,8 @@ export const UserDashboard: React.FC = () => {
     queryKey: ['my-transactions'],
     queryFn: () => offlineUserApi.myTransactions(),
     refetchInterval: 3000,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: 'always',
+    refetchOnMount: 'always' as const,
+    refetchOnWindowFocus: 'always' as const,
     staleTime: 0,
     gcTime: 0,
   });
@@ -115,8 +115,8 @@ export const UserDashboard: React.FC = () => {
     queryKey: ['my-games'],
     queryFn: () => offlineGameApi.myGames(),
     refetchInterval: 3000,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: 'always',
+    refetchOnMount: 'always' as const,
+    refetchOnWindowFocus: 'always' as const,
     staleTime: 0,
     gcTime: 0,
   });
