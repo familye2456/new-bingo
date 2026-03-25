@@ -9,7 +9,7 @@
     "dev": "ts-node-dev --respawn src/server.ts",
     "test": "jest --runInBand",
     "lint": "eslint src/**/*.ts",
-    "migrate": "typeorm migration:run -d src/config/database.ts",
+    "migrate": "ts-node -r tsconfig-paths/register node_modules/typeorm/cli.js migration:run -d src/config/database.ts",
     "create:admin": "ts-node -r tsconfig-paths/register src/scripts/createAdmin.ts",
     "seed:cartelas": "ts-node src/scripts/seedCartelas.ts"
   },
