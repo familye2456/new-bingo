@@ -52,9 +52,11 @@ export const useAuthStore = create<AuthState>((set) => ({
       const { user, accessToken } = res.data.data;
       if (accessToken) localStorage.setItem('access_token', accessToken);
       await dbPut('user', user, 'me');
-      set({ user, loading: false, initialized: true });
 
       if (user.paymentType === 'prepaid') {
+        // Show download screen — NOT initialized yet, user stays blocked
+        set({ user, loading: false, initialized: false });
+
         const steps: CacheStep[] = STEPS.map(s => ({ ...s }));
         set({ cacheSteps: steps });
 
@@ -85,6 +87,12 @@ export const useAuthStore = create<AuthState>((set) => ({
             mark(i, 'skipped');
           }
         }
+
+        // All done — now open the app
+        set({ initialized: true });
+      } else {
+        // Non-prepaid: no cache needed, open immediately
+        set({ user, loading: false, initialized: true });
       }
     } catch (err) {
       set({ loading: false, cacheSteps: [] });

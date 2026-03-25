@@ -37,8 +37,43 @@ const queryClient = new QueryClient({
 });
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean }> = ({ children, adminOnly }) => {
-  const { user, initialized } = useAuthStore();
-  if (!initialized) return null;
+  const { user, initialized, cacheSteps } = useAuthStore();
+
+  // Still bootstrapping (page refresh / fetchMe in progress)
+  if (!initialized && !user) return null;
+
+  // Logged in but cache download in progress — show blocking screen
+  if (!initialized && user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center"
+        style={{ background: '#0a1220' }}>
+        <div className="text-center w-72">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white font-black text-xl mx-auto mb-6">B</div>
+          <p className="text-white font-semibold mb-1">Setting up your account</p>
+          <p className="text-gray-500 text-xs mb-6">Downloading data for offline use…</p>
+          <div className="space-y-2">
+            {cacheSteps.map((step) => (
+              <div key={step.label} className="flex items-center gap-3 px-4 py-2.5 rounded-xl"
+                style={{ background: 'rgba(255,255,255,0.05)' }}>
+                <span className="text-base w-5 text-center">
+                  {step.status === 'done'    ? '✓' :
+                   step.status === 'loading' ? '⟳' :
+                   step.status === 'skipped' ? '—' : '·'}
+                </span>
+                <span className={`text-sm flex-1 text-left ${
+                  step.status === 'done'    ? 'text-emerald-400' :
+                  step.status === 'loading' ? 'text-yellow-400 animate-pulse' :
+                  step.status === 'skipped' ? 'text-gray-500' :
+                  'text-gray-600'
+                }`}>{step.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!user) return <Navigate to="/login" replace />;
   if (adminOnly && user.role !== 'admin') return <Navigate to="/admin" replace />;
   if (!adminOnly && user.role === 'admin') return <Navigate to="/admin" replace />;
