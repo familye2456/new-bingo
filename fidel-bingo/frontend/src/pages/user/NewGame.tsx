@@ -72,19 +72,32 @@ export const NewGame: React.FC = () => {
     queryFn: () => offlineUserApi.myCartelas(),
   });
 
+  // Remove stale selectedIds that no longer exist in the user's cartela list
+  useEffect(() => {
+    if (cartelas.length === 0) return;
+    const validIds = new Set(cartelas.map(c => c.id));
+    setSelectedIds(prev => {
+      const filtered = new Set([...prev].filter(id => validIds.has(id)));
+      return filtered.size === prev.size ? prev : filtered;
+    });
+  }, [cartelas]);
+
   const visibleCartelas = useMemo(() => {
     const list = rememberActive ? cartelas.filter((c) => c.isActive) : cartelas;
     return [...list].sort((a, b) => (a.cardNumber ?? 0) - (b.cardNumber ?? 0));
   }, [cartelas, rememberActive]);
 
   const createMutation = useMutation({
-    mutationFn: () =>
-      offlineGameApi.create({
-        cartelaIds: Array.from(selectedIds),
+    mutationFn: () => {
+      // Filter out any stale IDs that are no longer in the user's cartela list
+      const validIds = Array.from(selectedIds).filter(id => cartelas.some(c => c.id === id));
+      return offlineGameApi.create({
+        cartelaIds: validIds,
         betAmountPerCartela: bet,
         winPattern: pattern,
         housePercentage: houseCut as number,
-      }),
+      });
+    },
     onSuccess: (res) => {
       playSound('start.wav', voiceRef.current);
       const game = res?.data?.data?.data ?? res?.data?.data ?? res?.data;
