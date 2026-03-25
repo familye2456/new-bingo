@@ -86,7 +86,7 @@ export const UserDetail: React.FC = () => {
   ];
 
   return (
-    <div className="p-6 max-w-5xl space-y-5">
+    <div className="p-4 sm:p-6 max-w-5xl space-y-5">
       {/* Back */}
       <button onClick={() => navigate('/admin/users')}
         className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-600 transition-colors">
@@ -128,10 +128,10 @@ export const UserDetail: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-white rounded-2xl shadow-sm border border-gray-100 p-1.5 w-fit">
+      <div className="flex gap-1 bg-white rounded-2xl shadow-sm border border-gray-100 p-1.5 w-full sm:w-fit overflow-x-auto">
         {tabs.map(({ key, label }) => (
           <button key={key} onClick={() => setTab(key)}
-            className={`px-5 py-2 rounded-xl text-sm font-medium transition-all ${
+            className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
               tab === key ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
             }`}>
             {label}
@@ -144,12 +144,12 @@ export const UserDetail: React.FC = () => {
         <div className="space-y-4">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
             <div className="font-medium text-gray-700 mb-3 text-sm">Assign a card to {user.username}</div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <input
                 type="number" min={1} max={2000} placeholder="Card number (1–2000)"
                 value={cardNumber}
                 onChange={(e) => { setCardNumber(e.target.value); setAssignError(''); }}
-                className="border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                className="border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm flex-1 min-w-0 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
               />
               <button
                 onClick={() => assignMutation.mutate()}
@@ -198,7 +198,8 @@ export const UserDetail: React.FC = () => {
           ) : transactions.length === 0 ? (
             <div className="py-10 text-center text-gray-400 text-sm">No transactions yet.</div>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[540px]">
               <thead>
                 <tr className="border-b border-gray-100">
                   {['Type', 'Amount', 'Status', 'Description', 'Date'].map((h) => (
@@ -231,6 +232,7 @@ export const UserDetail: React.FC = () => {
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       )}

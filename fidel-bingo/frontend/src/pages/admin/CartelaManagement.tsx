@@ -195,7 +195,7 @@ export const CartelaManagement: React.FC = () => {
   const inputCls = "border border-gray-200 rounded-xl px-3.5 py-2.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-colors";
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {selectedCartela && (
         <BingoCardModal
           cartela={selectedCartela} users={users}
@@ -209,11 +209,11 @@ export const CartelaManagement: React.FC = () => {
       )}
 
       {/* Tabs */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex gap-1 bg-white rounded-2xl shadow-sm border border-gray-100 p-1.5">
           {(['cartelas', 'assign-range'] as Tab[]).map((t) => (
             <button key={t} onClick={() => setTab(t)}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
                 tab === t ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
               }`}>
               {t === 'assign-range' ? 'Assign by Range' : 'All Cartelas'}
@@ -221,7 +221,7 @@ export const CartelaManagement: React.FC = () => {
           ))}
         </div>
         {tab === 'cartelas' && (
-          <div className="flex items-center gap-3 text-sm text-gray-500">
+          <div className="flex items-center gap-2 flex-wrap text-sm text-gray-500">
             <span className="bg-yellow-100 text-yellow-700 px-2.5 py-1 rounded-full text-xs font-medium">{assignedCount} assigned</span>
             <span className="bg-gray-100 text-gray-500 px-2.5 py-1 rounded-full text-xs font-medium">{total - assignedCount} free</span>
             <span className="text-gray-400 text-xs">{total} total</span>

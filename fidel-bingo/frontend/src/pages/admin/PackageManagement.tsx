@@ -38,9 +38,9 @@ export const PackageManagement: React.FC = () => {
   const totalPrepaidBalance = prepaidUsers.reduce((s, u) => s + Number(u.balance), 0);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: 'Prepaid Users', value: prepaidUsers.length, color: 'from-violet-500 to-violet-600' },
           { label: 'Active Prepaid', value: prepaidUsers.filter(u => u.status === 'active').length, color: 'from-emerald-500 to-emerald-600' },
