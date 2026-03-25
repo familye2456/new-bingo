@@ -149,6 +149,14 @@ export const PlayBingo: React.FC = () => {
     try {
       const result = await offlineGameApi.checkCartela(game.id, num);
       setCheckResult(result);
+      if (result.registered) {
+        const isBoy = voiceRef.current === 'boy sound';
+        if (result.isWinner) {
+          playSound(isBoy ? 'winner.wav' : 'winner.mp3', voiceRef.current);
+        } else if (isBoy) {
+          playSound('notwinner.wav', voiceRef.current);
+        }
+      }
     } catch {
       setCheckResult({ registered: false, isWinner: false, winPattern: null });
     } finally {
