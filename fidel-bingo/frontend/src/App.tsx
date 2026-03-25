@@ -25,9 +25,9 @@ import { PackageManagement } from './pages/admin/PackageManagement';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: false,
-      staleTime: 0,          // always consider data stale — refetch on focus/mount
-      refetchOnWindowFocus: true,
+      retry: 1,
+      staleTime: 30 * 1000,      // 30s — don't refetch if data is fresh
+      refetchOnWindowFocus: false, // don't hammer server on tab switch
       networkMode: 'always',
     },
     mutations: {
@@ -89,9 +89,9 @@ const AppRoutes: React.FC = () => {
     fetchMe();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Poll balance every 5 seconds when online
+  // Poll balance every 60 seconds when online
   useEffect(() => {
-    const id = setInterval(() => refreshBalance(), 5000);
+    const id = setInterval(() => refreshBalance(), 60_000);
     return () => clearInterval(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

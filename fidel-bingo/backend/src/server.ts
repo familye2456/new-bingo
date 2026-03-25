@@ -69,8 +69,8 @@ app.use(metricsMiddleware);
 // Rate limiting
 app.use('/api/', rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: env.NODE_ENV === 'development' ? 10000 : 100,
-  skipSuccessfulRequests: true,
+  max: env.NODE_ENV === 'development' ? 10000 : 500,
+  skipSuccessfulRequests: false,
   message: { success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests' } },
 }));
 

@@ -104,21 +104,11 @@ export const UserDashboard: React.FC = () => {
   const { data: txs = [], isLoading } = useQuery<Transaction[]>({
     queryKey: ['my-transactions'],
     queryFn: () => offlineUserApi.myTransactions() as Promise<Transaction[]>,
-    refetchInterval: 3000,
-    refetchOnMount: 'always' as const,
-    refetchOnWindowFocus: 'always' as const,
-    staleTime: 0,
-    cacheTime: 0,
   });
 
   const { data: games = [], isLoading: gamesLoading } = useQuery<Game[]>({
     queryKey: ['my-games'],
     queryFn: () => offlineGameApi.myGames() as Promise<Game[]>,
-    refetchInterval: 3000,
-    refetchOnMount: 'always' as const,
-    refetchOnWindowFocus: 'always' as const,
-    staleTime: 0,
-    cacheTime: 0,
   });
 
   const daily   = calcStats(games, 1);
