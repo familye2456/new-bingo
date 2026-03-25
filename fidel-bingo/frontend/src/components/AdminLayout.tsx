@@ -62,6 +62,9 @@ export const AdminLayout: React.FC = () => {
     n.end ? location.pathname === n.to : location.pathname.startsWith(n.to)
   )?.label ?? 'Admin';
 
+  // On mobile the sidebar is never collapsed — always full width when open
+  const isCollapsed = collapsed; // only applies on lg+
+
   return (
     <div className="min-h-screen flex bg-[#f0f2f5]">
       {/* Mobile backdrop */}
@@ -74,25 +77,23 @@ export const AdminLayout: React.FC = () => {
 
       {/* Sidebar */}
       <aside
-        className={`
-          fixed lg:static inset-y-0 left-0 z-40
-          ${collapsed ? 'w-[68px]' : 'w-60'}
-          bg-[#0f172a] flex flex-col transition-all duration-200 shrink-0 relative
-          ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-        `}
-        style={{ transition: 'transform 0.2s, width 0.2s' }}
+        className={[
+          'fixed inset-y-0 left-0 z-40 bg-[#0f172a] flex flex-col shrink-0',
+          // Desktop: static in flow, no transform needed
+          'lg:static lg:translate-x-0',
+          isCollapsed ? 'lg:w-[68px]' : 'lg:w-60',
+          // Mobile: always w-60, slide in/out
+          'w-60',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full',
+          'transition-transform lg:transition-[width] duration-200',
+        ].join(' ')}
       >
         {/* Logo */}
-        <div className={`flex items-center ${collapsed ? 'justify-center px-0' : 'px-5'} h-16 border-b border-white/10`}>
-          {!collapsed && (
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white font-black text-sm">B</div>
-              <span className="text-white font-bold text-base tracking-tight">Fidel Bingo</span>
-            </div>
-          )}
-          {collapsed && (
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white font-black text-sm">B</div>
-          )}
+        <div className={`flex items-center ${isCollapsed ? 'lg:justify-center lg:px-0 px-5' : 'px-5'} h-16 border-b border-white/10`}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white font-black text-sm shrink-0">B</div>
+            <span className={`text-white font-bold text-base tracking-tight ${isCollapsed ? 'lg:hidden' : ''}`}>Fidel Bingo</span>
+          </div>
         </div>
 
         {/* Nav */}
@@ -111,50 +112,48 @@ export const AdminLayout: React.FC = () => {
               }
             >
               <span className="shrink-0">{icon}</span>
-              {!collapsed && <span>{label}</span>}
+              <span className={isCollapsed ? 'lg:hidden' : ''}>{label}</span>
             </NavLink>
           ))}
         </nav>
 
         {/* User + logout */}
         <div className="border-t border-white/10 p-3">
-          {!collapsed && (
-            <div className="flex items-center gap-2.5 px-1 mb-2">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
-                {user?.username?.[0]?.toUpperCase() ?? 'A'}
-              </div>
-              <div className="min-w-0">
-                <div className="text-white text-xs font-medium truncate">{user?.username}</div>
-                <div className="text-slate-400 text-[10px]">Administrator</div>
-              </div>
+          <div className={`flex items-center gap-2.5 px-1 mb-2 ${isCollapsed ? 'lg:hidden' : ''}`}>
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
+              {user?.username?.[0]?.toUpperCase() ?? 'A'}
             </div>
-          )}
+            <div className="min-w-0">
+              <div className="text-white text-xs font-medium truncate">{user?.username}</div>
+              <div className="text-slate-400 text-[10px]">Administrator</div>
+            </div>
+          </div>
           <button
             onClick={logout}
-            className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-slate-400 hover:bg-white/5 hover:text-red-400 transition-colors text-sm ${collapsed ? 'justify-center' : ''}`}
+            className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-slate-400 hover:bg-white/5 hover:text-red-400 transition-colors text-sm ${isCollapsed ? 'lg:justify-center' : ''}`}
           >
             <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
                 d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
-            {!collapsed && <span>Logout</span>}
+            <span className={isCollapsed ? 'lg:hidden' : ''}>Logout</span>
           </button>
         </div>
 
-        {/* Collapse toggle */}
+        {/* Collapse toggle — desktop only */}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="absolute -right-3 top-[72px] w-6 h-6 bg-[#0f172a] border border-white/20 rounded-full flex items-center justify-center text-slate-400 hover:text-white transition-colors z-10"
+          className="hidden lg:flex absolute -right-3 top-[72px] w-6 h-6 bg-[#0f172a] border border-white/20 rounded-full items-center justify-center text-slate-400 hover:text-white transition-colors z-10"
           aria-label="Toggle sidebar"
         >
-          <svg className={`w-3 h-3 transition-transform ${collapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className={`w-3 h-3 transition-transform ${isCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
       </aside>
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Main — full width on mobile, flex-1 on desktop */}
+      <div className="flex-1 flex flex-col min-w-0 w-full">
         {/* Top bar */}
         <header className="h-16 bg-white border-b border-gray-200 flex items-center px-4 sm:px-6 shrink-0">
           {/* Mobile hamburger */}
