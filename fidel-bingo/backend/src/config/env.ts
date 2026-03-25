@@ -1,6 +1,9 @@
 import dotenv from 'dotenv';
 import path from 'path';
+
+// Works for both ts-node (src/config/) and compiled (dist/config/)
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 export const env = {
   NODE_ENV: process.env.NODE_ENV || 'development',
@@ -8,7 +11,7 @@ export const env = {
   WS_PORT: parseInt(process.env.WS_PORT || '3001'),
 
   // Database
-  DATABASE_URL: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/fidelbingo',
+  DATABASE_URL: process.env.DATABASE_URL || (() => { throw new Error('DATABASE_URL is not set'); })(),
 
   // Redis — undefined means disabled, empty string also means disabled
   REDIS_URL: process.env.REDIS_URL || '',
