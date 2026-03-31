@@ -74,11 +74,9 @@ export const PlayBingo: React.FC = () => {
 
   useEffect(() => {
     if (isLoading) return;
-    // Only redirect if we have no gameId in URL and no active games
+    // Redirect to new-game if no active game
     if (activeGames.length === 0 && !selectedGameId) {
-      // Small delay to allow the newly created game to appear in the list
-      const t = setTimeout(() => navigate('/new-game', { replace: true }), 1500);
-      return () => clearTimeout(t);
+      navigate('/new-game', { replace: true });
     }
   }, [isLoading, activeGames.length, selectedGameId, navigate]);
 
@@ -178,8 +176,8 @@ export const PlayBingo: React.FC = () => {
     <div className="fixed inset-0 flex flex-col" style={{ background: '#0a1220' }}>
 
       {/* ── Top bar ── */}
-      <div className="flex items-center gap-2 pl-14 pr-3 py-2 shrink-0"
-        style={{ background: 'rgba(0,0,0,0.3)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <div className="flex items-center gap-2 pl-14 pr-3 py-3 shrink-0"
+        style={{ background: 'rgba(0,0,0,0.5)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
 
         {/* Game title */}
         <h1 className="text-yellow-400 font-extrabold text-lg sm:text-xl tracking-widest shrink-0">
@@ -204,28 +202,12 @@ export const PlayBingo: React.FC = () => {
               #{g.gameNumber ?? g.id.slice(0, 6)}
             </button>
           ))}
-          <button onClick={() => navigate('/new-game')}
-            className="text-xs font-bold px-3 py-1.5 rounded-lg"
-            style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
-            + New
-          </button>
         </div>
       </div>
-
-      {/* ── Number Board ── */}
       <div className="flex-1 flex items-center justify-center p-2 sm:p-3 min-h-0">
         {game ? (
           <NumberBoard calledNumbers={calledNumbers} lastNumber={lastNumber} />
-        ) : (
-          <div className="text-center">
-            <div className="text-5xl mb-4">🎱</div>
-            <div className="text-gray-400 mb-4">No active game</div>
-            <button onClick={() => navigate('/new-game')}
-              className="bg-yellow-400 text-gray-900 font-bold px-6 py-3 rounded-xl">
-              Start New Game
-            </button>
-          </div>
-        )}
+        ) : null}
       </div>
 
       {/* ── Controls ── */}
@@ -324,11 +306,9 @@ export const PlayBingo: React.FC = () => {
 };
 
 // ── InfoChip ──────────────────────────────────────────────────────────────────
-const InfoChip: React.FC<{ label: string; highlight?: boolean }> = ({ label, highlight }) => (
-  <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap shrink-0"
-    style={highlight
-      ? { background: 'rgba(251,191,36,0.2)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }
-      : { background: 'rgba(255,255,255,0.06)', color: '#9ca3af', border: '1px solid rgba(255,255,255,0.08)' }}>
+const InfoChip: React.FC<{ label: string; highlight?: boolean }> = ({ label }) => (
+  <span className="text-xs sm:text-sm font-bold px-3 py-1.5 rounded-xl whitespace-nowrap shrink-0"
+    style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.4)' }}>
     {label}
   </span>
 );
@@ -475,10 +455,10 @@ const CartelaPreviewModal: React.FC<{
         <div className="text-yellow-400 font-extrabold text-lg tracking-widest">Card #{cardNumber}</div>
 
         {/* Grid wrapper — position relative so SVG overlay sits on top */}
-        <div className="relative" style={{ width: GRID, height: GRID }}>
+        <div className="relative" style={{ width: GRID, height: GRID + 38, paddingTop: 38 }}>
 
           {/* BINGO header row */}
-          <div className="absolute -top-9 left-0 right-0 flex gap-[6px]">
+          <div className="absolute top-0 left-0 right-0 flex gap-[6px]">
             {BINGO_LETTERS.map(l => (
               <div key={l}
                 className="flex items-center justify-center font-extrabold text-gray-900 rounded-lg"
@@ -520,7 +500,7 @@ const CartelaPreviewModal: React.FC<{
             const col = idx % 5;
             const row = Math.floor(idx / 5);
             const left = col * (CELL + GAP);
-            const top = row * (CELL + GAP);
+            const top = 38 + row * (CELL + GAP);
 
             return (
               <div key={idx}

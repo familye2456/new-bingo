@@ -95,7 +95,7 @@ export const AdminLayout: React.FC = () => {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 py-4 px-2 space-y-0.5">
+        <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-0.5">
           {navItems.map(({ to, label, icon, end }) => (
             <NavLink
               key={to}
@@ -116,7 +116,7 @@ export const AdminLayout: React.FC = () => {
         </nav>
 
         {/* User + logout */}
-        <div className="border-t border-white/10 p-3">
+        <div className="shrink-0 border-t border-white/10 p-3">
           <div className={`flex items-center gap-2.5 px-1 mb-2 ${isCollapsed ? 'lg:hidden' : ''}`}>
             <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
               {user?.username?.[0]?.toUpperCase() ?? 'A'}
