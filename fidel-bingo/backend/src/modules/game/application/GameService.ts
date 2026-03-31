@@ -70,8 +70,12 @@ export class GameService {
         ? dto.housePercentage
         : env.HOUSE_PERCENTAGE;
 
+      // Per-user game counter
+      const userGameCount = await manager.count(Game, { where: { creatorId: userId } });
+
       const game = manager.create(Game, {
         creatorId: userId,
+        gameNumber: userGameCount + 1,
         betAmount: dto.betAmountPerCartela,
         housePercentage: HOUSE_PCT,
         winPattern: dto.winPattern ?? 'any',

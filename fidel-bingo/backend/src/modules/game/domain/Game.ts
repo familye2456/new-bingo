@@ -1,6 +1,6 @@
 import {
   Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, ManyToOne, JoinColumn, Generated
+  CreateDateColumn, ManyToOne, JoinColumn
 } from 'typeorm';
 import { User } from '../../user/domain/User';
 
@@ -12,8 +12,7 @@ export class Game {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ name: 'game_number' })
-  @Generated('increment')
+  @Column({ name: 'game_number', default: 1 })
   gameNumber!: number;
 
   @Column({ name: 'creator_id' })

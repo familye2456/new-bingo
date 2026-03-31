@@ -36,11 +36,20 @@ const queryClient = new QueryClient({
   },
 });
 
+const Splash: React.FC = () => (
+  <div className="min-h-screen flex items-center justify-center" style={{ background: '#0a1220' }}>
+    <div className="text-center">
+      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white font-black text-2xl mx-auto mb-4">B</div>
+      <div className="w-6 h-6 rounded-full border-2 border-yellow-400/30 border-t-yellow-400 animate-spin mx-auto" />
+    </div>
+  </div>
+);
+
 const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean }> = ({ children, adminOnly }) => {
   const { user, initialized, cacheSteps } = useAuthStore();
 
-  // Still bootstrapping (page refresh / fetchMe in progress)
-  if (!initialized && !user) return null;
+  // Still bootstrapping — show splash instead of blank white screen
+  if (!initialized && !user) return <Splash />;
 
   // Logged in but cache download in progress — show blocking screen
   if (!initialized && user) {
@@ -87,6 +96,16 @@ const AppRoutes: React.FC = () => {
 
   useEffect(() => {
     fetchMe();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep Render backend alive — ping /health every 10 min to prevent cold starts
+  useEffect(() => {
+    const BACKEND = (import.meta.env.VITE_API_URL || 'https://fidel-bingo.onrender.com/api')
+      .replace('/api', '');
+    const ping = () => fetch(`${BACKEND}/health`, { method: 'GET' }).catch(() => {});
+    ping(); // immediate ping on load
+    const id = setInterval(ping, 10 * 60 * 1000);
+    return () => clearInterval(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Poll balance every 60 seconds when online
