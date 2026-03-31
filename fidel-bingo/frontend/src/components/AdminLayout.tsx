@@ -66,7 +66,7 @@ export const AdminLayout: React.FC = () => {
   const isCollapsed = collapsed; // only applies on lg+
 
   return (
-    <div className="min-h-screen flex bg-[#f0f2f5]">
+    <div className="h-screen flex bg-[#f0f2f5] overflow-hidden">
       {/* Mobile backdrop */}
       {mobileOpen && (
         <div
@@ -78,11 +78,9 @@ export const AdminLayout: React.FC = () => {
       {/* Sidebar */}
       <aside
         className={[
-          'fixed inset-y-0 left-0 z-40 bg-[#0f172a] flex flex-col shrink-0',
-          // Desktop: static in flow, no transform needed
+          'fixed inset-y-0 left-0 z-40 bg-[#0f172a] flex flex-col shrink-0 h-screen overflow-hidden',
           'lg:static lg:translate-x-0',
           isCollapsed ? 'lg:w-[68px]' : 'lg:w-60',
-          // Mobile: always w-60, slide in/out
           'w-60',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
           'transition-transform lg:transition-[width] duration-200',

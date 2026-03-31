@@ -63,7 +63,7 @@ export const AdminOverview: React.FC = () => {
   return (
     <div className="p-4 sm:p-6 space-y-6">
       {/* Stats grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
         <StatCard
           label="Total Users" value={users.length}
           gradient="bg-gradient-to-br from-blue-500 to-blue-600"
@@ -93,12 +93,6 @@ export const AdminOverview: React.FC = () => {
           label="Active Games" value={activeGames}
           gradient="bg-gradient-to-br from-amber-500 to-amber-600"
           icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
-        />
-        <StatCard
-          label="Total Balance" value={`$${totalBalance.toFixed(2)}`}
-          gradient="bg-gradient-to-br from-teal-500 to-teal-600"
-          onClick={() => navigate('/admin/packages')}
-          icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
         />
       </div>
 
@@ -153,8 +147,8 @@ export const AdminOverview: React.FC = () => {
             <h3 className="font-semibold text-gray-800 mb-4 text-sm">Financial Summary</h3>
             <div className="space-y-3">
               {[
-                { label: 'Total Prize Pool (all games)', value: `$${totalPrizePool.toFixed(2)}`, color: 'text-emerald-600' },
-                { label: 'Prepaid Balance on Platform', value: `$${totalBalance.toFixed(2)}`, color: 'text-blue-600' },
+                { label: 'Total Prize Pool (all games)', value: `${totalPrizePool.toFixed(2)}`, color: 'text-emerald-600' },
+                { label: 'Prepaid Balance on Platform', value: `${totalBalance.toFixed(2)}`, color: 'text-blue-600' },
                 { label: 'Games Played', value: games.filter(g => g.status === 'finished').length, color: 'text-gray-700' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
