@@ -37,7 +37,31 @@ const STEPS: CacheStep[] = [
   { label: 'Cartelas',     status: 'pending' },
   { label: 'Games',        status: 'pending' },
   { label: 'Transactions', status: 'pending' },
+  { label: 'App & Sounds', status: 'pending' },
 ];
+
+/** Wait for the service worker to finish installing and caching all assets */
+async function waitForSWReady(): Promise<void> {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    // If there's a waiting or installing SW, wait for it to activate
+    const sw = reg.installing ?? reg.waiting;
+    if (!sw) return; // already active — assets cached
+    await new Promise<void>((resolve) => {
+      sw.addEventListener('statechange', function handler(e) {
+        if ((e.target as ServiceWorker).state === 'activated') {
+          sw.removeEventListener('statechange', handler);
+          resolve();
+        }
+      });
+      // Timeout after 60s — don't block forever
+      setTimeout(resolve, 60_000);
+    });
+  } catch {
+    // SW not available — ignore
+  }
+}
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
@@ -87,6 +111,11 @@ export const useAuthStore = create<AuthState>((set) => ({
             mark(i, 'skipped');
           }
         }
+
+        // Wait for service worker to finish caching all app assets & sounds
+        mark(4, 'loading');
+        await waitForSWReady();
+        mark(4, 'done');
 
         // All done — now open the app
         set({ initialized: true });
