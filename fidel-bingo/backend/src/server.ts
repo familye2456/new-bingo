@@ -46,6 +46,7 @@ app.use(helmet({
 const allowedOrigins = [
   env.FRONTEND_URL,
   'https://fidel-bingo1.netlify.app',
+  'https://f-bingo.vercel.app',
   'http://localhost:5173',
 ].filter(Boolean);
 

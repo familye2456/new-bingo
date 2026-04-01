@@ -103,7 +103,7 @@ const AppRoutes: React.FC = () => {
     const BACKEND = (import.meta.env.VITE_API_URL || 'https://fidel-bingo.onrender.com/api')
       .replace('/api', '');
     const ping = () => fetch(`${BACKEND}/health`, { method: 'GET' }).catch(() => {});
-    ping(); // immediate ping on load
+    ping();
     const id = setInterval(ping, 10 * 60 * 1000);
     return () => clearInterval(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
