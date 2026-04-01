@@ -137,31 +137,26 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   fetchMe: async () => {
-    const cached = await dbGet<User>('user', 'me');
-    if (cached) {
-      set({ user: cached, initialized: true });
-    }
-
+    // Try server first — only use cache as fallback if offline/unreachable
     try {
       const res = await api.get('/users/me');
       const fresh = res.data?.data as User;
       if (fresh?.id) {
         await dbPut('user', fresh, 'me');
         set({ user: fresh, initialized: true });
+        return;
       }
-    } catch {
-      if (!cached) {
+    } catch (err: any) {
+      // HTTP error (401 etc) — not authenticated, don't fall back to cache
+      if (err?.response?.status) {
         set({ user: null, initialized: true });
-      } else {
-        set({ initialized: true });
+        return;
       }
+      // Network error — fall back to cached user
     }
 
-    if (typeof window !== 'undefined') {
-      window.addEventListener('cache-refreshed', async () => {
-        const refreshed = await dbGet<User>('user', 'me');
-        if (refreshed) set({ user: refreshed });
-      });
-    }
+    // Offline fallback
+    const cached = await dbGet<User>('user', 'me');
+    set({ user: cached ?? null, initialized: true });
   },
 }));
