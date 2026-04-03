@@ -23,32 +23,9 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Cache the app shell (JS/CSS/HTML) and all sounds
+        // Cache only app shell assets (JS/CSS/HTML/sounds) — no API caching
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,mp3,wav}'],
-        // Runtime caching for user API routes only (not admin)
-        runtimeCaching: [
-          {
-            // User profile, cartelas, game history, transactions
-            urlPattern: /^https?:\/\/.*\/api\/(users\/me|cartelas\/mine|games\/mine|users\/me\/transactions|games\/[^/?]+$)/,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'user-api-cache',
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 7 }, // 7 days
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          {
-            // Game list
-            urlPattern: /^https?:\/\/.*\/api\/games(\?.*)?$/,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'games-list-cache',
-              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 10 }, // 10 min
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
-        // Never cache admin routes
+        runtimeCaching: [],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/admin/],
       },

@@ -68,6 +68,73 @@ export async function refreshCache() {
 
 // ── Flush queued mutations ────────────────────────────────────────────────────
 
+// ── Flush queued mutations ────────────────────────────────────────────────────
+
+/** Flush the sync queue without refreshing the full cache afterwards */
+export async function flushQueueOnly() {
+  if (!(await isPrepaid())) return;
+  const items = await getAllQueued();
+  if (items.length === 0) return;
+
+  for (const item of items) {
+    try {
+      switch (item.type) {
+        case 'createGame': {
+          const p = item.payload as any;
+          const res = await api.post('/games', {
+            cartelaIds: p.cartelaIds,
+            betAmountPerCartela: p.betAmountPerCartela,
+            winPattern: p.winPattern,
+          });
+          const realGame = res.data.data;
+          if (p.tempId) {
+            await dbDelete('games', p.tempId);
+            const allTx = await dbGetAll<any>('transactions');
+            for (const tx of allTx) {
+              if (tx.id?.includes(p.tempId)) {
+                await dbDelete('transactions', tx.id);
+                await dbPut('transactions', {
+                  ...tx,
+                  id: tx.id.replace(p.tempId, realGame.id),
+                  description: tx.description?.replace(p.tempId.slice(0, 12), realGame.id.slice(0, 8)),
+                });
+              }
+            }
+          }
+          await dbPut('games', realGame);
+          await dequeue(item.id!);
+          break;
+        }
+        case 'finishGame': {
+          const p = item.payload as any;
+          if (String(p.gameId).startsWith('offline-')) break;
+          await api.post(`/games/${p.gameId}/finish`);
+          await dequeue(item.id!);
+          break;
+        }
+        case 'claimBingo': {
+          const p = item.payload as any;
+          if (String(p.gameId).startsWith('offline-')) break;
+          await api.post(`/games/${p.gameId}/bingo`, { cartelaId: p.cartelaId });
+          await dequeue(item.id!);
+          break;
+        }
+        case 'markNumber': {
+          const p = item.payload as any;
+          await api.post(`/games/cartelas/${p.cartelaId}/mark`, { number: p.number });
+          await dequeue(item.id!);
+          break;
+        }
+        default:
+          await dequeue(item.id!);
+      }
+    } catch (err: any) {
+      if (err?.response?.status) await dequeue(item.id!);
+      break; // network error — stop
+    }
+  }
+}
+
 export async function flushQueue() {
   if (!(await isPrepaid())) return;
 

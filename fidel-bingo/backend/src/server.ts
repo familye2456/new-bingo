@@ -52,8 +52,10 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-    // In production be permissive — don't crash on unknown origins, just deny
+    if (!origin) return cb(null, true); // allow non-browser requests
+    if (allowedOrigins.includes(origin)) return cb(null, true);
+    // Allow any vercel.app or netlify.app preview deployments
+    if (origin.endsWith('.vercel.app') || origin.endsWith('.netlify.app')) return cb(null, true);
     return cb(null, false);
   },
   credentials: true,
