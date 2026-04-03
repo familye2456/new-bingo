@@ -71,8 +71,8 @@ app.use(metricsMiddleware);
 
 // Rate limiting — general API (per IP)
 app.use('/api/', rateLimit({
-  windowMs: 1 * 60 * 1000,       // 1 minute window
-  max: env.NODE_ENV === 'development' ? 10000 : 300,  // 300 req/min per IP
+  windowMs: 1 * 60 * 1000,
+  max: env.NODE_ENV === 'development' ? 10000 : 600,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests' } },

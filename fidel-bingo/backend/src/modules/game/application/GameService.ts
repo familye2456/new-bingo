@@ -61,7 +61,11 @@ export class GameService {
       throw new AppError(404, 'CARTELA_NOT_FOUND', 'One or more cartelas not found');
 
     const totalCost = dto.betAmountPerCartela * dto.cartelaIds.length;
-    if (user.paymentType !== 'postpaid' && user.balance < totalCost) {
+    const HOUSE_PCT_CHECK = (dto.housePercentage != null && dto.housePercentage >= 10 && dto.housePercentage <= 45)
+      ? dto.housePercentage
+      : env.HOUSE_PERCENTAGE;
+    const houseCutRequired = totalCost * (HOUSE_PCT_CHECK / 100);
+    if (user.paymentType !== 'postpaid' && Number(user.balance) < houseCutRequired) {
       throw new AppError(400, 'INSUFFICIENT_BALANCE', 'Insufficient balance');
     }
 

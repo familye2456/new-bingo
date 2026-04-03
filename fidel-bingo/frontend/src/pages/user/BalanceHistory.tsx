@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { offlineUserApi, offlineGameApi } from '../../services/offlineApi';
 import { useAuthStore } from '../../store/authStore';
 
@@ -48,6 +48,7 @@ const fmt = (d: string) => {
 export const BalanceHistory: React.FC = () => {
   const { user } = useAuthStore();
   const [tab, setTab] = useState<'transactions' | 'games'>('games');
+  const qc = useQueryClient();
 
   const { data: txs = [], isLoading: txLoading } = useQuery<Transaction[]>({
     queryKey: ['my-transactions'],
@@ -59,12 +60,34 @@ export const BalanceHistory: React.FC = () => {
     queryFn: () => offlineGameApi.myGames(),
   });
 
+  const activeGames = games.filter(g => g.status === 'active');
+
+  const finishAllMutation = useMutation({
+    mutationFn: async () => {
+      for (const g of activeGames) {
+        await offlineGameApi.finish(g.id);
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['my-games'] }),
+  });
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-semibold">Balance History</h1>
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2 text-sm">
-          Balance: <span className="font-bold text-green-600">{Number(user?.balance ?? 0).toFixed(2)} Birr</span>
+        <div className="flex items-center gap-3">
+          {activeGames.length > 0 && (
+            <button
+              onClick={() => finishAllMutation.mutate()}
+              disabled={finishAllMutation.isLoading}
+              className="flex items-center gap-1.5 bg-red-500 hover:bg-red-600 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors disabled:opacity-50"
+            >
+              {finishAllMutation.isLoading ? 'Finishing...' : `Finish All (${activeGames.length})`}
+            </button>
+          )}
+          <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2 text-sm">
+            Balance: <span className="font-bold text-green-600">{Number(user?.balance ?? 0).toFixed(2)} Birr</span>
+          </div>
         </div>
       </div>
 
@@ -96,42 +119,30 @@ export const BalanceHistory: React.FC = () => {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  {['#', 'Bet Birr', 'Total Cartelas', 'Total Bet', 'Win Birr', 'House Profit', 'Status'].map((h) => (
+                  {['#', 'Date', 'Bet Birr', 'Total Cartelas', 'Total Bet', 'Win Birr', 'House Profit', 'Status'].map((h) => (
                     <th key={h} className="text-left px-4 py-3 text-gray-500 font-medium text-xs whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {games.map((g, i) => {
+                {[...games]
+                  .sort((a, b) => (b.gameNumber ?? 0) - (a.gameNumber ?? 0))
+                  .map((g, i) => {
                   const won = g.isWinner;
                   const winBirr = won ? Number(g.totalBets) - Number(g.houseCut) : 0;
                   return (
                     <tr key={g.id} className="hover:bg-gray-50">
-                      {/* Game number (newest = #1) */}
                       <td className="px-4 py-3 font-mono text-gray-500 text-xs">#{g.gameNumber ?? (i + 1)}</td>
-
-                      {/* Bet per cartela */}
-                      <td className="px-4 py-3 font-semibold text-gray-800">
-                        {Number(g.betAmount).toFixed(2)}
-                      </td>
-
-                      {/* Total cartelas in game */}
+                      <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{fmt(g.createdAt)}</td>
+                      <td className="px-4 py-3 font-semibold text-gray-800">{Number(g.betAmount).toFixed(2)}</td>
                       <td className="px-4 py-3 text-gray-700">{g.cartelaCount}</td>
-
-                      {/* Total bets collected */}
                       <td className="px-4 py-3 text-gray-700">{Number(g.totalBets).toFixed(2)}</td>
-
-                      {/* Win birr (prize share if winner, else —) */}
                       <td className="px-4 py-3 font-semibold">
                         {won
                           ? <span className="text-green-600">+{winBirr.toFixed(2)}</span>
                           : <span className="text-gray-400">—</span>}
                       </td>
-
-                      {/* House profit */}
                       <td className="px-4 py-3 text-orange-600">{Number(g.houseCut).toFixed(2)}</td>
-
-                      {/* Status + result badge */}
                       <td className="px-4 py-3">
                         <div className="flex flex-col gap-1">
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium w-fit ${

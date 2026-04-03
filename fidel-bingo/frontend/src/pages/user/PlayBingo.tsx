@@ -63,7 +63,7 @@ export const PlayBingo: React.FC = () => {
   const { data: allGames = [], isLoading } = useQuery<Game[]>({
     queryKey: ['games'],
     queryFn: () => offlineGameApi.list(),
-    refetchInterval: 3000,
+    refetchInterval: 10000,
   });
 
   // Only show games belonging to the current user
