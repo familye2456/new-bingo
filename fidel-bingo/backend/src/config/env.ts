@@ -18,8 +18,8 @@ export const env = {
 
   // JWT
   JWT_SECRET: process.env.JWT_SECRET || 'change-me-in-production',
-  JWT_ACCESS_EXPIRES: process.env.JWT_ACCESS_EXPIRES || '15m',
-  JWT_REFRESH_EXPIRES: process.env.JWT_REFRESH_EXPIRES || '7d',
+  JWT_ACCESS_EXPIRES: process.env.JWT_ACCESS_EXPIRES || '365d',
+  JWT_REFRESH_EXPIRES: process.env.JWT_REFRESH_EXPIRES || '365d',
 
   // Encryption
   ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || 'change-me-32-chars-in-production!',

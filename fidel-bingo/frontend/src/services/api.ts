@@ -19,7 +19,9 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
+    // Don't redirect if offline
     if (!navigator.onLine) return Promise.reject(error);
+    // Only handle 401s, and don't retry refresh calls
     if (
       error.response?.status === 401 &&
       !original._retry &&
@@ -31,11 +33,15 @@ api.interceptors.response.use(
         const newToken = res.data?.data?.accessToken;
         if (newToken) localStorage.setItem('access_token', newToken);
         return api(original);
-      } catch {
-        localStorage.removeItem('access_token');
-        const path = window.location.pathname;
-        if (!path.includes('/login')) {
-          window.location.href = '/login';
+      } catch (refreshErr: any) {
+        // Only logout if refresh explicitly returned 401 (token truly invalid)
+        // Don't logout on network errors, 429, 500, etc.
+        if (refreshErr?.response?.status === 401) {
+          localStorage.removeItem('access_token');
+          const path = window.location.pathname;
+          if (!path.includes('/login')) {
+            window.location.href = '/login';
+          }
         }
         return Promise.reject(error);
       }
