@@ -67,12 +67,21 @@ app.use(express.json({ limit: '10kb' }));
 app.use(cookieParser());
 app.use(metricsMiddleware);
 
-// Rate limiting
+// Rate limiting — general API (per IP)
 app.use('/api/', rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: env.NODE_ENV === 'development' ? 10000 : 500,
-  skipSuccessfulRequests: false,
+  windowMs: 1 * 60 * 1000,       // 1 minute window
+  max: env.NODE_ENV === 'development' ? 10000 : 300,  // 300 req/min per IP
+  standardHeaders: true,
+  legacyHeaders: false,
   message: { success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests' } },
+}));
+
+// Auth routes — stricter, only failed attempts count
+app.use('/api/auth/login', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: env.NODE_ENV === 'development' ? 10000 : 30,
+  skipSuccessfulRequests: true,
+  message: { success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many login attempts' } },
 }));
 
 // Routes

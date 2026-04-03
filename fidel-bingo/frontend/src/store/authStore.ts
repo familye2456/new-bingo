@@ -18,6 +18,9 @@ interface User {
 export interface CacheStep {
   label: string;
   status: 'pending' | 'loading' | 'done' | 'skipped';
+  count?: number;
+  total?: number;   // for SW step: total assets expected
+  cached?: number;  // for SW step: assets cached so far
 }
 
 interface AuthState {
@@ -40,23 +43,61 @@ const STEPS: CacheStep[] = [
   { label: 'App & Sounds', status: 'pending' },
 ];
 
-/** Wait for the service worker to finish installing and caching all assets */
-async function waitForSWReady(): Promise<void> {
-  if (!('serviceWorker' in navigator)) return;
+/** Wait for the service worker to finish installing and caching all assets, with progress */
+async function waitForSWReady(
+  onProgress: (cached: number, total: number) => void
+): Promise<void> {
+  if (!('serviceWorker' in navigator) || !('caches' in window)) return;
+
   try {
     const reg = await navigator.serviceWorker.ready;
-    // If there's a waiting or installing SW, wait for it to activate
     const sw = reg.installing ?? reg.waiting;
-    if (!sw) return; // already active — assets cached
+
+    // Poll Cache Storage for progress
+    const poll = async () => {
+      try {
+        const cacheNames = await caches.keys();
+        let cached = 0;
+        for (const name of cacheNames) {
+          const cache = await caches.open(name);
+          const keys = await cache.keys();
+          cached += keys.length;
+        }
+        return cached;
+      } catch { return 0; }
+    };
+
+    if (!sw) {
+      // SW already active — just count what's cached
+      const cached = await poll();
+      onProgress(cached, cached || 1);
+      return;
+    }
+
+    // Poll every 500ms while SW is installing
     await new Promise<void>((resolve) => {
-      sw.addEventListener('statechange', function handler(e) {
+      let lastCached = 0;
+
+      const interval = setInterval(async () => {
+        const cached = await poll();
+        if (cached !== lastCached) {
+          lastCached = cached;
+          onProgress(cached, Math.max(cached, lastCached));
+        }
+      }, 500);
+
+      sw.addEventListener('statechange', async function handler(e) {
         if ((e.target as ServiceWorker).state === 'activated') {
           sw.removeEventListener('statechange', handler);
+          clearInterval(interval);
+          const final = await poll();
+          onProgress(final, final || 1);
           resolve();
         }
       });
-      // Timeout after 60s — don't block forever
-      setTimeout(resolve, 60_000);
+
+      // Timeout after 90s
+      setTimeout(() => { clearInterval(interval); resolve(); }, 90_000);
     });
   } catch {
     // SW not available — ignore
@@ -78,47 +119,77 @@ export const useAuthStore = create<AuthState>((set) => ({
       await dbPut('user', user, 'me');
 
       if (user.paymentType === 'prepaid') {
-        // Show download screen — NOT initialized yet, user stays blocked
-        set({ user, loading: false, initialized: false });
+        // Skip download screen if already cached for this user
+        const cacheKey = `sw_cached_${user.id}`;
+        const alreadyCached = localStorage.getItem(cacheKey) === '1';
 
-        const steps: CacheStep[] = STEPS.map(s => ({ ...s }));
-        set({ cacheSteps: steps });
+        if (alreadyCached) {
+          set({ user, loading: false, initialized: true });
+        } else {
+          // Show download screen — NOT initialized yet, user stays blocked
+          set({ user, loading: false, initialized: false });
 
-        const mark = (i: number, status: CacheStep['status']) => {
-          steps[i] = { ...steps[i], status };
-          set({ cacheSteps: [...steps] });
-        };
+          const steps: CacheStep[] = STEPS.map(s => ({ ...s }));
+          set({ cacheSteps: steps });
 
-        const fetches: Array<{ url: string; store: string; key?: string }> = [
-          { url: '/users/me',              store: 'user',         key: 'me' },
-          { url: '/cartelas/mine',         store: 'cartelas' },
-          { url: '/games/mine',            store: 'games' },
-          { url: '/users/me/transactions', store: 'transactions' },
-        ];
+          const mark = (i: number, status: CacheStep['status'], count?: number) => {
+            steps[i] = { ...steps[i], status, ...(count !== undefined ? { count } : {}) };
+            set({ cacheSteps: [...steps] });
+          };
 
-        for (let i = 0; i < fetches.length; i++) {
-          mark(i, 'loading');
-          try {
-            const r = await api.get(fetches[i].url);
-            const data = r.data.data;
-            if (fetches[i].key) {
-              await dbPut(fetches[i].store, data, fetches[i].key);
-            } else {
-              for (const item of (data ?? [])) await dbPut(fetches[i].store, item);
+          const fetches: Array<{ url: string; store: string; key?: string }> = [
+            { url: '/users/me',              store: 'user',         key: 'me' },
+            { url: '/cartelas/mine',         store: 'cartelas' },
+            { url: '/games/mine',            store: 'games' },
+            { url: '/users/me/transactions', store: 'transactions' },
+          ];
+
+          for (let i = 0; i < fetches.length; i++) {
+            mark(i, 'loading');
+            try {
+              const r = await api.get(fetches[i].url);
+              const data = r.data.data;
+              if (fetches[i].key) {
+                await dbPut(fetches[i].store, data, fetches[i].key);
+                mark(i, 'done', 1);
+              } else {
+                const items = data ?? [];
+                for (const item of items) await dbPut(fetches[i].store, item);
+                mark(i, 'done', items.length);
+              }
+            } catch {
+              mark(i, 'skipped');
             }
-            mark(i, 'done');
-          } catch {
-            mark(i, 'skipped');
           }
+
+          // Mark as cached now (data is in IndexedDB) so next login skips this screen
+          // even if the user closes before the SW finishes installing
+          localStorage.setItem(cacheKey, '1');
+
+          // Wait for service worker to finish caching all app assets & sounds
+          // Only block if SW is still installing (first install). Skip if already active.
+          mark(4, 'loading');
+          const swAlreadyActive = await (async () => {
+            if (!('serviceWorker' in navigator)) return true;
+            try {
+              const reg = await navigator.serviceWorker.ready;
+              return !reg.installing && !reg.waiting;
+            } catch { return true; }
+          })();
+
+          if (swAlreadyActive) {
+            mark(4, 'done');
+          } else {
+            await waitForSWReady((cached, total) => {
+              steps[4] = { ...steps[4], status: 'loading', cached, total };
+              set({ cacheSteps: [...steps] });
+            });
+            mark(4, 'done', steps[4].cached);
+          }
+
+          // All done — now open the app
+          set({ initialized: true });
         }
-
-        // Wait for service worker to finish caching all app assets & sounds
-        mark(4, 'loading');
-        await waitForSWReady();
-        mark(4, 'done');
-
-        // All done — now open the app
-        set({ initialized: true });
       } else {
         // Non-prepaid: no cache needed, open immediately
         set({ user, loading: false, initialized: true });

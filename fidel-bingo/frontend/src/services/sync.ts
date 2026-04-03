@@ -25,22 +25,41 @@ export async function refreshCache() {
       api.get('/users/me/transactions'),
     ]);
 
-    // Store fresh user (balance included) — /users/me: { success, data: user }
     const meData = meRes.data?.data ?? meRes.data;
+
+    // Only update balance from server if sync queue is empty (all offline ops synced)
+    const pendingQueue = await getAllQueued();
+    if (pendingQueue.length > 0 && meData) {
+      // Keep local balance — offline ops haven't synced yet
+      const localUser = await dbGet<any>('user', 'me');
+      if (localUser) meData.balance = localUser.balance;
+    }
     await dbPut('user', meData, 'me');
 
     const toList = (d: any) => Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : Array.isArray(d?.data?.data) ? d.data.data : [];
 
+    // Cartelas — safe to replace (no offline-created cartelas)
     await dbClear('cartelas');
     for (const c of toList(cartelasRes.data)) await dbPut('cartelas', c);
 
+    // Games — keep offline (temp) games, only replace server-side ones
+    const serverGames = toList(gamesRes.data);
+    const localGames = await dbGetAll<any>('games');
+    const offlineGames = localGames.filter((g: any) => String(g.id).startsWith('offline-'));
     await dbClear('games');
-    for (const g of toList(gamesRes.data)) await dbPut('games', g);
+    for (const g of serverGames) await dbPut('games', g);
+    for (const g of offlineGames) await dbPut('games', g); // restore offline games
 
+    // Transactions — keep offline ones, only replace server-side ones
+    const serverTx = toList(txRes.data);
+    const localTx = await dbGetAll<any>('transactions');
+    const offlineTx = localTx.filter((t: any) =>
+      String(t.id).startsWith('tx-bet-offline-') || String(t.id).startsWith('tx-win-offline-')
+    );
     await dbClear('transactions');
-    for (const t of toList(txRes.data)) await dbPut('transactions', t);
+    for (const t of serverTx) await dbPut('transactions', t);
+    for (const t of offlineTx) await dbPut('transactions', t); // restore offline transactions
 
-    // Signal React Query to invalidate its cache
     window.dispatchEvent(new CustomEvent('cache-refreshed'));
   } catch {
     // server unreachable — skip
@@ -135,6 +154,18 @@ export async function flushQueue() {
 
 // ── Listen for online event ───────────────────────────────────────────────────
 
+let _flushing = false;
+
+export async function syncWhenOnline() {
+  if (_flushing || !navigator.onLine) return;
+  _flushing = true;
+  try {
+    await flushQueue();
+  } finally {
+    _flushing = false;
+  }
+}
+
 if (typeof window !== 'undefined') {
-  window.addEventListener('online', () => flushQueue());
+  window.addEventListener('online', () => syncWhenOnline());
 }

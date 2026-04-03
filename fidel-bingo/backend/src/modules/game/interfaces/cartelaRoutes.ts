@@ -22,6 +22,52 @@ router.get('/mine', async (req: AuthRequest, res: Response) => {
   res.json({ success: true, data: cartelas });
 });
 
+// Generate a new cartela for the current user (auto card number)
+router.post('/generate', async (req: AuthRequest, res: Response) => {
+  const { numbers: customNumbers } = req.body as { numbers?: number[] };
+
+  const cartelaRepo = AppDataSource.getRepository(Cartela);
+  const ucRepo = AppDataSource.getRepository(UserCartela);
+  const { CartelaGenerator } = await import('../application/CartelaGenerator');
+  const generator = new CartelaGenerator();
+
+  // Validate custom numbers if provided
+  if (customNumbers !== undefined) {
+    if (!Array.isArray(customNumbers) || customNumbers.length !== 25)
+      throw new AppError(400, 'INVALID_NUMBERS', 'numbers must be an array of 25 integers');
+  }
+
+  // Get next card number for this user
+  const lastAssignment = await ucRepo
+    .createQueryBuilder('uc')
+    .innerJoin('uc.cartela', 'c')
+    .where('uc.userId = :userId', { userId: req.user!.id })
+    .orderBy('c.cardNumber', 'DESC')
+    .select(['uc.cartelaId'])
+    .getOne();
+
+  // Find the max card number globally to assign next
+  const maxCard = await cartelaRepo
+    .createQueryBuilder('c')
+    .select('MAX(c.cardNumber)', 'max')
+    .getRawOne();
+  const nextCardNumber = (maxCard?.max ?? 0) + 1;
+
+  const numbers = customNumbers ?? generator.generate();
+  const cartela = cartelaRepo.create({
+    cardNumber: nextCardNumber,
+    numbers,
+    patternMask: generator.generateMask(),
+    isActive: true,
+    isWinner: false,
+    purchasePrice: 0,
+  });
+  await cartelaRepo.save(cartela);
+  await ucRepo.save(ucRepo.create({ userId: req.user!.id, cartelaId: cartela.id }));
+
+  res.status(201).json({ success: true, data: { ...cartela, assignedAt: new Date() } });
+});
+
 // ─── Admin only below ────────────────────────────────────────────────────────
 
 router.use(authorize('admin'));

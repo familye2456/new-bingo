@@ -53,30 +53,109 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean 
 
   // Logged in but cache download in progress — show blocking screen
   if (!initialized && user) {
+    const total = cacheSteps.length;
+    const done = cacheSteps.filter(s => s.status === 'done' || s.status === 'skipped').length;
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
     return (
-      <div className="min-h-screen flex items-center justify-center"
+      <div className="min-h-screen flex items-center justify-center px-6"
         style={{ background: '#0a1220' }}>
-        <div className="text-center w-72">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white font-black text-xl mx-auto mb-6">B</div>
-          <p className="text-white font-semibold mb-1">Setting up your account</p>
-          <p className="text-gray-500 text-xs mb-6">Downloading data for offline use…</p>
+        <div className="w-full max-w-xs">
+          {/* Logo */}
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white font-black text-2xl mb-4 shadow-lg"
+              style={{ boxShadow: '0 0 32px rgba(251,191,36,0.3)' }}>B</div>
+            <p className="text-white font-bold text-lg">Fidel Bingo</p>
+            <p className="text-gray-500 text-xs mt-1">Preparing offline mode…</p>
+          </div>
+
+          {/* Overall progress bar */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-gray-500">Downloading</span>
+              <span className="text-xs font-bold text-yellow-400">{pct}%</span>
+            </div>
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${pct}%`,
+                  background: 'linear-gradient(90deg, #f59e0b, #fbbf24)',
+                  boxShadow: pct > 0 ? '0 0 8px rgba(251,191,36,0.5)' : 'none',
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Step list */}
           <div className="space-y-2">
-            {cacheSteps.map((step) => (
-              <div key={step.label} className="flex items-center gap-3 px-4 py-2.5 rounded-xl"
-                style={{ background: 'rgba(255,255,255,0.05)' }}>
-                <span className="text-base w-5 text-center">
-                  {step.status === 'done'    ? '✓' :
-                   step.status === 'loading' ? '⟳' :
-                   step.status === 'skipped' ? '—' : '·'}
-                </span>
-                <span className={`text-sm flex-1 text-left ${
-                  step.status === 'done'    ? 'text-emerald-400' :
-                  step.status === 'loading' ? 'text-yellow-400 animate-pulse' :
-                  step.status === 'skipped' ? 'text-gray-500' :
-                  'text-gray-600'
-                }`}>{step.label}</span>
-              </div>
-            ))}
+            {cacheSteps.map((step) => {
+              const isDone    = step.status === 'done' || step.status === 'skipped';
+              const isLoading = step.status === 'loading';
+              return (
+                <div key={step.label} className="rounded-xl overflow-hidden transition-all duration-300">
+                  <div
+                    className="flex items-center gap-3 px-4 py-3"
+                    style={{
+                      background: isDone
+                        ? 'rgba(34,197,94,0.08)'
+                        : isLoading
+                        ? 'rgba(251,191,36,0.08)'
+                        : 'rgba(255,255,255,0.04)',
+                      borderTop: isDone ? '1px solid rgba(34,197,94,0.2)' : isLoading ? '1px solid rgba(251,191,36,0.2)' : '1px solid rgba(255,255,255,0.06)',
+                      borderLeft: isDone ? '1px solid rgba(34,197,94,0.2)' : isLoading ? '1px solid rgba(251,191,36,0.2)' : '1px solid rgba(255,255,255,0.06)',
+                      borderRight: isDone ? '1px solid rgba(34,197,94,0.2)' : isLoading ? '1px solid rgba(251,191,36,0.2)' : '1px solid rgba(255,255,255,0.06)',
+                      borderBottom: isLoading && step.cached !== undefined ? 'none' : isDone ? '1px solid rgba(34,197,94,0.2)' : isLoading ? '1px solid rgba(251,191,36,0.2)' : '1px solid rgba(255,255,255,0.06)',
+                      borderRadius: isLoading && step.cached !== undefined ? '12px 12px 0 0' : '12px',
+                    }}>
+                    {/* Icon */}
+                    <div className="w-5 h-5 shrink-0 flex items-center justify-center">
+                      {isDone ? (
+                        <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : isLoading ? (
+                        <div className="w-4 h-4 rounded-full border-2 border-yellow-400/30 border-t-yellow-400 animate-spin" />
+                      ) : (
+                        <div className="w-2 h-2 rounded-full bg-gray-700" />
+                      )}
+                    </div>
+                    {/* Label */}
+                    <span className={`text-sm font-medium flex-1 ${
+                      isDone    ? 'text-emerald-400' :
+                      isLoading ? 'text-yellow-400' :
+                      'text-gray-600'
+                    }`}>{step.label}</span>
+                    {/* Status / count */}
+                    {isLoading && step.cached === undefined && <span className="text-[10px] text-yellow-500 animate-pulse">Loading…</span>}
+                    {isLoading && step.cached !== undefined && (
+                      <span className="text-[10px] font-bold text-yellow-400">{step.cached} files</span>
+                    )}
+                    {isDone && step.count !== undefined && step.count > 1 && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                        style={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80' }}>
+                        {step.count}
+                      </span>
+                    )}
+                    {isDone && (step.count === undefined || step.count <= 1) && (
+                      <span className="text-[10px] text-emerald-500">✓</span>
+                    )}
+                  </div>
+                  {/* SW sub-progress bar */}
+                  {isLoading && step.cached !== undefined && (
+                    <div className="h-1.5"
+                      style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.2)', borderTop: 'none', borderRadius: '0 0 12px 12px' }}>
+                      <div className="h-full rounded-b-xl transition-all duration-500"
+                        style={{
+                          width: step.total ? `${Math.min(100, Math.round((step.cached / step.total) * 100))}%` : '100%',
+                          background: 'linear-gradient(90deg,#f59e0b,#fbbf24)',
+                          animation: !step.total ? 'pulse 1.5s infinite' : undefined,
+                        }} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -93,8 +172,11 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean 
 const AppRoutes: React.FC = () => {
   const { fetchMe, refreshBalance } = useAuthStore();
   const qc = useQueryClient();
+  const fetchedRef = React.useRef(false);
 
   useEffect(() => {
+    if (fetchedRef.current) return; // prevent double-invoke in React dev mode
+    fetchedRef.current = true;
     fetchMe();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -5,6 +5,7 @@
 import { api } from './api';
 import { dbGet, dbGetAll, dbPut, enqueue, adjustBalance } from './db';
 import { useAuthStore } from '../store/authStore';
+import { flushQueue } from './sync';
 
 /** Update both IndexedDB and Zustand store atomically */
 async function applyBalanceDelta(delta: number) {
@@ -103,6 +104,8 @@ export const offlineUserApi = {
 
   myTransactions: async (): Promise<any[]> => {
     if (navigator.onLine) {
+      // Flush offline queue first
+      await flushQueue();
       try {
         const res = await api.get('/users/me/transactions');
         const list = toList(res.data);
@@ -133,17 +136,16 @@ export const offlineGameApi = {
   },
 
   myGames: async (): Promise<any[]> => {
-    // Always try server first — never serve stale IDB when online
     if (navigator.onLine) {
+      // Flush offline queue first so server has all data before we fetch
+      await flushQueue();
       try {
         const res = await api.get('/games/mine');
         const list = toList(res.data);
         for (const g of list) await dbPut('games', g);
         return list;
       } catch (err: any) {
-        // HTTP error (401 etc) — rethrow, don't fall back to IDB
         if (err?.response?.status) throw err;
-        // Network error — fall through to IDB
       }
     }
     // Offline fallback

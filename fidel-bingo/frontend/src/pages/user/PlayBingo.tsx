@@ -58,6 +58,7 @@ export const PlayBingo: React.FC = () => {
   const [checkLoading, setCheckLoading] = useState(false);
   const autoRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [sessionCalledNumbers, setSessionCalledNumbers] = useState<number[]>([]);
+  const [winnerInfo, setWinnerInfo] = useState<{ cardNumber: number; amount: number; pattern: string } | null>(null);
 
   const { data: allGames = [], isLoading } = useQuery<Game[]>({
     queryKey: ['games'],
@@ -151,6 +152,11 @@ export const PlayBingo: React.FC = () => {
         const isBoy = voiceRef.current === 'boy sound';
         if (result.isWinner) {
           playSound(isBoy ? 'winner.wav' : 'winner.mp3', voiceRef.current);
+          setWinnerInfo({
+            cardNumber: num,
+            amount: Number(game?.prizePool ?? 0),
+            pattern: result.winPattern ?? '',
+          });
         } else if (isBoy) {
           playSound('notwinner.wav', voiceRef.current);
         }
@@ -298,6 +304,30 @@ export const PlayBingo: React.FC = () => {
                 </>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Prize Pool Banner ── */}
+      {game && (
+        <div className="shrink-0 flex items-center justify-center gap-4 py-2 px-4"
+          style={{ background: 'rgba(0,0,0,0.4)', borderTop: '1px solid rgba(251,191,36,0.15)' }}>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-gray-500 uppercase tracking-widest">Prize Pool</span>
+            <span className="text-yellow-400 font-extrabold text-lg tabular-nums"
+              style={{ textShadow: '0 0 12px rgba(251,191,36,0.6)', animation: 'pulse 2s infinite' }}>
+              {Number(game.prizePool).toFixed(2)} <span className="text-sm font-bold">BIRR</span>
+            </span>
+          </div>
+          <div className="w-px h-5 bg-white/10" />
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-gray-500 uppercase tracking-widest">Cartelas</span>
+            <span className="text-white font-bold text-base">{game.cartelaCount}</span>
+          </div>
+          <div className="w-px h-5 bg-white/10" />
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-gray-500 uppercase tracking-widest">Bet</span>
+            <span className="text-white font-bold text-base">{Number(game.betAmount).toFixed(0)} BIRR</span>
           </div>
         </div>
       )}
