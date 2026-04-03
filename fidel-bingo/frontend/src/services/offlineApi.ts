@@ -107,9 +107,14 @@ export const offlineUserApi = {
       await flushQueueOnly();
       try {
         const res = await api.get('/users/me/transactions');
-        const list = toList(res.data);
-        for (const t of list) await dbPut('transactions', t);
-        return list;
+        const serverList = toList(res.data);
+        for (const t of serverList) await dbPut('transactions', t);
+        // Merge offline transactions not yet synced
+        const allLocal = await dbGetAll<any>('transactions');
+        const offlineTx = allLocal.filter((t: any) =>
+          String(t.id).startsWith('tx-bet-offline-') || String(t.id).startsWith('tx-win-offline-')
+        );
+        return [...serverList, ...offlineTx];
       } catch (err: any) {
         if (err?.response?.status) throw err;
       }
@@ -136,15 +141,19 @@ export const offlineGameApi = {
 
   myGames: async (): Promise<any[]> => {
     if (navigator.onLine) {
-      // Flush pending offline ops first (without refreshing full cache)
       await flushQueueOnly();
       try {
         const res = await api.get('/games/mine');
-        const list = toList(res.data);
-        for (const g of list) await dbPut('games', g);
-        return list;
+        const serverList = toList(res.data);
+        // Write server games to IDB
+        for (const g of serverList) await dbPut('games', g);
+        // Merge any still-pending offline games (not yet synced)
+        const allLocal = await dbGetAll<any>('games');
+        const offlineGames = allLocal.filter((g: any) => String(g.id).startsWith('offline-'));
+        return [...serverList, ...offlineGames];
       } catch (err: any) {
         if (err?.response?.status) throw err;
+        // Network error — fall through to IDB
       }
     }
     if (await isPrepaid()) {
