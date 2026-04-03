@@ -97,6 +97,8 @@ async function _doFlush() {
           if (p.tempId) {
             _syncedTempIds.add(p.tempId);
             await dbDelete('games', p.tempId);
+
+            // Update transactions referencing tempId
             const allTx = await dbGetAll<any>('transactions');
             for (const tx of allTx) {
               if (tx.id?.includes(p.tempId)) {
@@ -108,6 +110,20 @@ async function _doFlush() {
                 });
               }
             }
+
+            // Update any pending finishGame/claimBingo queue items that reference the tempId
+            // by re-reading the queue and patching them in IDB
+            const db = await import('./db').then(m => m.getDB());
+            const allQueued = await getAllQueued();
+            for (const qi of allQueued) {
+              const qp = qi.payload as any;
+              if (qp?.gameId === p.tempId) {
+                await db.put('syncQueue', {
+                  ...qi,
+                  payload: { ...qp, gameId: realGame.id },
+                }, qi.id);
+              }
+            }
           }
           await dbPut('games', realGame);
           await dequeue(item.id!);
@@ -116,7 +132,8 @@ async function _doFlush() {
 
         case 'finishGame': {
           const p = item.payload as any;
-          if (String(p.gameId).startsWith('offline-')) { await dequeue(item.id!); break; }
+          // If still has offline ID, createGame hasn't synced yet — skip for now
+          if (String(p.gameId).startsWith('offline-')) break;
           await api.post(`/games/${p.gameId}/finish`);
           await dequeue(item.id!);
           break;
@@ -124,7 +141,7 @@ async function _doFlush() {
 
         case 'claimBingo': {
           const p = item.payload as any;
-          if (String(p.gameId).startsWith('offline-')) { await dequeue(item.id!); break; }
+          if (String(p.gameId).startsWith('offline-')) break;
           await api.post(`/games/${p.gameId}/bingo`, { cartelaId: p.cartelaId });
           await dequeue(item.id!);
           break;
