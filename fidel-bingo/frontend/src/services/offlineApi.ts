@@ -233,34 +233,33 @@ export const offlineGameApi = {
   },
 
   reset: async (gameId: string) => {
-    const result = await tryApi(() => api.post(`/games/${gameId}/reset`));
-    if (result.ok) {
-      const cached = await dbGet<any>('games', gameId);
-      if (cached) {
-        cached.calledNumbers = [];
-        await dbPut('games', cached);
+    if (!String(gameId).startsWith('offline-')) {
+      const result = await tryApi(() => api.post(`/games/${gameId}/reset`));
+      if (result.ok) {
+        const cached = await dbGet<any>('games', gameId);
+        if (cached) { cached.calledNumbers = []; await dbPut('games', cached); }
+        return result.data;
       }
-      return result.data;
     }
-    // Offline: just clear locally
     const game = await dbGet<any>('games', gameId);
     if (game) { game.calledNumbers = []; await dbPut('games', game); }
     return { data: { success: true } };
   },
 
   callNumber: async (gameId: string) => {
-    const result = await tryApi(() => api.post(`/games/${gameId}/call`));
-    if (result.ok) {
-      // Backend returns { success, data: { number, remaining } }
-      const num: number | undefined = result.data.data?.data?.number;
-      if (num != null) {
-        const cached = await dbGet<any>('games', gameId);
-        if (cached) {
-          cached.calledNumbers = [...(cached.calledNumbers ?? []), num];
-          await dbPut('games', cached);
+    if (!String(gameId).startsWith('offline-')) {
+      const result = await tryApi(() => api.post(`/games/${gameId}/call`));
+      if (result.ok) {
+        const num: number | undefined = result.data.data?.data?.number;
+        if (num != null) {
+          const cached = await dbGet<any>('games', gameId);
+          if (cached) {
+            cached.calledNumbers = [...(cached.calledNumbers ?? []), num];
+            await dbPut('games', cached);
+          }
         }
+        return result.data;
       }
-      return result.data;
     }
 
     if (!(await isPrepaid())) throw new Error('Server unavailable');
@@ -290,11 +289,14 @@ export const offlineGameApi = {
    * Offline → mark finished locally, enqueue for sync.
    */
   finish: async (gameId: string) => {
-    const result = await tryApi(() => api.post(`/games/${gameId}/finish`));
-    if (result.ok) {
-      const game = await dbGet<any>('games', gameId);
-      if (game) { game.status = 'finished'; await dbPut('games', game); }
-      return result.data;
+    // If offline game, skip server call — just mark locally and enqueue
+    if (!String(gameId).startsWith('offline-')) {
+      const result = await tryApi(() => api.post(`/games/${gameId}/finish`));
+      if (result.ok) {
+        const game = await dbGet<any>('games', gameId);
+        if (game) { game.status = 'finished'; await dbPut('games', game); }
+        return result.data;
+      }
     }
 
     if (!(await isPrepaid())) throw new Error('Server unavailable');
@@ -384,8 +386,11 @@ export const offlineGameApi = {
   },
 
   checkCartela: async (gameId: string, cardNumber: number) => {
-    const result = await tryApi(() => api.get(`/games/${gameId}/check/${cardNumber}`));
-    if (result.ok) return result.data.data.data;
+    // If it's an offline game, always use local check — server doesn't know about it yet
+    if (!String(gameId).startsWith('offline-')) {
+      const result = await tryApi(() => api.get(`/games/${gameId}/check/${cardNumber}`));
+      if (result.ok) return result.data.data.data;
+    }
 
     // ── Offline fallback ──────────────────────────────────────────────────────
     const game = await dbGet<any>('games', gameId);
