@@ -12,7 +12,18 @@ async function isPrepaid(): Promise<boolean> {
 
 // ── Global flush lock — prevents concurrent flushes ───────────────────────────
 let _flushing = false;
-const _syncedTempIds = new Set<string>(); // track already-synced offline games this session
+
+// Persist synced tempIds across page reloads to prevent duplicate POSTs
+const SYNCED_KEY = 'synced_temp_ids';
+function getSyncedIds(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(SYNCED_KEY) || '[]')); } catch { return new Set(); }
+}
+function addSyncedId(id: string) {
+  const ids = getSyncedIds();
+  ids.add(id);
+  localStorage.setItem(SYNCED_KEY, JSON.stringify([...ids]));
+}
+function isSynced(id: string): boolean { return getSyncedIds().has(id); }
 
 // ── Cache refresh ─────────────────────────────────────────────────────────────
 
@@ -80,8 +91,8 @@ async function _doFlush() {
         case 'createGame': {
           const p = item.payload as any;
 
-          // Skip if already synced this session (prevents duplicate POSTs)
-          if (p.tempId && _syncedTempIds.has(p.tempId)) {
+          // Skip if already synced (persisted across reloads)
+          if (p.tempId && isSynced(p.tempId)) {
             await dequeue(item.id!);
             break;
           }
@@ -95,7 +106,7 @@ async function _doFlush() {
           const realGame = res.data.data;
 
           if (p.tempId) {
-            _syncedTempIds.add(p.tempId);
+            addSyncedId(p.tempId); // persist so page reload won't re-sync
             // Remove offline game from IDB
             await dbDelete('games', p.tempId);
 

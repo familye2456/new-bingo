@@ -5,7 +5,7 @@
 import { api } from './api';
 import { dbGet, dbGetAll, dbPut, enqueue, adjustBalance } from './db';
 import { useAuthStore } from '../store/authStore';
-import { flushQueue, flushQueueOnly } from './sync';
+import { flushQueue } from './sync';
 
 /** Update both IndexedDB and Zustand store atomically */
 async function applyBalanceDelta(delta: number) {
@@ -104,7 +104,6 @@ export const offlineUserApi = {
 
   myTransactions: async (): Promise<any[]> => {
     if (navigator.onLine) {
-      await flushQueueOnly();
       try {
         const res = await api.get('/users/me/transactions');
         const serverList = toList(res.data);
@@ -151,7 +150,6 @@ export const offlineGameApi = {
 
   myGames: async (): Promise<any[]> => {
     if (navigator.onLine) {
-      await flushQueueOnly();
       try {
         const res = await api.get('/games/mine');
         const serverList = toList(res.data);
@@ -169,7 +167,6 @@ export const offlineGameApi = {
     if (await isPrepaid()) {
       const user = await dbGet<any>('user', 'me');
       const all = await dbGetAll<any>('games');
-      // Deduplicate by id
       const seen = new Set<string>();
       const deduped = all.filter((g: any) => {
         if (seen.has(g.id)) return false;
