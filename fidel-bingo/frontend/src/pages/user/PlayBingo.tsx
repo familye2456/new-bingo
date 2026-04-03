@@ -62,13 +62,13 @@ export const PlayBingo: React.FC = () => {
 
   const { data: allGames = [], isLoading } = useQuery<Game[]>({
     queryKey: ['games'],
-    queryFn: () => offlineGameApi.list(),
+    queryFn: () => offlineGameApi.list('active'),
     refetchInterval: 10000,
   });
 
-  // Only show games belonging to the current user
-  const games = allGames.filter((g) => g.creatorId === user?.id);
-  const activeGames = games.filter((g) => g.status === 'active');
+  // Only show games belonging to the current user that are active
+  const games = allGames.filter((g) => g.creatorId === user?.id && g.status === 'active');
+  const activeGames = games;
   const game = selectedGameId
     ? games.find((g) => g.id === selectedGameId) ?? null
     : activeGames[0] ?? null;

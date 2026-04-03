@@ -134,9 +134,19 @@ export const offlineGameApi = {
     if (result.ok) {
       const list = toList(result.data);
       for (const g of list) await dbPut('games', g);
-      return list;
+      // Also include offline games with matching status
+      const allLocal = await dbGetAll<any>('games');
+      const offlineGames = allLocal.filter((g: any) =>
+        String(g.id).startsWith('offline-') &&
+        (!_status || g.status === _status)
+      );
+      const serverIds = new Set(list.map((g: any) => g.id));
+      const uniqueOffline = offlineGames.filter((g: any) => !serverIds.has(g.id));
+      return [...list, ...uniqueOffline];
     }
-    return dbGetAll<any>('games');
+    // Offline fallback — filter by status
+    const all = await dbGetAll<any>('games');
+    return _status ? all.filter((g: any) => g.status === _status) : all;
   },
 
   myGames: async (): Promise<any[]> => {
