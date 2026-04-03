@@ -1,17 +1,18 @@
 /**
  * Online/offline sync manager.
- * - flushQueue: replays queued mutations against the server when back online
- * - refreshCache: pulls fresh data from server into IndexedDB
- * - Emits a custom 'cache-refreshed' event so React Query can invalidate
  */
 import { api } from './api';
-import { dbGet, dbPut, dbGetAll, dbDelete, dbClear, enqueue, dequeue, getAllQueued } from './db';
+import { dbGet, dbPut, dbGetAll, dbDelete, dbClear, dequeue, getAllQueued } from './db';
 
 async function isPrepaid(): Promise<boolean> {
   const user = await dbGet<{ paymentType?: string }>('user', 'me');
   if (!user) return false;
   return !user.paymentType || user.paymentType === 'prepaid';
 }
+
+// ── Global flush lock — prevents concurrent flushes ───────────────────────────
+let _flushing = false;
+const _syncedTempIds = new Set<string>(); // track already-synced offline games this session
 
 // ── Cache refresh ─────────────────────────────────────────────────────────────
 
@@ -27,10 +28,9 @@ export async function refreshCache() {
 
     const meData = meRes.data?.data ?? meRes.data;
 
-    // Only update balance from server if sync queue is empty (all offline ops synced)
+    // Only update balance from server if sync queue is empty
     const pendingQueue = await getAllQueued();
     if (pendingQueue.length > 0 && meData) {
-      // Keep local balance — offline ops haven't synced yet
       const localUser = await dbGet<any>('user', 'me');
       if (localUser) meData.balance = localUser.balance;
     }
@@ -38,19 +38,16 @@ export async function refreshCache() {
 
     const toList = (d: any) => Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : Array.isArray(d?.data?.data) ? d.data.data : [];
 
-    // Cartelas — safe to replace (no offline-created cartelas)
     await dbClear('cartelas');
     for (const c of toList(cartelasRes.data)) await dbPut('cartelas', c);
 
-    // Games — keep offline (temp) games, only replace server-side ones
     const serverGames = toList(gamesRes.data);
     const localGames = await dbGetAll<any>('games');
     const offlineGames = localGames.filter((g: any) => String(g.id).startsWith('offline-'));
     await dbClear('games');
     for (const g of serverGames) await dbPut('games', g);
-    for (const g of offlineGames) await dbPut('games', g); // restore offline games
+    for (const g of offlineGames) await dbPut('games', g);
 
-    // Transactions — keep offline ones, only replace server-side ones
     const serverTx = toList(txRes.data);
     const localTx = await dbGetAll<any>('transactions');
     const offlineTx = localTx.filter((t: any) =>
@@ -58,7 +55,7 @@ export async function refreshCache() {
     );
     await dbClear('transactions');
     for (const t of serverTx) await dbPut('transactions', t);
-    for (const t of offlineTx) await dbPut('transactions', t); // restore offline transactions
+    for (const t of offlineTx) await dbPut('transactions', t);
 
     window.dispatchEvent(new CustomEvent('cache-refreshed'));
   } catch {
@@ -66,13 +63,11 @@ export async function refreshCache() {
   }
 }
 
-// ── Flush queued mutations ────────────────────────────────────────────────────
+// ── Core flush logic (shared) ─────────────────────────────────────────────────
 
-// ── Flush queued mutations ────────────────────────────────────────────────────
-
-/** Flush the sync queue without refreshing the full cache afterwards */
-export async function flushQueueOnly() {
+async function _doFlush() {
   if (!(await isPrepaid())) return;
+
   const items = await getAllQueued();
   if (items.length === 0) return;
 
@@ -81,13 +76,23 @@ export async function flushQueueOnly() {
       switch (item.type) {
         case 'createGame': {
           const p = item.payload as any;
+
+          // Skip if already synced this session (prevents duplicate POSTs)
+          if (p.tempId && _syncedTempIds.has(p.tempId)) {
+            await dequeue(item.id!);
+            break;
+          }
+
           const res = await api.post('/games', {
             cartelaIds: p.cartelaIds,
             betAmountPerCartela: p.betAmountPerCartela,
             winPattern: p.winPattern,
+            housePercentage: p.housePercentage,
           });
           const realGame = res.data.data;
+
           if (p.tempId) {
+            _syncedTempIds.add(p.tempId);
             await dbDelete('games', p.tempId);
             const allTx = await dbGetAll<any>('transactions');
             for (const tx of allTx) {
@@ -105,132 +110,65 @@ export async function flushQueueOnly() {
           await dequeue(item.id!);
           break;
         }
+
         case 'finishGame': {
           const p = item.payload as any;
-          if (String(p.gameId).startsWith('offline-')) break;
+          if (String(p.gameId).startsWith('offline-')) { await dequeue(item.id!); break; }
           await api.post(`/games/${p.gameId}/finish`);
           await dequeue(item.id!);
           break;
         }
+
         case 'claimBingo': {
           const p = item.payload as any;
-          if (String(p.gameId).startsWith('offline-')) break;
+          if (String(p.gameId).startsWith('offline-')) { await dequeue(item.id!); break; }
           await api.post(`/games/${p.gameId}/bingo`, { cartelaId: p.cartelaId });
           await dequeue(item.id!);
           break;
         }
+
         case 'markNumber': {
           const p = item.payload as any;
           await api.post(`/games/cartelas/${p.cartelaId}/mark`, { number: p.number });
           await dequeue(item.id!);
           break;
         }
+
         default:
           await dequeue(item.id!);
       }
     } catch (err: any) {
-      if (err?.response?.status) await dequeue(item.id!);
-      break; // network error — stop
+      if (err?.response?.status) await dequeue(item.id!); // server error — discard
+      else break; // network error — stop, retry later
     }
   }
 }
 
+// ── Public API ────────────────────────────────────────────────────────────────
+
+/** Flush queue only — no cache refresh. Used before individual fetches. */
+export async function flushQueueOnly() {
+  if (_flushing) return; // already running
+  _flushing = true;
+  try { await _doFlush(); }
+  finally { _flushing = false; }
+}
+
+/** Flush queue then refresh full cache. Used on online event. */
 export async function flushQueue() {
-  if (!(await isPrepaid())) return;
-
-  const items = await getAllQueued();
-  if (items.length === 0) {
-    await refreshCache();
-    return;
-  }
-
-  for (const item of items) {
-    try {
-      switch (item.type) {
-        case 'createGame': {
-          const p = item.payload as any;
-          // POST the game to server
-          const res = await api.post('/games', {
-            cartelaIds: p.cartelaIds,
-            betAmountPerCartela: p.betAmountPerCartela,
-            winPattern: p.winPattern,
-          });
-          const realGame = res.data.data; // single wrap: { success, data: game }
-
-          // Replace the temp game with the real one
-          if (p.tempId) {
-            await dbDelete('games', p.tempId);
-            // Also fix any transactions that referenced the tempId
-            const allTx = await dbGetAll<any>('transactions');
-            for (const tx of allTx) {
-              if (tx.id?.includes(p.tempId)) {
-                await dbDelete('transactions', tx.id);
-                await dbPut('transactions', {
-                  ...tx,
-                  id: tx.id.replace(p.tempId, realGame.id),
-                  description: tx.description?.replace(p.tempId.slice(0, 12), realGame.id.slice(0, 8)),
-                });
-              }
-            }
-          }
-          await dbPut('games', realGame);
-          await dequeue(item.id!);
-          break;
-        }
-
-        case 'finishGame': {
-          const p = item.payload as any;
-          // Skip if it's still a temp (offline) game id — createGame hasn't synced yet
-          if (String(p.gameId).startsWith('offline-')) break;
-          await api.post(`/games/${p.gameId}/finish`);
-          await dequeue(item.id!);
-          break;
-        }
-
-        case 'claimBingo': {
-          const p = item.payload as any;
-          if (String(p.gameId).startsWith('offline-')) break;
-          await api.post(`/games/${p.gameId}/bingo`, { cartelaId: p.cartelaId });
-          await dequeue(item.id!);
-          break;
-        }
-
-        case 'markNumber': {
-          const p = item.payload as any;
-          await api.post(`/games/cartelas/${p.cartelaId}/mark`, { number: p.number });
-          await dequeue(item.id!);
-          break;
-        }
-
-        default:
-          await dequeue(item.id!);
-      }
-    } catch (err: any) {
-      // If server returned an error (not a network error), discard the item
-      if (err?.response?.status) {
-        await dequeue(item.id!);
-      }
-      // Network error — leave in queue, stop processing
-      break;
-    }
-  }
-
-  // After flushing, pull fresh data from server
-  await refreshCache();
-}
-
-// ── Listen for online event ───────────────────────────────────────────────────
-
-let _flushing = false;
-
-export async function syncWhenOnline() {
-  if (_flushing || !navigator.onLine) return;
+  if (_flushing) return;
   _flushing = true;
   try {
-    await flushQueue();
+    await _doFlush();
+    await refreshCache();
   } finally {
     _flushing = false;
   }
+}
+
+export async function syncWhenOnline() {
+  if (!navigator.onLine) return;
+  await flushQueue();
 }
 
 if (typeof window !== 'undefined') {
