@@ -199,9 +199,10 @@ export const offlineGameApi = {
     if (result.ok) {
       const game = result.data.data.data;
       await dbPut('games', game);
-      const houseCut = data.betAmountPerCartela * data.cartelaIds.length * (HOUSE_PCT / 100);
+      // Server already deducted balance — just refresh it from server response
       await _writeBetTransactions(game.id, data.cartelaIds, data.betAmountPerCartela, Number(game.housePercentage ?? HOUSE_PCT));
-      await applyBalanceDelta(-houseCut);
+      // Sync local balance from server (don't double-deduct)
+      useAuthStore.getState().refreshBalance();
       return result.data;
     }
 

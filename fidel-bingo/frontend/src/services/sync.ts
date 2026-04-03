@@ -96,6 +96,7 @@ async function _doFlush() {
 
           if (p.tempId) {
             _syncedTempIds.add(p.tempId);
+            // Remove offline game from IDB
             await dbDelete('games', p.tempId);
 
             // Update transactions referencing tempId
@@ -112,7 +113,6 @@ async function _doFlush() {
             }
 
             // Update any pending finishGame/claimBingo queue items that reference the tempId
-            // by re-reading the queue and patching them in IDB
             const db = await import('./db').then(m => m.getDB());
             const allQueued = await getAllQueued();
             for (const qi of allQueued) {
@@ -125,6 +125,7 @@ async function _doFlush() {
               }
             }
           }
+          // Store the real server game
           await dbPut('games', realGame);
           await dequeue(item.id!);
           break;
@@ -135,6 +136,9 @@ async function _doFlush() {
           // If still has offline ID, createGame hasn't synced yet — skip for now
           if (String(p.gameId).startsWith('offline-')) break;
           await api.post(`/games/${p.gameId}/finish`);
+          // Clean up any stale local copy
+          const localGame = await dbGet<any>('games', p.gameId);
+          if (localGame) { localGame.status = 'finished'; await dbPut('games', localGame); }
           await dequeue(item.id!);
           break;
         }
