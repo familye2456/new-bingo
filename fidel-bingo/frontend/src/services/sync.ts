@@ -44,9 +44,12 @@ export async function refreshCache() {
     const serverGames = toList(gamesRes.data);
     const localGames = await dbGetAll<any>('games');
     const offlineGames = localGames.filter((g: any) => String(g.id).startsWith('offline-'));
+    const serverGameIds = new Set(serverGames.map((g: any) => g.id));
     await dbClear('games');
     for (const g of serverGames) await dbPut('games', g);
-    for (const g of offlineGames) await dbPut('games', g);
+    for (const g of offlineGames) {
+      if (!serverGameIds.has(g.id)) await dbPut('games', g);
+    }
 
     const serverTx = toList(txRes.data);
     const localTx = await dbGetAll<any>('transactions');

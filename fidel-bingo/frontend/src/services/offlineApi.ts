@@ -145,21 +145,28 @@ export const offlineGameApi = {
       try {
         const res = await api.get('/games/mine');
         const serverList = toList(res.data);
-        // Write server games to IDB
         for (const g of serverList) await dbPut('games', g);
-        // Merge any still-pending offline games (not yet synced)
+        // Merge still-pending offline games, deduplicate by id
         const allLocal = await dbGetAll<any>('games');
         const offlineGames = allLocal.filter((g: any) => String(g.id).startsWith('offline-'));
-        return [...serverList, ...offlineGames];
+        const serverIds = new Set(serverList.map((g: any) => g.id));
+        const uniqueOffline = offlineGames.filter((g: any) => !serverIds.has(g.id));
+        return [...serverList, ...uniqueOffline];
       } catch (err: any) {
         if (err?.response?.status) throw err;
-        // Network error — fall through to IDB
       }
     }
     if (await isPrepaid()) {
       const user = await dbGet<any>('user', 'me');
       const all = await dbGetAll<any>('games');
-      return user ? all.filter((g: any) => g.creatorId === user.id) : all;
+      // Deduplicate by id
+      const seen = new Set<string>();
+      const deduped = all.filter((g: any) => {
+        if (seen.has(g.id)) return false;
+        seen.add(g.id);
+        return true;
+      });
+      return user ? deduped.filter((g: any) => g.creatorId === user.id) : deduped;
     }
     return [];
   },
