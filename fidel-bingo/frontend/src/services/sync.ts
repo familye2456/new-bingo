@@ -173,10 +173,15 @@ async function _doFlush() {
           const p = item.payload as any;
           // If still has offline ID, createGame hasn't synced yet — skip for now
           if (String(p.gameId).startsWith('offline-')) break;
-          await api.post(`/games/${p.gameId}/finish`);
+          try {
+            await api.post(`/games/${p.gameId}/finish`);
+          } catch (finishErr: any) {
+            // 400 "already ended" means server already has it finished — treat as success
+            if (finishErr?.response?.status !== 400) throw finishErr;
+          }
           // Track this ID so refreshCache won't overwrite it with 'active'
           _justFinishedIds.add(String(p.gameId));
-          // Clean up any stale local copy
+          // Update local copy
           const localGame = await dbGet<any>('games', p.gameId);
           if (localGame) { localGame.status = 'finished'; await dbPut('games', localGame); }
           await dequeue(item.id!);
