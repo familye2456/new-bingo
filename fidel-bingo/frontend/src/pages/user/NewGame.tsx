@@ -119,6 +119,10 @@ export const NewGame: React.FC = () => {
           status: game.status ?? 'active',
           createdAt: game.createdAt ?? new Date().toISOString(),
         };
+        // Inject into both query caches so PlayBingo sees it immediately
+        queryClient.setQueryData(['games'], (old: any[] = []) =>
+          old.some((g) => g.id === newGame.id) ? old : [newGame, ...old]
+        );
         queryClient.setQueryData(['my-games'], (old: any[] = []) =>
           old.some((g) => g.id === newGame.id) ? old : [newGame, ...old]
         );

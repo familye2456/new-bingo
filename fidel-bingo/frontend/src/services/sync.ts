@@ -55,9 +55,19 @@ export async function refreshCache() {
     const serverGames = toList(gamesRes.data);
     const localGames = await dbGetAll<any>('games');
     const offlineGames = localGames.filter((g: any) => String(g.id).startsWith('offline-'));
+    // Preserve locally-finished status for games the server may not have caught up on yet
+    const localFinishedIds = new Set(
+      localGames.filter((g: any) => g.status === 'finished').map((g: any) => g.id)
+    );
     const serverGameIds = new Set(serverGames.map((g: any) => g.id));
     await dbClear('games');
-    for (const g of serverGames) await dbPut('games', g);
+    for (const g of serverGames) {
+      if (localFinishedIds.has(g.id) && g.status !== 'finished') {
+        await dbPut('games', { ...g, status: 'finished' });
+      } else {
+        await dbPut('games', g);
+      }
+    }
     for (const g of offlineGames) {
       if (!serverGameIds.has(g.id)) await dbPut('games', g);
     }
@@ -206,6 +216,15 @@ export async function syncWhenOnline() {
   await flushQueue();
 }
 
+// Debounce — don't sync more than once per 10 seconds
+let _lastSync = 0;
+function debouncedSync() {
+  const now = Date.now();
+  if (now - _lastSync < 10_000) return;
+  _lastSync = now;
+  syncWhenOnline();
+}
+
 if (typeof window !== 'undefined') {
-  window.addEventListener('online', () => syncWhenOnline());
+  window.addEventListener('online', debouncedSync);
 }

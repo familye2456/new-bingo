@@ -5,7 +5,6 @@
 import { api } from './api';
 import { dbGet, dbGetAll, dbPut, enqueue, adjustBalance } from './db';
 import { useAuthStore } from '../store/authStore';
-import { flushQueue } from './sync';
 
 /** Update both IndexedDB and Zustand store atomically */
 async function applyBalanceDelta(delta: number) {

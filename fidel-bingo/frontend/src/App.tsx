@@ -178,6 +178,12 @@ const AppRoutes: React.FC = () => {
     if (fetchedRef.current) return; // prevent double-invoke in React dev mode
     fetchedRef.current = true;
     fetchMe();
+    // Trigger sync once on app load if online and there are pending items
+    if (navigator.onLine) {
+      import('./services/sync').then(({ syncWhenOnline }) => {
+        setTimeout(syncWhenOnline, 2000); // delay to let auth settle first
+      });
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep Render backend alive — ping /health every 10 min to prevent cold starts
