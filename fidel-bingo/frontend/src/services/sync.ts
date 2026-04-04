@@ -55,14 +55,15 @@ export async function refreshCache() {
     const serverGames = toList(gamesRes.data);
     const localGames = await dbGetAll<any>('games');
     const offlineGames = localGames.filter((g: any) => String(g.id).startsWith('offline-'));
-    // Preserve locally-finished status for games the server may not have caught up on yet
-    const localFinishedIds = new Set(
-      localGames.filter((g: any) => g.status === 'finished').map((g: any) => g.id)
-    );
+    // Preserve finished status: locally marked finished OR just finished in this flush cycle
+    const localFinishedIds = new Set([
+      ...localGames.filter((g: any) => g.status === 'finished').map((g: any) => String(g.id)),
+      ..._justFinishedIds,
+    ]);
     const serverGameIds = new Set(serverGames.map((g: any) => g.id));
     await dbClear('games');
     for (const g of serverGames) {
-      if (localFinishedIds.has(g.id) && g.status !== 'finished') {
+      if (localFinishedIds.has(String(g.id)) && g.status !== 'finished') {
         await dbPut('games', { ...g, status: 'finished' });
       } else {
         await dbPut('games', g);
@@ -89,8 +90,12 @@ export async function refreshCache() {
 
 // ── Core flush logic (shared) ─────────────────────────────────────────────────
 
+// Track game IDs finished during the current flush so refreshCache won't overwrite them
+const _justFinishedIds = new Set<string>();
+
 async function _doFlush() {
   if (!(await isPrepaid())) return;
+  _justFinishedIds.clear();
 
   const items = await getAllQueued();
   if (items.length === 0) return;
@@ -107,16 +112,28 @@ async function _doFlush() {
             break;
           }
 
-          const res = await api.post('/games', {
-            cartelaIds: p.cartelaIds,
-            betAmountPerCartela: p.betAmountPerCartela,
-            winPattern: p.winPattern,
-            housePercentage: p.housePercentage,
-          });
-          const realGame = res.data.data;
+          // Mark as synced BEFORE the POST to prevent duplicate creation on retry/reload
+          if (p.tempId) addSyncedId(p.tempId);
+
+          let realGame: any;
+          try {
+            const res = await api.post('/games', {
+              cartelaIds: p.cartelaIds,
+              betAmountPerCartela: p.betAmountPerCartela,
+              winPattern: p.winPattern,
+              housePercentage: p.housePercentage,
+            });
+            realGame = res.data.data;
+          } catch (postErr: any) {
+            // If network error, un-mark so we retry next time
+            if (!postErr?.response?.status && p.tempId) {
+              const ids = getSyncedIds(); ids.delete(p.tempId);
+              localStorage.setItem(SYNCED_KEY, JSON.stringify([...ids]));
+            }
+            throw postErr;
+          }
 
           if (p.tempId) {
-            addSyncedId(p.tempId); // persist so page reload won't re-sync
             // Remove offline game from IDB
             await dbDelete('games', p.tempId);
 
@@ -157,6 +174,8 @@ async function _doFlush() {
           // If still has offline ID, createGame hasn't synced yet — skip for now
           if (String(p.gameId).startsWith('offline-')) break;
           await api.post(`/games/${p.gameId}/finish`);
+          // Track this ID so refreshCache won't overwrite it with 'active'
+          _justFinishedIds.add(String(p.gameId));
           // Clean up any stale local copy
           const localGame = await dbGet<any>('games', p.gameId);
           if (localGame) { localGame.status = 'finished'; await dbPut('games', localGame); }
