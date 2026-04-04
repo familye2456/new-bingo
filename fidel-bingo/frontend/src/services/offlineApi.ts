@@ -5,6 +5,7 @@
 import { api } from './api';
 import { dbGet, dbGetAll, dbPut, enqueue, adjustBalance } from './db';
 import { useAuthStore } from '../store/authStore';
+import { _justFinishedIds } from './sync';
 
 /** Update both IndexedDB and Zustand store atomically */
 async function applyBalanceDelta(delta: number) {
@@ -152,13 +153,25 @@ export const offlineGameApi = {
       try {
         const res = await api.get('/games/mine');
         const serverList = toList(res.data);
-        for (const g of serverList) await dbPut('games', g);
-        // Merge still-pending offline games, deduplicate by id
+
+        // Preserve locally-finished status in case server hasn't caught up yet
         const allLocal = await dbGetAll<any>('games');
+        const localFinishedIds = new Set([
+          ...allLocal.filter((g: any) => g.status === 'finished').map((g: any) => String(g.id)),
+          ..._justFinishedIds,
+        ]);
+        const mergedList = serverList.map((g: any) =>
+          localFinishedIds.has(String(g.id)) && g.status !== 'finished'
+            ? { ...g, status: 'finished' }
+            : g
+        );
+
+        for (const g of mergedList) await dbPut('games', g);
+        // Merge still-pending offline games, deduplicate by id
         const offlineGames = allLocal.filter((g: any) => String(g.id).startsWith('offline-'));
         const serverIds = new Set(serverList.map((g: any) => g.id));
         const uniqueOffline = offlineGames.filter((g: any) => !serverIds.has(g.id));
-        return [...serverList, ...uniqueOffline];
+        return [...mergedList, ...uniqueOffline];
       } catch (err: any) {
         if (err?.response?.status) throw err;
       }

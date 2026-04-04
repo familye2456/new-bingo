@@ -91,7 +91,7 @@ export async function refreshCache() {
 // ── Core flush logic (shared) ─────────────────────────────────────────────────
 
 // Track game IDs finished during the current flush so refreshCache won't overwrite them
-const _justFinishedIds = new Set<string>();
+export const _justFinishedIds = new Set<string>();
 
 async function _doFlush() {
   if (!(await isPrepaid())) return;
