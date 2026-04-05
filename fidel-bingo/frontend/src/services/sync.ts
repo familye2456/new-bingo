@@ -63,10 +63,16 @@ export async function refreshCache() {
     const serverGameIds = new Set(serverGames.map((g: any) => g.id));
     await dbClear('games');
     for (const g of serverGames) {
+      const localGame = localGames.find((l: any) => String(l.id) === String(g.id));
+      const merged = {
+        ...g,
+        // Preserve locally-patched cartelaIds (server game object doesn't include them)
+        cartelaIds: g.cartelaIds ?? localGame?.cartelaIds,
+      };
       if (localFinishedIds.has(String(g.id)) && g.status !== 'finished') {
-        await dbPut('games', { ...g, status: 'finished' });
+        await dbPut('games', { ...merged, status: 'finished' });
       } else {
-        await dbPut('games', g);
+        await dbPut('games', merged);
       }
     }
     for (const g of offlineGames) {
@@ -136,6 +142,13 @@ async function _doFlush() {
           if (p.tempId) {
             // Remove offline game from IDB
             await dbDelete('games', p.tempId);
+
+            // Migrate gameCartelas mapping from tempId to real ID
+            const tempCartelaIds = await dbGet<string[]>('gameCartelas', p.tempId);
+            if (tempCartelaIds) {
+              await dbPut('gameCartelas', tempCartelaIds, realGame.id);
+              await dbDelete('gameCartelas', p.tempId);
+            }
 
             // Update transactions referencing tempId
             const allTx = await dbGetAll<any>('transactions');

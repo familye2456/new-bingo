@@ -5,7 +5,7 @@
 import { openDB, IDBPDatabase } from 'idb';
 
 const DB_NAME = 'fidel-bingo';
-const DB_VERSION = 2; // bumped — added pendingBalance field to user store
+const DB_VERSION = 3; // v3: added gameCartelas store for offline cartela membership check
 
 export interface SyncItem {
   id?: number;
@@ -28,7 +28,12 @@ export async function getDB() {
         db.createObjectStore('transactions', { keyPath: 'id' });
         db.createObjectStore('syncQueue', { keyPath: 'id', autoIncrement: true });
       }
-      // v2: no schema change needed, just version bump to clear stale data
+      if (oldVersion < 3) {
+        // Maps gameId → string[] of cartelaIds — never cleared by server refreshes
+        if (!db.objectStoreNames.contains('gameCartelas')) {
+          db.createObjectStore('gameCartelas');
+        }
+      }
     },
   });
   return _db;

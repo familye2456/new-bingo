@@ -160,11 +160,17 @@ export const offlineGameApi = {
           ...allLocal.filter((g: any) => g.status === 'finished').map((g: any) => String(g.id)),
           ..._justFinishedIds,
         ]);
-        const mergedList = serverList.map((g: any) =>
-          localFinishedIds.has(String(g.id)) && g.status !== 'finished'
-            ? { ...g, status: 'finished' }
-            : g
-        );
+        const mergedList = serverList.map((g: any) => {
+          const local = allLocal.find((l: any) => String(l.id) === String(g.id));
+          const base = {
+            ...g,
+            // Preserve locally-patched cartelaIds — server doesn't return them on /games/mine
+            cartelaIds: g.cartelaIds ?? local?.cartelaIds,
+          };
+          return localFinishedIds.has(String(g.id)) && g.status !== 'finished'
+            ? { ...base, status: 'finished' }
+            : base;
+        });
 
         for (const g of mergedList) await dbPut('games', g);
         // Merge still-pending offline games, deduplicate by id
@@ -207,7 +213,17 @@ export const offlineGameApi = {
     const result = await tryApi(() => api.post('/games', data));
     if (result.ok) {
       const game = result.data.data.data;
-      await dbPut('games', game);
+      // Patch cartelaIds onto the cached game so offline checkCartela works without getCartelas
+      const patchedGame = { ...game, cartelaIds: data.cartelaIds };
+      await dbPut('games', patchedGame);
+      // Persist gameId → cartelaIds mapping in its own store (survives server cache overwrites)
+      await dbPut('gameCartelas', data.cartelaIds, game.id);
+      // Also ensure each cartela is individually cached for offline check
+      const allCartelas = await dbGetAll<any>('cartelas');
+      for (const cid of data.cartelaIds) {
+        const c = allCartelas.find((x: any) => x.id === cid);
+        if (c) await dbPut('cartelas', c);
+      }
       // Server already deducted balance — just refresh it from server response
       await _writeBetTransactions(game.id, data.cartelaIds, data.betAmountPerCartela, Number(game.housePercentage ?? HOUSE_PCT));
       // Sync local balance from server (don't double-deduct)
@@ -244,6 +260,8 @@ export const offlineGameApi = {
     };
 
     await dbPut('games', game);
+    // Persist gameId → cartelaIds mapping so offline checkCartela works reliably
+    await dbPut('gameCartelas', data.cartelaIds, tempId);
     await _writeBetTransactions(tempId, data.cartelaIds, data.betAmountPerCartela, HOUSE_PCT);
     // Deduct only house cut from balance
     await applyBalanceDelta(-houseCut);
@@ -389,15 +407,17 @@ export const offlineGameApi = {
   getCartelas: async (gameId: string) => {
     const result = await tryApi(() => api.get(`/games/${gameId}/cartelas`));
     if (result.ok) {
-      // Cache each cartela AND patch the game record with cartelaIds for offline checkCartela
       const list = toList(result.data);
+      const ids: string[] = [];
       for (const c of list) {
-        if (c.id) await dbPut('cartelas', c);
+        if (c.id) { await dbPut('cartelas', c); ids.push(c.id); }
       }
-      // Patch cached game with cartelaIds so offline check can verify membership
+      // Persist gameId → cartelaIds mapping in its own store (survives server cache overwrites)
+      if (ids.length > 0) await dbPut('gameCartelas', ids, gameId);
+      // Also patch the cached game record for backward compat
       const cachedGame = await dbGet<any>('games', gameId);
       if (cachedGame) {
-        cachedGame.cartelaIds = list.map((c: any) => c.id).filter(Boolean);
+        cachedGame.cartelaIds = ids;
         await dbPut('games', cachedGame);
       }
       return result.data;
@@ -421,10 +441,13 @@ export const offlineGameApi = {
     const cartela = allCartelas.find((c: any) => c.cardNumber === cardNumber);
     if (!cartela) return { registered: false, cardNumber, isWinner: false, winPattern: null };
 
-    // Verify it belongs to this game — game.cartelaIds is stored on offline games;
-    // for online games cached via getCartelas the cartela is in IDB but we check via game link
-    const inGame: boolean =
-      (Array.isArray(game.cartelaIds) && game.cartelaIds.includes(cartela.id));
+    // Check membership: use dedicated gameCartelas store first (most reliable),
+    // then fall back to game.cartelaIds (set on offline games and patched on online games)
+    const storedIds = await dbGet<string[]>('gameCartelas', gameId);
+    const cartelaIdList: string[] = storedIds
+      ?? (Array.isArray(game.cartelaIds) ? game.cartelaIds : []);
+
+    const inGame = cartelaIdList.includes(cartela.id);
     if (!inGame) return { registered: false, cardNumber, isWinner: false, winPattern: null };
 
     const called: number[] = game.calledNumbers ?? [];
