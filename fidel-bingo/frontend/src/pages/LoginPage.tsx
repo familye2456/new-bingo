@@ -48,8 +48,11 @@ export const LoginPage: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-600 to-purple-700 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md relative overflow-hidden">
 
-        <h1 className="text-3xl font-bold text-center text-blue-600 mb-2">Fidel Bingo</h1>
-        <p className="text-center text-gray-500 mb-6">Sign in to play</p>
+        <div className="flex flex-col items-center mb-6">
+          <img src="/icons/logo.png" alt="Fidel Bingo" className="w-20 h-20 object-contain mb-3" />
+          <h1 className="text-2xl font-bold text-blue-600">Fidel Bingo</h1>
+          <p className="text-gray-500 text-sm mt-1">Sign in to play</p>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -107,6 +110,10 @@ export const LoginPage: React.FC = () => {
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
+
+        <p className="text-center text-xs text-gray-400 mt-4">
+          Need help? Call <a href="tel:0934942672" className="text-blue-500 font-semibold">0934942672</a>
+        </p>
 
         {/* ── Cache progress overlay ── */}
         {caching && (

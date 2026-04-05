@@ -39,7 +39,9 @@ const queryClient = new QueryClient({
 const Splash: React.FC = () => (
   <div className="min-h-screen flex items-center justify-center" style={{ background: '#0a1220' }}>
     <div className="text-center">
-      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white font-black text-2xl mx-auto mb-4">B</div>
+      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center mx-auto mb-4 overflow-hidden">
+        <img src="/icons/logo.png" alt="Fidel Bingo" className="w-full h-full object-contain" />
+      </div>
       <div className="w-6 h-6 rounded-full border-2 border-yellow-400/30 border-t-yellow-400 animate-spin mx-auto" />
     </div>
   </div>
@@ -63,8 +65,10 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean 
         <div className="w-full max-w-xs">
           {/* Logo */}
           <div className="flex flex-col items-center mb-8">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white font-black text-2xl mb-4 shadow-lg"
-              style={{ boxShadow: '0 0 32px rgba(251,191,36,0.3)' }}>B</div>
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center mb-4 shadow-lg overflow-hidden"
+              style={{ boxShadow: '0 0 32px rgba(251,191,36,0.3)' }}>
+              <img src="/icons/logo.png" alt="Fidel Bingo" className="w-full h-full object-contain" />
+            </div>
             <p className="text-white font-bold text-lg">Fidel Bingo</p>
             <p className="text-gray-500 text-xs mt-1">Preparing offline mode…</p>
           </div>

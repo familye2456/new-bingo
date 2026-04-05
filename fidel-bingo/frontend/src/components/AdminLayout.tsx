@@ -89,7 +89,9 @@ export const AdminLayout: React.FC = () => {
         {/* Logo */}
         <div className={`flex items-center ${isCollapsed ? 'lg:justify-center lg:px-0 px-5' : 'px-5'} h-16 border-b border-white/10`}>
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white font-black text-sm shrink-0">B</div>
+            <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0">
+              <img src="/icons/logo.png" alt="Fidel Bingo" className="w-full h-full object-contain" />
+            </div>
             <span className={`text-white font-bold text-base tracking-tight ${isCollapsed ? 'lg:hidden' : ''}`}>Fidel Bingo</span>
           </div>
         </div>

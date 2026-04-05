@@ -26,13 +26,13 @@ export const Settings: React.FC = () => {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
   return (
-    <div className="p-6 max-w-lg mx-auto">
+    <div className="h-full overflow-auto p-6 max-w-lg mx-auto">
       <h1 className="text-xl font-semibold mb-6">Settings</h1>
 
       <div className="bg-white rounded-xl shadow p-6 mb-4">
         <h2 className="font-medium text-gray-700 mb-4">Profile</h2>
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs text-gray-500 mb-1">First Name</label>
               <input name="firstName" value={form.firstName} onChange={handleChange}

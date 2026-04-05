@@ -18,3 +18,7 @@ html, body, #root {
   white-space: nowrap;
   border-width: 0;
 }
+
+/* Hide scrollbars globally while keeping scroll functionality */
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }

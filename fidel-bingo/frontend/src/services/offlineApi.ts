@@ -213,21 +213,21 @@ export const offlineGameApi = {
     const result = await tryApi(() => api.post('/games', data));
     if (result.ok) {
       const game = result.data.data.data;
-      // Patch cartelaIds onto the cached game so offline checkCartela works without getCartelas
-      const patchedGame = { ...game, cartelaIds: data.cartelaIds };
-      await dbPut('games', patchedGame);
-      // Persist gameId → cartelaIds mapping in its own store (survives server cache overwrites)
-      await dbPut('gameCartelas', data.cartelaIds, game.id);
-      // Also ensure each cartela is individually cached for offline check
-      const allCartelas = await dbGetAll<any>('cartelas');
-      for (const cid of data.cartelaIds) {
-        const c = allCartelas.find((x: any) => x.id === cid);
-        if (c) await dbPut('cartelas', c);
-      }
-      // Server already deducted balance — just refresh it from server response
-      await _writeBetTransactions(game.id, data.cartelaIds, data.betAmountPerCartela, Number(game.housePercentage ?? HOUSE_PCT));
-      // Sync local balance from server (don't double-deduct)
-      useAuthStore.getState().refreshBalance();
+
+      // Return immediately — do all IDB caching in the background so UI navigates fast
+      Promise.resolve().then(async () => {
+        const patchedGame = { ...game, cartelaIds: data.cartelaIds };
+        await dbPut('games', patchedGame);
+        await dbPut('gameCartelas', data.cartelaIds, game.id);
+        const allCartelas = await dbGetAll<any>('cartelas');
+        for (const cid of data.cartelaIds) {
+          const c = allCartelas.find((x: any) => x.id === cid);
+          if (c) await dbPut('cartelas', c);
+        }
+        await _writeBetTransactions(game.id, data.cartelaIds, data.betAmountPerCartela, Number(game.housePercentage ?? HOUSE_PCT));
+        useAuthStore.getState().refreshBalance();
+      }).catch(() => {});
+
       return result.data;
     }
 
@@ -471,16 +471,28 @@ export const offlineGameApi = {
         case 'line1': return countLines() >= 1;
         case 'line2': return countLines() >= 2;
         case 'line3': return countLines() >= 3;
-        case 'fullhouse': return mask.every(Boolean);
+        case 'fullhouse':
+        case 'blackout': return mask.every(Boolean);
         case 'fourCorners': return mask[0] && mask[4] && mask[20] && mask[24];
+        case 'X':    return [0,6,12,18,24].every(i => mask[i]) && [4,8,12,16,20].every(i => mask[i]);
+        case 'plus': return [10,11,12,13,14].every(i => mask[i]) && [2,7,12,17,22].every(i => mask[i]);
+        case 'T':    return [0,1,2,3,4].every(i => mask[i]) && [2,7,12,17,22].every(i => mask[i]);
+        case 'L':    return [0,5,10,15,20].every(i => mask[i]) && [20,21,22,23,24].every(i => mask[i]);
+        case 'frame': return [0,1,2,3,4,5,9,10,14,15,19,20,21,22,23,24].every(i => mask[i]);
         default: return countLines() >= 1;
       }
     };
 
     const getWinPattern = (): string | null => {
+      if (mask.every(Boolean)) return 'fullhouse';
+      if (checkWin('frame')) return 'frame';
+      if (checkWin('X')) return 'X';
+      if (checkWin('plus')) return 'plus';
+      if (checkWin('T')) return 'T';
+      if (checkWin('L')) return 'L';
+      if (checkWin('fourCorners')) return 'fourCorners';
       const lines = countLines();
       if (lines === 0) return null;
-      if (mask.every(Boolean)) return 'fullhouse';
       if (lines >= 3) return 'line3';
       if (lines >= 2) return 'line2';
       return 'line1';

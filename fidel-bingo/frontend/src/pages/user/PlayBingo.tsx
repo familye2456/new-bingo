@@ -49,7 +49,15 @@ export const PlayBingo: React.FC = () => {
 
   const [selectedGameId, setSelectedGameId] = useState<string | null>(searchParams.get('gameId'));
   const [autoOn, setAutoOn] = useState(false);
-  const [speed, setSpeed] = useState(5);
+  const [speed, setSpeed] = useState(() => {
+    const saved = localStorage.getItem('bingo_speed');
+    return saved ? Number(saved) : 5;
+  });
+  const speedRef = useRef(speed);
+  useEffect(() => {
+    speedRef.current = speed;
+    localStorage.setItem('bingo_speed', String(speed));
+  }, [speed]);
   const [checkId, setCheckId] = useState('');
   const [checkResult, setCheckResult] = useState<{
     registered: boolean; isWinner: boolean; winPattern: string | null;
@@ -128,13 +136,16 @@ export const PlayBingo: React.FC = () => {
   const startAuto = useCallback(() => {
     if (!game || game.status !== 'active') return;
     setAutoOn(true);
+    let elapsed = 0;
     autoRef.current = setInterval(() => {
+      elapsed += 0.5;
+      if (elapsed < speedRef.current) return; // wait until user-selected speed elapses
+      elapsed = 0;
       if (sessionCalledRef.current.length >= 75) { stopAuto(); return; }
       callMutation.mutate();
-    }, speed * 1000);
-  }, [game, speed, callMutation, stopAuto]);
+    }, 500);
+  }, [game, callMutation, stopAuto]);
 
-  useEffect(() => { if (autoOn) { stopAuto(); startAuto(); } }, [speed]); // eslint-disable-line
   useEffect(() => () => stopAuto(), [stopAuto]);
   useEffect(() => { if (sessionCalledNumbers.length >= 75 && autoOn) stopAuto(); }, [sessionCalledNumbers.length, autoOn, stopAuto]);
 
@@ -194,7 +205,6 @@ export const PlayBingo: React.FC = () => {
         {game && (
           <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none flex-1 mx-2">
             <InfoChip label={`${calledNumbers.length}/75`} highlight />
-            <InfoChip label={`BET ${Number(game.betAmount * game.cartelaCount).toFixed(0)} ₿`} />
             <InfoChip label={`WIN ${Number(game.prizePool).toFixed(1)} ₿`} />
             <InfoChip label={`${game.cartelaCount} CARTELA`} />
           </div>
@@ -248,7 +258,7 @@ export const PlayBingo: React.FC = () => {
           </div>
 
           {/* Speed + Check */}
-          <div className="flex items-center justify-center gap-4 flex-wrap">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 flex-wrap">
             <div className="flex items-center gap-2 rounded-xl px-3 py-1.5"
               style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
               <span className="text-[10px] text-gray-500 uppercase tracking-wider">Speed</span>
@@ -264,7 +274,7 @@ export const PlayBingo: React.FC = () => {
                   type="text" placeholder="Card #" value={checkId}
                   onChange={(e) => { setCheckId(e.target.value); setCheckResult(null); }}
                   onKeyDown={(e) => e.key === 'Enter' && handleCheck()}
-                  className="rounded-xl px-3 py-1.5 text-sm w-24 focus:outline-none focus:border-yellow-400/50"
+                  className="rounded-xl px-3 py-1.5 text-sm w-28 sm:w-24 focus:outline-none focus:border-yellow-400/50"
                   style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
                 />
                 <button
@@ -323,11 +333,6 @@ export const PlayBingo: React.FC = () => {
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-gray-500 uppercase tracking-widest">Cartelas</span>
             <span className="text-white font-bold text-base">{game.cartelaCount}</span>
-          </div>
-          <div className="w-px h-5 bg-white/10" />
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-500 uppercase tracking-widest">Bet</span>
-            <span className="text-white font-bold text-base">{Number(game.betAmount).toFixed(0)} BIRR</span>
           </div>
         </div>
       )}
@@ -421,35 +426,46 @@ const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null
 /** Returns the flat indices (0-24) that are part of any completed winning line. */
 function getWinIndices(mask: boolean[], pattern: string | null): number[] {
   if (!pattern) return [];
-
-  const result = new Set<number>();
-
-  const addRow = () => {
-    for (let r = 0; r < 5; r++) {
-      const idxs = [0,1,2,3,4].map(c => r*5+c);
-      if (idxs.every(i => mask[i])) idxs.forEach(i => result.add(i));
-    }
-  };
-  const addCol = () => {
-    for (let c = 0; c < 5; c++) {
-      const idxs = [0,1,2,3,4].map(r => r*5+c);
-      if (idxs.every(i => mask[i])) idxs.forEach(i => result.add(i));
-    }
-  };
-  const addDiags = () => {
-    const main = [0,6,12,18,24]; if (main.every(i => mask[i])) main.forEach(i => result.add(i));
-    const anti = [4,8,12,16,20]; if (anti.every(i => mask[i])) anti.forEach(i => result.add(i));
-  };
-  const addCorners = () => {
-    if (mask[0] && mask[4] && mask[20] && mask[24]) [0,4,20,24].forEach(i => result.add(i));
-  };
-
-  // For line-based patterns, add all completed lines
-  addRow(); addCol(); addDiags(); addCorners();
-
   if (pattern === 'fullhouse') return Array.from({length:25},(_,i)=>i);
-  if (pattern === 'fourCorners') return result.size ? [0,4,20,24] : [];
+  if (pattern === 'fourCorners') return mask[0]&&mask[4]&&mask[20]&&mask[24] ? [0,4,20,24] : [];
+  if (pattern === 'X') {
+    const main=[0,6,12,18,24], anti=[4,8,12,16,20];
+    if (main.every(i=>mask[i]) && anti.every(i=>mask[i])) return [...new Set([...main,...anti])];
+    return [];
+  }
+  if (pattern === 'plus') {
+    const row=[10,11,12,13,14], col=[2,7,12,17,22];
+    if (row.every(i=>mask[i]) && col.every(i=>mask[i])) return [...new Set([...row,...col])];
+    return [];
+  }
+  if (pattern === 'T') {
+    const top=[0,1,2,3,4], mid=[2,7,12,17,22];
+    if (top.every(i=>mask[i]) && mid.every(i=>mask[i])) return [...new Set([...top,...mid])];
+    return [];
+  }
+  if (pattern === 'L') {
+    const left=[0,5,10,15,20], bot=[20,21,22,23,24];
+    if (left.every(i=>mask[i]) && bot.every(i=>mask[i])) return [...new Set([...left,...bot])];
+    return [];
+  }
+  if (pattern === 'frame') {
+    const frame=[0,1,2,3,4,5,9,10,14,15,19,20,21,22,23,24];
+    return frame.every(i=>mask[i]) ? frame : [];
+  }
 
+  // line-based: highlight all completed lines
+  const result = new Set<number>();
+  for (let r = 0; r < 5; r++) {
+    const idxs = [0,1,2,3,4].map(c => r*5+c);
+    if (idxs.every(i => mask[i])) idxs.forEach(i => result.add(i));
+  }
+  for (let c = 0; c < 5; c++) {
+    const idxs = [0,1,2,3,4].map(r => r*5+c);
+    if (idxs.every(i => mask[i])) idxs.forEach(i => result.add(i));
+  }
+  const main=[0,6,12,18,24]; if (main.every(i=>mask[i])) main.forEach(i=>result.add(i));
+  const anti=[4,8,12,16,20]; if (anti.every(i=>mask[i])) anti.forEach(i=>result.add(i));
+  if (mask[0]&&mask[4]&&mask[20]&&mask[24]) [0,4,20,24].forEach(i=>result.add(i));
   return Array.from(result);
 }
 

@@ -21,12 +21,12 @@ const BingoCard: React.FC<{ cartela: CartelaRecord }> = ({ cartela }) => {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="w-20 h-20 rounded-xl bg-gradient-to-b from-yellow-400 to-yellow-500 text-gray-900 font-bold text-sm hover:scale-105 transition-transform shadow flex items-center justify-center">
+        className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-gradient-to-b from-yellow-400 to-yellow-500 text-gray-900 font-bold text-sm hover:scale-105 transition-transform shadow flex items-center justify-center">
         #{cartela.cardNumber ?? '?'}
       </button>
       {open && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setOpen(false)}>
-          <div className="bg-[#1e1e1e] rounded-2xl p-5 w-72 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-[#1e1e1e] rounded-2xl p-4 w-[90vw] max-w-xs shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="text-center text-yellow-400 font-bold text-lg mb-3">Card #{cartela.cardNumber}</div>
             <div className="grid grid-cols-5 gap-1 mb-1">
               {COLS.map((c) => (
@@ -137,7 +137,7 @@ export const MyCartelas: React.FC = () => {
   });
 
   return (
-    <div className="p-4 sm:p-6">
+    <div className="h-full overflow-auto p-4 sm:p-6">
       <div className="flex items-center justify-between mb-4 sm:mb-6 gap-2 flex-wrap">
         <div>
           <h1 className="text-xl font-semibold">My Cartelas</h1>

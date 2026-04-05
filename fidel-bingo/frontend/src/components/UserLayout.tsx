@@ -44,7 +44,7 @@ export const UserLayout: React.FC = () => {
   const initials = (user?.username ?? 'U').slice(0, 2).toUpperCase();
 
   return (
-    <div className="min-h-screen flex" style={{ background: '#0a1628', color: '#fff' }}>
+    <div className="h-screen flex overflow-hidden" style={{ background: '#0a1628', color: '#fff' }}>
 
       {/* ── Toggle button — always visible ── */}
       <button
@@ -87,10 +87,10 @@ export const UserLayout: React.FC = () => {
         {/* Logo */}
         <div className="flex items-center gap-2.5 px-5 pt-5 pb-4">
           <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-extrabold text-gray-900 text-sm"
-            style={{ background: 'linear-gradient(135deg,#fbbf24,#f59e0b)', boxShadow: '0 2px 12px rgba(251,191,36,0.35)' }}
+            className="w-9 h-9 rounded-xl shrink-0 overflow-hidden"
+            style={{ boxShadow: '0 2px 12px rgba(251,191,36,0.35)' }}
           >
-            FB
+            <img src="/icons/logo.png" alt="Fidel Bingo" className="w-full h-full object-contain" />
           </div>
           <div>
             <div className="text-white font-bold text-sm tracking-wide">Fidel Bingo</div>
@@ -192,7 +192,7 @@ export const UserLayout: React.FC = () => {
       </aside>
 
       {/* ── Main content ── */}
-      <main className="flex-1 overflow-auto" style={{ background: '#0e1a35' }}>
+      <main className="flex-1 overflow-hidden h-full" style={{ background: '#0e1a35' }}>
         <Outlet />
       </main>
     </div>

@@ -152,7 +152,7 @@ export const UserDashboard: React.FC = () => {
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return (
-    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
+    <div className="h-full overflow-auto p-4 sm:p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-4 sm:mb-6 gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-semibold text-white">Dashboard</h1>
@@ -194,47 +194,54 @@ export const UserDashboard: React.FC = () => {
           No games yet
         </div>
       ) : (
-        <div className="rounded-xl border border-[#2a2f45] overflow-hidden">
-          <div className="overflow-x-auto -mx-0">
-            <table className="w-full text-sm min-w-[500px]">
-              <thead>
-                <tr style={{ background: '#161929', borderBottom: '1px solid #2a2f45' }}>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Games</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Players Bet</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Players Won</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">House Profit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dailySummary.map((row, i) => (
-                  <tr key={row.date}
-                    style={{
-                      background: i % 2 === 0 ? '#1e2235' : '#1a1e30',
-                      borderBottom: '1px solid rgba(255,255,255,0.04)',
-                    }}>
-                    <td className="px-4 py-3 text-gray-300 whitespace-nowrap">{row.date}</td>
-                    <td className="px-4 py-3 text-center">
-                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold text-white"
-                        style={{ background: 'rgba(99,102,241,0.3)' }}>
-                        {row.games}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold" style={{ color: '#4ade80' }}>
-                      {row.totalBet.toLocaleString()} Birr
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold" style={{ color: '#fbbf24' }}>
-                      {row.totalPrize.toLocaleString()} Birr
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold" style={{ color: '#f87171' }}>
-                      {row.houseCut.toLocaleString()} Birr
-                    </td>
+        <>
+          {/* Desktop table */}
+          <div className="hidden sm:block rounded-xl border border-[#2a2f45] overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[500px]">
+                <thead>
+                  <tr style={{ background: '#161929', borderBottom: '1px solid #2a2f45' }}>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
+                    <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Games</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Players Bet</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Players Won</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">House Profit</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {dailySummary.map((row, i) => (
+                    <tr key={row.date} style={{ background: i % 2 === 0 ? '#1e2235' : '#1a1e30', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                      <td className="px-4 py-3 text-gray-300 whitespace-nowrap">{row.date}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold text-white" style={{ background: 'rgba(99,102,241,0.3)' }}>{row.games}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold" style={{ color: '#4ade80' }}>{row.totalBet.toLocaleString()} Birr</td>
+                      <td className="px-4 py-3 text-right font-semibold" style={{ color: '#fbbf24' }}>{row.totalPrize.toLocaleString()} Birr</td>
+                      <td className="px-4 py-3 text-right font-semibold" style={{ color: '#f87171' }}>{row.houseCut.toLocaleString()} Birr</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+
+          {/* Mobile card list */}
+          <div className="sm:hidden space-y-2">
+            {dailySummary.map((row) => (
+              <div key={row.date} className="rounded-xl p-3" style={{ background: '#1e2235', border: '1px solid #2a2f45' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-300 text-xs">{row.date}</span>
+                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold text-white" style={{ background: 'rgba(99,102,241,0.3)' }}>{row.games}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div><div className="text-gray-500 mb-0.5">Bet</div><div className="font-semibold" style={{ color: '#4ade80' }}>{row.totalBet.toLocaleString()}</div></div>
+                  <div><div className="text-gray-500 mb-0.5">Won</div><div className="font-semibold" style={{ color: '#fbbf24' }}>{row.totalPrize.toLocaleString()}</div></div>
+                  <div><div className="text-gray-500 mb-0.5">House</div><div className="font-semibold" style={{ color: '#f87171' }}>{row.houseCut.toLocaleString()}</div></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

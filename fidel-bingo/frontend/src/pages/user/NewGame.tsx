@@ -30,6 +30,11 @@ const PATTERNS: { label: string; value: string; icon: string }[] = [
   { label: 'Three Lines',  value: 'line3',       icon: '☰' },
   { label: 'Full House',   value: 'fullhouse',   icon: '⬛' },
   { label: 'Four Corners', value: 'fourCorners', icon: '⬜' },
+  { label: 'X Shape',      value: 'X',           icon: '✕' },
+  { label: 'Plus',         value: 'plus',        icon: '✚' },
+  { label: 'T Shape',      value: 'T',           icon: '⊤' },
+  { label: 'L Shape',      value: 'L',           icon: '⌐' },
+  { label: 'Frame',        value: 'frame',       icon: '▣' },
 ];
 
 const MIN_CARTELAS = 3;
@@ -149,7 +154,7 @@ export const NewGame: React.FC = () => {
   const totalPrize = bet * selectedIds.size;
 
   return (
-    <div className="min-h-full flex flex-col" style={{ background: '#0a1220', color: '#fff' }}>
+    <div className="h-full flex flex-col" style={{ background: '#0a1220', color: '#fff' }}>
 
       {/* ── Header ── */}
       <div className="px-4 sm:px-5 pt-4 sm:pt-5 pb-4 shrink-0"
@@ -164,7 +169,7 @@ export const NewGame: React.FC = () => {
         </div>
 
         {/* Config row */}
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
 
           {/* Bet control */}
           <div className="flex items-center gap-1.5 rounded-xl px-3 py-2"
@@ -203,17 +208,6 @@ export const NewGame: React.FC = () => {
               ))}
             </select>
           </div>
-
-          {/* Quick Add button */}
-          <button
-            onClick={() => setShowQuickAdd(true)}
-            className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold transition-all hover:brightness-125"
-            style={{ background: 'rgba(255,255,255,0.05)', color: '#9ca3af', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
-              <path d="M12 5v14M5 12h14" strokeLinecap="round" />
-            </svg>
-            Quick Add
-          </button>
 
           {/* Start Game */}
           <button
@@ -273,7 +267,7 @@ export const NewGame: React.FC = () => {
       </div>
 
       {/* ── Card Grid ── */}
-      <div className="flex-1 overflow-auto px-3 sm:px-4 py-4">
+      <div className="flex-1 overflow-auto px-3 sm:px-4 py-4 scrollbar-none" style={{ scrollbarWidth: 'none' }}>
         {isLoading ? (
           <div className="flex items-center justify-center py-24">
             <div className="text-center">

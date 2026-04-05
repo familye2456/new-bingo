@@ -49,14 +49,16 @@ export class GameService {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'User not found');
 
-    // Verify all cartelas belong to this user
-    const ownedAssignments = await this.ucRepo.find({ where: { userId } });
+    // Run ownership check and cartela fetch in parallel
+    const [ownedAssignments, cartelas] = await Promise.all([
+      this.ucRepo.find({ where: { userId } }),
+      this.cartelaRepo.findByIds(dto.cartelaIds),
+    ]);
+
     const ownedIds = new Set(ownedAssignments.map((a) => a.cartelaId));
     for (const cid of dto.cartelaIds) {
       if (!ownedIds.has(cid)) throw new AppError(403, 'FORBIDDEN', `Cartela ${cid} is not assigned to you`);
     }
-
-    const cartelas = await this.cartelaRepo.findByIds(dto.cartelaIds);
     if (cartelas.length !== dto.cartelaIds.length)
       throw new AppError(404, 'CARTELA_NOT_FOUND', 'One or more cartelas not found');
 
@@ -94,21 +96,25 @@ export class GameService {
       });
       await manager.save(game);
 
-      // Set purchase price on each cartela and link to game
-      for (const cartela of cartelas) {
+      // Set purchase price on each cartela and link to game — batch saves for speed
+      const cartelasToSave = cartelas.map((cartela) => {
         cartela.purchasePrice = dto.betAmountPerCartela;
         cartela.patternMask = Array(25).fill(false);
         cartela.patternMask[12] = true; // FREE center
         cartela.isWinner = false;
-        await manager.save(cartela);
+        return cartela;
+      });
+      await manager.save(cartelasToSave);
 
-        await manager.save(manager.create(GameCartela, {
+      const gameCartelas = cartelas.map((cartela) =>
+        manager.create(GameCartela, {
           gameId: game.id,
           cartelaId: cartela.id,
           userId,
           betAmount: dto.betAmountPerCartela,
-        }));
-      }
+        })
+      );
+      await manager.save(gameCartelas);
 
       // Deduct only house cut from balance — prize pool stays in the system for the winner
       const houseCut = totalCost * (HOUSE_PCT / 100);
