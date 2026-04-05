@@ -107,14 +107,20 @@ async function _doFlush() {
   if (items.length === 0) return;
 
   for (const item of items) {
+    // Re-read the item fresh from IDB — a previous iteration (e.g. createGame)
+    // may have updated this item's payload (e.g. tempId → realId on finishGame)
+    const db = await import('./db').then(m => m.getDB());
+    const freshItem = await db.get('syncQueue', item.id!);
+    const current = freshItem ?? item;
+
     try {
-      switch (item.type) {
+      switch (current.type) {
         case 'createGame': {
-          const p = item.payload as any;
+          const p = current.payload as any;
 
           // Skip if already synced (persisted across reloads)
           if (p.tempId && isSynced(p.tempId)) {
-            await dequeue(item.id!);
+            await dequeue(current.id!);
             break;
           }
 
@@ -164,7 +170,6 @@ async function _doFlush() {
             }
 
             // Update any pending finishGame/claimBingo queue items that reference the tempId
-            const db = await import('./db').then(m => m.getDB());
             const allQueued = await getAllQueued();
             for (const qi of allQueued) {
               const qp = qi.payload as any;
@@ -176,14 +181,15 @@ async function _doFlush() {
               }
             }
           }
-          // Store the real server game
-          await dbPut('games', realGame);
-          await dequeue(item.id!);
+          // Store the real server game (preserve finished status if already marked locally)
+          const wasFinished = _justFinishedIds.has(String(realGame.id));
+          await dbPut('games', wasFinished ? { ...realGame, status: 'finished' } : realGame);
+          await dequeue(current.id!);
           break;
         }
 
         case 'finishGame': {
-          const p = item.payload as any;
+          const p = current.payload as any;
           // If still has offline ID, createGame hasn't synced yet — skip for now
           if (String(p.gameId).startsWith('offline-')) break;
           try {
@@ -197,30 +203,30 @@ async function _doFlush() {
           // Update local copy
           const localGame = await dbGet<any>('games', p.gameId);
           if (localGame) { localGame.status = 'finished'; await dbPut('games', localGame); }
-          await dequeue(item.id!);
+          await dequeue(current.id!);
           break;
         }
 
         case 'claimBingo': {
-          const p = item.payload as any;
+          const p = current.payload as any;
           if (String(p.gameId).startsWith('offline-')) break;
           await api.post(`/games/${p.gameId}/bingo`, { cartelaId: p.cartelaId });
-          await dequeue(item.id!);
+          await dequeue(current.id!);
           break;
         }
 
         case 'markNumber': {
-          const p = item.payload as any;
+          const p = current.payload as any;
           await api.post(`/games/cartelas/${p.cartelaId}/mark`, { number: p.number });
-          await dequeue(item.id!);
+          await dequeue(current.id!);
           break;
         }
 
         default:
-          await dequeue(item.id!);
+          await dequeue(current.id!);
       }
     } catch (err: any) {
-      if (err?.response?.status) await dequeue(item.id!); // server error — discard
+      if (err?.response?.status) await dequeue(current.id!); // server error — discard
       else break; // network error — stop, retry later
     }
   }
