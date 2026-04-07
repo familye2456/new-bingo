@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+import { offlineGameApi } from '../services/offlineApi';
+
+async function getPostLoginRoute(): Promise<string> {
+  try {
+    const games = await offlineGameApi.list('active');
+    const user = useAuthStore.getState().user;
+    const myActive = games.filter((g: any) => g.creatorId === user?.id);
+    if (myActive.length > 0) return `/play?gameId=${myActive[0].id}`;
+  } catch {}
+  return '/new-game';
+}
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -32,7 +43,7 @@ export const LoginPage: React.FC = () => {
     if (!caching) return;
     const allDone = cacheSteps.length > 0 && cacheSteps.every(s => s.status === 'done' || s.status === 'skipped');
     if (allDone) {
-      const t = setTimeout(() => navigate('/dashboard'), 600);
+      const t = setTimeout(async () => navigate(await getPostLoginRoute()), 600);
       return () => clearTimeout(t);
     }
   }, [cacheSteps, caching, navigate]);
@@ -40,7 +51,7 @@ export const LoginPage: React.FC = () => {
   // For non-prepaid users cacheSteps stays empty — navigate right after login
   useEffect(() => {
     if (!loading && !caching && useAuthStore.getState().user) {
-      navigate('/dashboard');
+      getPostLoginRoute().then(navigate);
     }
   }, [loading, caching, navigate]);
 
