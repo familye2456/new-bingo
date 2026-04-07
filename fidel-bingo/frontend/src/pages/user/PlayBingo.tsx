@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { offlineGameApi } from '../../services/offlineApi';
 import { useAuthStore } from '../../store/authStore';
 import { useGameSettings } from '../../store/gameSettingsStore';
+import { playCachedSound } from '../../services/db';
 
 let _userInteracted = false;
 if (typeof window !== 'undefined') {
@@ -14,7 +15,7 @@ if (typeof window !== 'undefined') {
 
 function playSound(name: string, category: string) {
   if (!_userInteracted) return;
-  new Audio(`/sounds/${encodeURIComponent(category)}/${name}`).play().catch(() => {});
+  playCachedSound(`/sounds/${encodeURIComponent(category)}/${name}`).catch(() => {});
 }
 
 interface Game {

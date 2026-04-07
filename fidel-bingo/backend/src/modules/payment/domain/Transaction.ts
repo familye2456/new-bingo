@@ -1,6 +1,6 @@
 import {
   Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, ManyToOne, JoinColumn
+  CreateDateColumn, ManyToOne, JoinColumn, Index
 } from 'typeorm';
 import { User } from '../../user/domain/User';
 
@@ -8,6 +8,8 @@ export type TransactionType = 'deposit' | 'withdrawal' | 'bet' | 'win' | 'refund
 export type TransactionStatus = 'pending' | 'completed' | 'failed' | 'refunded';
 
 @Entity('transactions')
+@Index('idx_transactions_user_id', ['userId'])
+@Index('idx_transactions_user_created', ['userId', 'createdAt'])
 export class Transaction {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

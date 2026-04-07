@@ -48,6 +48,10 @@ export class User {
   @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
   balance!: number;
 
+  /** Maximum credit allowed for postpaid users (0 = unlimited) */
+  @Column({ name: 'credit_limit', type: 'decimal', precision: 12, scale: 2, default: 0 })
+  creditLimit!: number;
+
   @Column({ name: 'kyc_level', default: 0 })
   kycLevel!: number;
 

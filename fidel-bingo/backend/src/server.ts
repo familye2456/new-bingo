@@ -86,6 +86,15 @@ app.use('/api/auth/login', rateLimit({
   message: { success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many login attempts' } },
 }));
 
+// Postpaid game creation — stricter limit to prevent credit abuse
+app.use('/api/games', rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: env.NODE_ENV === 'development' ? 10000 : 20,
+  keyGenerator: (req) => `postpaid:${(req as any).user?.id ?? req.ip}`,
+  skip: (req) => req.method !== 'POST',
+  message: { success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many game creation requests' } },
+}));
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/games', gameRoutes);

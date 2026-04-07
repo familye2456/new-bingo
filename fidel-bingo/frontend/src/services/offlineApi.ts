@@ -93,13 +93,15 @@ export const offlineUserApi = {
   updateMe: (data: object) => api.patch('/users/me', data),
 
   myCartelas: async (): Promise<any[]> => {
+    // Return IDB cache immediately, then refresh in background
+    const cached = await dbGetAll<any>('cartelas');
     const result = await tryApi(() => api.get('/cartelas/mine'));
     if (result.ok) {
       const list = toList(result.data);
-      for (const c of list) await dbPut('cartelas', c);
+      await Promise.all(list.map((c: any) => dbPut('cartelas', c)));
       return list;
     }
-    return dbGetAll<any>('cartelas');
+    return cached;
   },
 
   myTransactions: async (): Promise<any[]> => {
@@ -107,7 +109,7 @@ export const offlineUserApi = {
       try {
         const res = await api.get('/users/me/transactions');
         const serverList = toList(res.data);
-        for (const t of serverList) await dbPut('transactions', t);
+        await Promise.all(serverList.map((t: any) => dbPut('transactions', t)));
         // Merge offline transactions not yet synced
         const allLocal = await dbGetAll<any>('transactions');
         const offlineTx = allLocal.filter((t: any) =>
@@ -118,8 +120,8 @@ export const offlineUserApi = {
         if (err?.response?.status) throw err;
       }
     }
-    if (await isPrepaid()) return dbGetAll<any>('transactions');
-    return [];
+    // Both prepaid and postpaid fall back to cache when offline
+    return dbGetAll<any>('transactions');
   },
 };
 
@@ -132,7 +134,7 @@ export const offlineGameApi = {
     );
     if (result.ok) {
       const list = toList(result.data);
-      for (const g of list) await dbPut('games', g);
+      await Promise.all(list.map((g: any) => dbPut('games', g)));
       // Also include offline games with matching status
       const allLocal = await dbGetAll<any>('games');
       const offlineGames = allLocal.filter((g: any) =>
@@ -143,7 +145,7 @@ export const offlineGameApi = {
       const uniqueOffline = offlineGames.filter((g: any) => !serverIds.has(g.id));
       return [...list, ...uniqueOffline];
     }
-    // Offline fallback — filter by status
+    // Offline fallback — all users get cached data
     const all = await dbGetAll<any>('games');
     return _status ? all.filter((g: any) => g.status === _status) : all;
   },
@@ -182,91 +184,66 @@ export const offlineGameApi = {
         if (err?.response?.status) throw err;
       }
     }
-    if (await isPrepaid()) {
-      const user = await dbGet<any>('user', 'me');
-      const all = await dbGetAll<any>('games');
-      const seen = new Set<string>();
-      const deduped = all.filter((g: any) => {
-        if (seen.has(g.id)) return false;
-        seen.add(g.id);
-        return true;
-      });
-      return user ? deduped.filter((g: any) => g.creatorId === user.id) : deduped;
-    }
-    return [];
+    // All users fall back to IDB cache when server is unreachable
+    const user = await dbGet<any>('user', 'me');
+    const all = await dbGetAll<any>('games');
+    const seen = new Set<string>();
+    const deduped = all.filter((g: any) => {
+      if (seen.has(g.id)) return false;
+      seen.add(g.id);
+      return true;
+    });
+    return user ? deduped.filter((g: any) => g.creatorId === user.id) : deduped;
   },
 
   get: async (id: string): Promise<any> => {
     const result = await tryApi(() => api.get(`/games/${id}`));
-    if (result.ok) return result.data.data.data; // axios: result.data = AxiosResponse, .data = { success, data: game }
-    if (await isPrepaid()) return dbGet('games', id);
-    return null;
+    if (result.ok) return result.data.data.data;
+    // All users fall back to cache when server is unreachable
+    return dbGet('games', id);
   },
 
   /**
    * Create a game.
-   * Online  → POST to server, cache result + write bet transactions + deduct balance.
-   * Offline → save locally, write bet transactions, deduct balance, enqueue for sync.
+   * Online  → POST to server, cache result in background, navigate immediately.
+   * Offline → save locally, enqueue for sync.
    */
   create: async (data: { cartelaIds: string[]; betAmountPerCartela: number; winPattern?: string; housePercentage?: number }) => {
-    const HOUSE_PCT = data.housePercentage ?? 10; // use provided value or fallback
+    const HOUSE_PCT = data.housePercentage ?? 10;
     const result = await tryApi(() => api.post('/games', data));
     if (result.ok) {
       const game = result.data.data.data;
-
-      // Return immediately — do all IDB caching in the background so UI navigates fast
+      // Cache in background — don't block navigation
       Promise.resolve().then(async () => {
-        const patchedGame = { ...game, cartelaIds: data.cartelaIds };
-        await dbPut('games', patchedGame);
+        await dbPut('games', { ...game, cartelaIds: data.cartelaIds });
         await dbPut('gameCartelas', data.cartelaIds, game.id);
-        const allCartelas = await dbGetAll<any>('cartelas');
-        for (const cid of data.cartelaIds) {
-          const c = allCartelas.find((x: any) => x.id === cid);
-          if (c) await dbPut('cartelas', c);
-        }
         await _writeBetTransactions(game.id, data.cartelaIds, data.betAmountPerCartela, Number(game.housePercentage ?? HOUSE_PCT));
         useAuthStore.getState().refreshBalance();
       }).catch(() => {});
-
       return result.data;
     }
 
-    if (!(await isPrepaid())) throw new Error('Server unavailable');
-
+    // Server unreachable — fall back to IDB for all users
     const user = await dbGet<any>('user', 'me');
     const tempId = `offline-${Date.now()}`;
     const now = new Date().toISOString();
     const totalBet = data.betAmountPerCartela * data.cartelaIds.length;
     const houseCut = totalBet * (HOUSE_PCT / 100);
-    const prizePool = totalBet - houseCut;  // winner gets totalBet minus house cut
+    const prizePool = totalBet - houseCut;
 
     const game = {
-      id: tempId,
-      status: 'active',
-      betAmount: data.betAmountPerCartela,
-      cartelaCount: data.cartelaIds.length,
-      totalBets: totalBet,
-      prizePool,
-      houseCut,
-      housePercentage: HOUSE_PCT,
-      calledNumbers: [],
-      numberSequence: shuffleSequence(),
-      winnerIds: [],
-      isWinner: false,
-      winPattern: data.winPattern ?? 'any',
-      creatorId: user?.id ?? '',
-      createdAt: now,
-      cartelaIds: data.cartelaIds,
+      id: tempId, status: 'active', betAmount: data.betAmountPerCartela,
+      cartelaCount: data.cartelaIds.length, totalBets: totalBet, prizePool, houseCut,
+      housePercentage: HOUSE_PCT, calledNumbers: [], numberSequence: shuffleSequence(),
+      winnerIds: [], isWinner: false, winPattern: data.winPattern ?? 'any',
+      creatorId: user?.id ?? '', createdAt: now, cartelaIds: data.cartelaIds,
     };
 
     await dbPut('games', game);
-    // Persist gameId → cartelaIds mapping so offline checkCartela works reliably
     await dbPut('gameCartelas', data.cartelaIds, tempId);
     await _writeBetTransactions(tempId, data.cartelaIds, data.betAmountPerCartela, HOUSE_PCT);
-    // Deduct only house cut from balance
     await applyBalanceDelta(-houseCut);
     await enqueue({ type: 'createGame', payload: { tempId, ...data } });
-
     return { data: { data: game } };
   },
 
@@ -300,8 +277,7 @@ export const offlineGameApi = {
       }
     }
 
-    if (!(await isPrepaid())) throw new Error('Server unavailable');
-
+    // Server unreachable — use IDB for all users
     const game = await dbGet<any>('games', gameId);
     if (!game) return { data: { data: { number: null, remaining: 0 } } };
 
@@ -337,8 +313,7 @@ export const offlineGameApi = {
       }
     }
 
-    if (!(await isPrepaid())) throw new Error('Server unavailable');
-
+    // Server unreachable — mark locally and enqueue for all users
     const game = await dbGet<any>('games', gameId);
     if (game) {
       game.status = 'finished';
@@ -362,8 +337,7 @@ export const offlineGameApi = {
       return result.data;
     }
 
-    if (!(await isPrepaid())) throw new Error('Server unavailable');
-
+    // Server unreachable — handle locally for all users
     const [game, user] = await Promise.all([
       dbGet<any>('games', gameId),
       dbGet<any>('user', 'me'),
@@ -397,11 +371,9 @@ export const offlineGameApi = {
   markNumber: async (cartelaId: string, number: number) => {
     const result = await tryApi(() => api.post(`/games/cartelas/${cartelaId}/mark`, { number }));
     if (result.ok) return result.data;
-    if (await isPrepaid()) {
-      await enqueue({ type: 'markNumber', payload: { cartelaId, number } });
-      return { data: { data: null } };
-    }
-    throw new Error('Server unavailable');
+    // Enqueue for all users when offline
+    await enqueue({ type: 'markNumber', payload: { cartelaId, number } });
+    return { data: { data: null } };
   },
 
   getCartelas: async (gameId: string) => {

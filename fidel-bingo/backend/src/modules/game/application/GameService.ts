@@ -46,14 +46,18 @@ export class GameService {
     if (dto.betAmountPerCartela <= 0)
       throw new AppError(400, 'INVALID_BET', 'Invalid bet amount');
 
-    const user = await this.userRepo.findOne({ where: { id: userId } });
-    if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'User not found');
-
-    // Run ownership check and cartela fetch in parallel
-    const [ownedAssignments, cartelas] = await Promise.all([
-      this.ucRepo.find({ where: { userId } }),
-      this.cartelaRepo.findByIds(dto.cartelaIds),
+    // 1 round-trip: fetch user + ownership + cartelas + game count all in parallel
+    const [user, ownedAssignments, cartelas, userGameCount] = await Promise.all([
+      this.userRepo.findOne({ where: { id: userId }, select: ['id', 'paymentType', 'balance', 'creditLimit'] }),
+      this.ucRepo.find({
+        where: dto.cartelaIds.map((cartelaId) => ({ userId, cartelaId })),
+        select: ['cartelaId'],
+      }),
+      this.cartelaRepo.findByIds(dto.cartelaIds, { select: ['id'] }),
+      this.gameRepo.count({ where: { creatorId: userId } }),
     ]);
+
+    if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'User not found');
 
     const ownedIds = new Set(ownedAssignments.map((a) => a.cartelaId));
     for (const cid of dto.cartelaIds) {
@@ -63,22 +67,24 @@ export class GameService {
       throw new AppError(404, 'CARTELA_NOT_FOUND', 'One or more cartelas not found');
 
     const totalCost = dto.betAmountPerCartela * dto.cartelaIds.length;
-    const HOUSE_PCT_CHECK = (dto.housePercentage != null && dto.housePercentage >= 10 && dto.housePercentage <= 45)
-      ? dto.housePercentage
-      : env.HOUSE_PERCENTAGE;
-    const houseCutRequired = totalCost * (HOUSE_PCT_CHECK / 100);
-    if (user.paymentType !== 'postpaid' && Number(user.balance) < houseCutRequired) {
-      throw new AppError(400, 'INSUFFICIENT_BALANCE', 'Insufficient balance');
+    const HOUSE_PCT = (dto.housePercentage != null && dto.housePercentage >= 10 && dto.housePercentage <= 45)
+      ? dto.housePercentage : env.HOUSE_PERCENTAGE;
+    const houseCut = totalCost * (HOUSE_PCT / 100);
+
+    if (user.paymentType !== 'postpaid') {
+      if (Number(user.balance) < houseCut)
+        throw new AppError(400, 'INSUFFICIENT_BALANCE', 'Insufficient balance');
+    } else {
+      const creditLimit = Number(user.creditLimit ?? 0);
+      if (creditLimit > 0) {
+        const currentDebt = Math.max(0, -Number(user.balance));
+        if (currentDebt + houseCut > creditLimit)
+          throw new AppError(400, 'CREDIT_LIMIT_EXCEEDED', 'Credit limit exceeded');
+      }
     }
 
+    // 1 transaction: save game + game_cartelas + deduct balance + save transaction
     return AppDataSource.transaction(async (manager) => {
-      const HOUSE_PCT = (dto.housePercentage != null && dto.housePercentage >= 10 && dto.housePercentage <= 45)
-        ? dto.housePercentage
-        : env.HOUSE_PERCENTAGE;
-
-      // Per-user game counter
-      const userGameCount = await manager.count(Game, { where: { creatorId: userId } });
-
       const game = manager.create(Game, {
         creatorId: userId,
         gameNumber: userGameCount + 1,
@@ -91,48 +97,36 @@ export class GameService {
         winnerIds: [],
         cartelaCount: cartelas.length,
         totalBets: totalCost,
-        prizePool: totalCost * (1 - HOUSE_PCT / 100),   // totalBets - houseCut
-        houseCut: totalCost * (HOUSE_PCT / 100),
+        prizePool: totalCost - houseCut,
+        houseCut,
       });
-      await manager.save(game);
 
-      // Set purchase price on each cartela and link to game — batch saves for speed
-      const cartelasToSave = cartelas.map((cartela) => {
-        cartela.purchasePrice = dto.betAmountPerCartela;
-        cartela.patternMask = Array(25).fill(false);
-        cartela.patternMask[12] = true; // FREE center
-        cartela.isWinner = false;
-        return cartela;
-      });
-      await manager.save(cartelasToSave);
+      // Run game insert + balance decrement in parallel inside the transaction
+      const [savedGame] = await Promise.all([
+        manager.save(game),
+        manager.decrement(User, { id: userId }, 'balance', houseCut),
+      ]);
 
-      const gameCartelas = cartelas.map((cartela) =>
-        manager.create(GameCartela, {
-          gameId: game.id,
-          cartelaId: cartela.id,
-          userId,
-          betAmount: dto.betAmountPerCartela,
-        })
-      );
-      await manager.save(gameCartelas);
-
-      // Deduct only house cut from balance — prize pool stays in the system for the winner
-      const houseCut = totalCost * (HOUSE_PCT / 100);
-      await manager.decrement(User, { id: userId }, 'balance', houseCut);
-
-      await manager.save(manager.create(Transaction, {
-        userId,
-        gameId: game.id,
-        transactionType: 'bet',
-        amount: houseCut,
-        status: 'completed',
-        description: `House fee for game ${game.id}`,
-        processedAt: new Date(),
-      }));
+      // Batch insert game_cartelas + transaction record in parallel
+      await Promise.all([
+        manager.save(
+          dto.cartelaIds.map((cartelaId) =>
+            manager.create(GameCartela, { gameId: savedGame.id, cartelaId, userId, betAmount: dto.betAmountPerCartela })
+          )
+        ),
+        manager.save(
+          manager.create(Transaction, {
+            userId, gameId: savedGame.id, transactionType: 'bet',
+            amount: houseCut, status: 'completed',
+            description: `House fee for game ${savedGame.id}`,
+            processedAt: new Date(),
+          })
+        ),
+      ]);
 
       activeGames.inc();
-      logger.info('Game created', { gameId: game.id, userId });
-      return game;
+      logger.info('Game created', { gameId: savedGame.id, userId });
+      return savedGame;
     });
   }
 

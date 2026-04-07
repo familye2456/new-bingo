@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { offlineUserApi, offlineGameApi } from '../../services/offlineApi';
 import { useGameSettings } from '../../store/gameSettingsStore';
 import { useAuthStore } from '../../store/authStore';
+import { playCachedSound } from '../../services/db';
 
 let _userInteracted = false;
 if (typeof window !== 'undefined') {
@@ -14,7 +15,7 @@ if (typeof window !== 'undefined') {
 
 function playSound(name: string, category: string) {
   if (!_userInteracted) return;
-  new Audio(`/sounds/${encodeURIComponent(category)}/${name}`).play().catch(() => {});
+  playCachedSound(`/sounds/${encodeURIComponent(category)}/${name}`).catch(() => {});
 }
 
 interface CartelaRecord {
@@ -108,7 +109,6 @@ export const NewGame: React.FC = () => {
       const game = res?.data?.data?.data ?? res?.data?.data ?? res?.data;
       const id = game?.id;
       if (id) {
-        // Optimistically inject the new game into the cached list immediately
         const hc = typeof houseCut === 'number' ? houseCut : 10;
         const totalBets = bet * selectedIds.size;
         const houseCutAmt = totalBets * hc / 100;
@@ -124,16 +124,13 @@ export const NewGame: React.FC = () => {
           status: game.status ?? 'active',
           createdAt: game.createdAt ?? new Date().toISOString(),
         };
-        // Inject into both query caches so PlayBingo sees it immediately
+        // Inject into query cache so PlayBingo sees it immediately
         queryClient.setQueryData(['games'], (old: any[] = []) =>
           old.some((g) => g.id === newGame.id) ? old : [newGame, ...old]
         );
         queryClient.setQueryData(['my-games'], (old: any[] = []) =>
           old.some((g) => g.id === newGame.id) ? old : [newGame, ...old]
         );
-        // Background refetch to sync with server
-        queryClient.invalidateQueries({ queryKey: ['my-games'] });
-        refreshBalance();
         navigate(`/play?gameId=${id}`);
       }
     },

@@ -28,7 +28,6 @@ function isSynced(id: string): boolean { return getSyncedIds().has(id); }
 // ── Cache refresh ─────────────────────────────────────────────────────────────
 
 export async function refreshCache() {
-  if (!(await isPrepaid())) return;
   try {
     const [meRes, cartelasRes, gamesRes, txRes] = await Promise.all([
       api.get('/users/me'),
@@ -50,7 +49,7 @@ export async function refreshCache() {
     const toList = (d: any) => Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : Array.isArray(d?.data?.data) ? d.data.data : [];
 
     await dbClear('cartelas');
-    for (const c of toList(cartelasRes.data)) await dbPut('cartelas', c);
+    await Promise.all(toList(cartelasRes.data).map((c: any) => dbPut('cartelas', c)));
 
     const serverGames = toList(gamesRes.data);
     const localGames = await dbGetAll<any>('games');
@@ -62,22 +61,19 @@ export async function refreshCache() {
     ]);
     const serverGameIds = new Set(serverGames.map((g: any) => g.id));
     await dbClear('games');
-    for (const g of serverGames) {
+    const mergedGames = serverGames.map((g: any) => {
       const localGame = localGames.find((l: any) => String(l.id) === String(g.id));
-      const merged = {
-        ...g,
-        // Preserve locally-patched cartelaIds (server game object doesn't include them)
-        cartelaIds: g.cartelaIds ?? localGame?.cartelaIds,
-      };
-      if (localFinishedIds.has(String(g.id)) && g.status !== 'finished') {
-        await dbPut('games', { ...merged, status: 'finished' });
-      } else {
-        await dbPut('games', merged);
-      }
-    }
-    for (const g of offlineGames) {
-      if (!serverGameIds.has(g.id)) await dbPut('games', g);
-    }
+      const merged = { ...g, cartelaIds: g.cartelaIds ?? localGame?.cartelaIds };
+      return localFinishedIds.has(String(g.id)) && g.status !== 'finished'
+        ? { ...merged, status: 'finished' }
+        : merged;
+    });
+    await Promise.all(mergedGames.map((g: any) => dbPut('games', g)));
+    await Promise.all(
+      offlineGames
+        .filter((g: any) => !serverGameIds.has(g.id))
+        .map((g: any) => dbPut('games', g))
+    );
 
     const serverTx = toList(txRes.data);
     const localTx = await dbGetAll<any>('transactions');
@@ -85,8 +81,10 @@ export async function refreshCache() {
       String(t.id).startsWith('tx-bet-offline-') || String(t.id).startsWith('tx-win-offline-')
     );
     await dbClear('transactions');
-    for (const t of serverTx) await dbPut('transactions', t);
-    for (const t of offlineTx) await dbPut('transactions', t);
+    await Promise.all([
+      ...serverTx.map((t: any) => dbPut('transactions', t)),
+      ...offlineTx.map((t: any) => dbPut('transactions', t)),
+    ]);
 
     window.dispatchEvent(new CustomEvent('cache-refreshed'));
   } catch {
@@ -100,7 +98,6 @@ export async function refreshCache() {
 export const _justFinishedIds = new Set<string>();
 
 async function _doFlush() {
-  if (!(await isPrepaid())) return;
   _justFinishedIds.clear();
 
   const items = await getAllQueued();

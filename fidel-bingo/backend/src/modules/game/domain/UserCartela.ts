@@ -1,12 +1,14 @@
 import {
   Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, ManyToOne, JoinColumn, Unique
+  CreateDateColumn, ManyToOne, JoinColumn, Unique, Index
 } from 'typeorm';
 import { User } from '../../user/domain/User';
 import { Cartela } from './Cartela';
 
 @Entity('user_cartelas')
 @Unique(['userId', 'cartelaId'])
+@Index('idx_user_cartelas_user_id', ['userId'])
+@Index('idx_user_cartelas_cartela_id', ['cartelaId'])
 export class UserCartela {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

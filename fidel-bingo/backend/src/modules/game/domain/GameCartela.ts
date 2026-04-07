@@ -1,6 +1,6 @@
 import {
   Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, ManyToOne, JoinColumn, Unique
+  CreateDateColumn, ManyToOne, JoinColumn, Unique, Index
 } from 'typeorm';
 import { Game } from './Game';
 import { Cartela } from './Cartela';
@@ -8,6 +8,8 @@ import { User } from '../../user/domain/User';
 
 @Entity('game_cartelas')
 @Unique(['gameId', 'cartelaId'])
+@Index('idx_game_cartelas_game_id', ['gameId'])
+@Index('idx_game_cartelas_user_id', ['userId'])
 export class GameCartela {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

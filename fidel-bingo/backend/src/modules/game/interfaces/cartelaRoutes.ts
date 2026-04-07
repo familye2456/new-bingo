@@ -95,17 +95,18 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       return res.json({ success: true, data: [], total: 0 });
     }
   } else if (unassigned === 'true') {
-    // Get all assigned cartelaIds, then exclude them
-    const assigned = await ucRepo.find({ select: ['cartelaId'] });
-    const assignedIds = assigned.map((a) => a.cartelaId);
-
+    // Use NOT EXISTS subquery — avoids loading entire user_cartelas table into memory
     const qb = cartelaRepo.createQueryBuilder('c')
+      .where((qb) => {
+        const sub = qb.subQuery()
+          .select('1')
+          .from(UserCartela, 'uc')
+          .where('uc.cartelaId = c.id')
+          .getQuery();
+        return `NOT EXISTS ${sub}`;
+      })
       .orderBy('c.cardNumber', 'ASC')
       .take(take).skip(skip);
-
-    if (assignedIds.length > 0) {
-      qb.where('c.id NOT IN (:...assignedIds)', { assignedIds });
-    }
 
     const [data, total] = await qb.getManyAndCount();
     const enriched = data.map((c) => ({ ...c, userId: null, user: null }));

@@ -1,6 +1,6 @@
 import {
   Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, ManyToOne, JoinColumn
+  CreateDateColumn, ManyToOne, JoinColumn, Index
 } from 'typeorm';
 import { User } from '../../user/domain/User';
 
@@ -8,6 +8,9 @@ export type GameStatus = 'pending' | 'active' | 'finished' | 'cancelled';
 export type GameType = 'standard' | 'progressive' | 'speed';
 
 @Entity('games')
+@Index('idx_games_creator_id', ['creatorId'])
+@Index('idx_games_status', ['status'])
+@Index('idx_games_creator_status', ['creatorId', 'status'])
 export class Game {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

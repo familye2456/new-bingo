@@ -83,3 +83,39 @@ export async function dequeue(id: number) {
 export async function getAllQueued(): Promise<SyncItem[]> {
   return dbGetAll<SyncItem>('syncQueue');
 }
+
+// ── Cached audio playback ────────────────────────────────────────────────────
+
+/**
+ * Play a sound file. Tries the network first; if offline or fetch fails,
+ * falls back to the service worker cache (works for both prepaid and postpaid).
+ */
+export async function playCachedSound(path: string): Promise<void> {
+  // Try direct Audio element first (works when online or SW has it cached)
+  try {
+    const audio = new Audio(path);
+    await audio.play();
+    return;
+  } catch {
+    // Might be a network error — try Cache Storage fallback
+  }
+
+  if (!('caches' in window)) return;
+  try {
+    const cacheNames = await caches.keys();
+    for (const name of cacheNames) {
+      const cache = await caches.open(name);
+      const response = await cache.match(path);
+      if (response) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.onended = () => URL.revokeObjectURL(url);
+        await audio.play();
+        return;
+      }
+    }
+  } catch {
+    // Cache Storage not available or sound not cached — silently ignore
+  }
+}
