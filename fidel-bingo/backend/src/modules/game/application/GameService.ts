@@ -53,7 +53,7 @@ export class GameService {
         where: dto.cartelaIds.map((cartelaId) => ({ userId, cartelaId })),
         select: ['cartelaId'],
       }),
-      this.cartelaRepo.findByIds(dto.cartelaIds, { select: ['id'] }),
+      this.cartelaRepo.findByIds(dto.cartelaIds),
       this.gameRepo.count({ where: { creatorId: userId } }),
     ]);
 
