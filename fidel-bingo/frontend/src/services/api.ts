@@ -70,6 +70,7 @@ export const adminApi = {
   deactivateUser: (id: string) => api.patch(`/users/${id}/deactivate`),
   deleteUser: (id: string) => api.delete(`/users/${id}`),
   topUpBalance: (id: string, amount: number) => api.patch(`/users/${id}/balance`, { amount }),
+  deductBalance: (id: string, amount: number) => api.patch(`/users/${id}/balance/deduct`, { amount }),
   getUserTransactions: (id: string) => api.get(`/users/${id}/transactions`),
   getUserCartelas: (id: string) => api.get(`/users/${id}/cartelas`),
 };

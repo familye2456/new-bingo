@@ -9,7 +9,7 @@ interface UserRecord {
 }
 
 const emptyForm = { username: '', email: '', password: '', paymentType: 'prepaid' as 'prepaid' | 'postpaid', voice: 'boy sound' as 'boy sound' | 'girl sound' };
-type ModalType = 'create' | 'edit' | 'topup' | 'cartela' | null;
+type ModalType = 'create' | 'edit' | 'topup' | 'deduct' | 'cartela' | null;
 
 interface CartelaRecord { id: string; cardNumber?: number; isActive: boolean; assignedAt: string; }
 
@@ -40,6 +40,7 @@ export const UserManagement: React.FC = () => {
   const [modal, setModal] = useState<ModalType>(null);
   const [editUser, setEditUser] = useState<UserRecord | null>(null);
   const [topUpUser, setTopUpUser] = useState<UserRecord | null>(null);
+  const [deductUser, setDeductUser] = useState<UserRecord | null>(null);
   const [cartelaUser, setCartelaUser] = useState<UserRecord | null>(null);
   const [rangeFrom, setRangeFrom] = useState('');
   const [rangeTo, setRangeTo] = useState('');
@@ -51,6 +52,7 @@ export const UserManagement: React.FC = () => {
   const [removeSuccess, setRemoveSuccess] = useState('');
   const [form, setForm] = useState(emptyForm);
   const [topUpAmount, setTopUpAmount] = useState('');
+  const [deductAmount, setDeductAmount] = useState('');
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'prepaid' | 'postpaid'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'suspended'>('all');
@@ -88,6 +90,10 @@ export const UserManagement: React.FC = () => {
   const deleteMutation = useMutation({ mutationFn: (id: string) => adminApi.deleteUser(id), onSuccess: invalidate });
   const topUpMutation = useMutation({
     mutationFn: () => adminApi.topUpBalance(topUpUser!.id, parseFloat(topUpAmount)),
+    onSuccess: () => { invalidate(); closeModal(); },
+  });
+  const deductMutation = useMutation({
+    mutationFn: () => adminApi.deductBalance(deductUser!.id, parseFloat(deductAmount)),
     onSuccess: () => { invalidate(); closeModal(); },
   });
 
@@ -148,8 +154,8 @@ export const UserManagement: React.FC = () => {
   });
 
   const closeModal = () => {
-    setModal(null); setEditUser(null); setTopUpUser(null); setCartelaUser(null);
-    setForm(emptyForm); setTopUpAmount(''); setRangeFrom(''); setRangeTo(''); setAssignCartelaError(''); setAssignCartelaSuccess('');
+    setModal(null); setEditUser(null); setTopUpUser(null); setDeductUser(null); setCartelaUser(null);
+    setForm(emptyForm); setTopUpAmount(''); setDeductAmount(''); setRangeFrom(''); setRangeTo(''); setAssignCartelaError(''); setAssignCartelaSuccess('');
     setRemoveFrom(''); setRemoveTo(''); setRemoveError(''); setRemoveSuccess('');
   };
 
@@ -260,6 +266,44 @@ export const UserManagement: React.FC = () => {
         </ModalWrap>
       )}
 
+
+      {modal === 'deduct' && deductUser && (
+        <ModalWrap title={`Deduct Balance — ${deductUser.username}`} onClose={closeModal}>
+          <div className="space-y-4">
+            <div className="bg-red-50 rounded-xl p-4 flex items-center justify-between">
+              <span className="text-sm text-gray-600">Current balance</span>
+              <span className="text-lg font-bold text-red-500">${Number(deductUser.balance).toFixed(2)}</span>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Amount to Deduct ($)</label>
+              <input type="number" min="0.01" step="0.01" value={deductAmount}
+                onChange={(e) => setDeductAmount(e.target.value)} className={inputCls} placeholder="0.00" />
+            </div>
+            {deductAmount && parseFloat(deductAmount) > 0 && (
+              <div className={`rounded-xl p-3 text-sm ${parseFloat(deductAmount) > Number(deductUser.balance) ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-700'}`}>
+                {parseFloat(deductAmount) > Number(deductUser.balance)
+                  ? 'Amount exceeds current balance'
+                  : <>New balance: <strong>${(Number(deductUser.balance) - parseFloat(deductAmount)).toFixed(2)}</strong></>}
+              </div>
+            )}
+            {deductMutation.isError && (
+              <p className="text-xs text-red-500">{(deductMutation.error as any)?.response?.data?.error?.message ?? 'Deduction failed'}</p>
+            )}
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => deductMutation.mutate()}
+                disabled={deductMutation.isPending || !deductAmount || parseFloat(deductAmount) <= 0 || parseFloat(deductAmount) > Number(deductUser.balance)}
+                className="flex-1 bg-red-500 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-red-600 disabled:opacity-50 transition-colors"
+              >
+                {deductMutation.isPending ? 'Deducting...' : 'Deduct Balance'}
+              </button>
+              <button onClick={closeModal} className="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </ModalWrap>
+      )}
 
       {modal === 'cartela' && cartelaUser && (
         <ModalWrap title={`Cartelas — ${cartelaUser.username}`} onClose={closeModal}>
@@ -475,6 +519,12 @@ export const UserManagement: React.FC = () => {
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                           </button>
                         )}
+                        {u.paymentType === 'prepaid' && (
+                          <button onClick={() => { setDeductUser(u); setModal('deduct'); }} title="Deduct balance"
+                            className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
+                          </button>
+                        )}
                         {u.status === 'active' ? (
                           <button onClick={() => deactivateMutation.mutate(u.id)} title="Deactivate"
                             className="p-1.5 rounded-lg hover:bg-amber-50 text-gray-400 hover:text-amber-600 transition-colors">
@@ -552,6 +602,13 @@ export const UserManagement: React.FC = () => {
                   className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-medium">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                   Top Up
+                </button>
+              )}
+              {u.paymentType === 'prepaid' && (
+                <button onClick={() => { setDeductUser(u); setModal('deduct'); }}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-50 text-red-500 text-xs font-medium">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
+                  Deduct
                 </button>
               )}
               {u.status === 'active' ? (

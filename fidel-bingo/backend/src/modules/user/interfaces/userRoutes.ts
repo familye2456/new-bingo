@@ -106,6 +106,23 @@ router.patch('/:id/balance', authorize('admin'), async (req: AuthRequest, res: R
   res.json({ success: true, data: updated?.sanitize() });
 });
 
+// Deduct balance (prepaid users only)
+router.patch('/:id/balance/deduct', authorize('admin'), async (req: AuthRequest, res: Response) => {
+  const repo = AppDataSource.getRepository(User);
+  const user = await repo.findOne({ where: { id: req.params.id } });
+  if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
+  if (user.role === 'admin') throw new AppError(403, 'FORBIDDEN', 'Cannot modify another admin');
+  if (user.paymentType !== 'prepaid') throw new AppError(400, 'NOT_PREPAID', 'Balance deduction is only for prepaid users');
+
+  const amount = parseFloat(req.body.amount);
+  if (isNaN(amount) || amount <= 0) throw new AppError(400, 'INVALID_AMOUNT', 'Amount must be a positive number');
+  if (Number(user.balance) < amount) throw new AppError(400, 'INSUFFICIENT_BALANCE', 'Deduction exceeds current balance');
+
+  await repo.decrement({ id: req.params.id }, 'balance', amount);
+  const updated = await repo.findOne({ where: { id: req.params.id } });
+  res.json({ success: true, data: updated?.sanitize() });
+});
+
 // Activate a user
 router.patch('/:id/activate', authorize('admin'), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(User);

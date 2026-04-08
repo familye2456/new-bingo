@@ -73,6 +73,8 @@ export const NewGame: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(_prefs?.selectedIds ?? []));
   const [rememberActive, setRememberActive] = useState(true);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [quickAddValue, setQuickAddValue] = useState('');
+  const quickAddRef = useRef<HTMLInputElement>(null);
 
   // Persist whenever any selection changes
   useEffect(() => { savePrefs(bet, pattern, selectedIds, houseCut); }, [bet, pattern, selectedIds, houseCut]);
@@ -150,6 +152,14 @@ export const NewGame: React.FC = () => {
       return next;
     });
 
+  const handleQuickAdd = (val: string) => {
+    const num = parseInt(val, 10);
+    const found = cartelas.find((c) => c.cardNumber === num);
+    if (found) {
+      toggle(found.id);
+      setQuickAddValue('');
+    }
+  };
   const houseCutValid = typeof houseCut === 'number' && houseCut >= 10 && houseCut <= 45;
   const canStart = selectedIds.size >= MIN_CARTELAS && houseCutValid;
   const totalPrize = bet * selectedIds.size;
@@ -258,6 +268,32 @@ export const NewGame: React.FC = () => {
               : { background: 'rgba(255,255,255,0.05)', color: '#6b7280', border: '1px solid rgba(255,255,255,0.08)' }}>
             {rememberActive ? '✓' : '○'} Active only
           </button>
+          {showQuickAdd ? (
+            <input
+              ref={quickAddRef}
+              autoFocus
+              type="number"
+              value={quickAddValue}
+              onChange={(e) => {
+                setQuickAddValue(e.target.value);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { handleQuickAdd(quickAddValue); }
+                if (e.key === 'Escape') { setShowQuickAdd(false); setQuickAddValue(''); }
+              }}
+              onBlur={() => { setShowQuickAdd(false); setQuickAddValue(''); }}
+              placeholder="Card #"
+              className="w-20 text-xs px-2.5 py-1 rounded-lg font-bold focus:outline-none"
+              style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)' }}
+            />
+          ) : (
+            <button
+              onClick={() => setShowQuickAdd(true)}
+              className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg font-bold transition-all hover:brightness-125"
+              style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)' }}>
+              ＋ Quick Add
+            </button>
+          )}
           {selectedIds.size > 0 && (
             <button onClick={() => setSelectedIds(new Set())}
               className="text-xs text-gray-600 hover:text-red-400 transition-colors px-2 py-1">
@@ -312,15 +348,6 @@ export const NewGame: React.FC = () => {
         )}
       </div>
 
-      {/* ── Quick Add Modal ── */}
-      {showQuickAdd && (
-        <QuickAddModal
-          cartelas={cartelas}
-          selectedIds={selectedIds}
-          onToggle={(id) => setSelectedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; })}
-          onClose={() => setShowQuickAdd(false)}
-        />
-      )}
 
 
     </div>
@@ -411,92 +438,6 @@ const HouseCutPicker: React.FC<{
           </div>
         </div>
       )}
-    </div>
-  );
-};
-
-// ── Quick Add Modal ───────────────────────────────────────────────────────────
-const QuickAddModal: React.FC<{
-  cartelas: CartelaRecord[];
-  selectedIds: Set<string>;
-  onToggle: (id: string) => void;
-  onClose: () => void;
-}> = ({ cartelas, selectedIds, onToggle, onClose }) => {
-  const [value, setValue] = useState('');
-
-  const status = (() => {
-    if (!value) return null;
-    const num = parseInt(value, 10);
-    const found = cartelas.find((c) => c.cardNumber === num);
-    if (!found) return 'notfound';
-    return selectedIds.has(found.id) ? 'selected' : 'found';
-  })();
-
-  const commit = () => {
-    const num = parseInt(value, 10);
-    const found = cartelas.find((c) => c.cardNumber === num);
-    if (found) { onToggle(found.id); setValue(''); }
-  };
-
-  const press = (key: string) => {
-    if (key === '⌫') { setValue((v) => v.slice(0, -1)); return; }
-    if (key === '✓') { commit(); return; }
-    if (value.length >= 3) return;
-    setValue((v) => v + key);
-  };
-
-  const KEYS = ['1','2','3','4','5','6','7','8','9','⌫','0','✓'];
-
-  const statusColor = status === 'found' ? '#4ade80' : status === 'selected' ? '#fbbf24' : status === 'notfound' ? '#f87171' : '#6b7280';
-  const statusText = status === 'found' ? 'Tap ✓ to add' : status === 'selected' ? 'Already selected — tap ✓ to remove' : status === 'notfound' ? 'Card not found' : 'Enter card number';
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center"
-      style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-      onClick={onClose}>
-      <div className="w-full max-w-sm rounded-t-3xl p-5 pb-8 flex flex-col gap-4"
-        style={{ background: '#0f1e35', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 -8px 40px rgba(0,0,0,0.7)' }}
-        onClick={(e) => e.stopPropagation()}>
-
-        {/* Handle */}
-        <div className="w-10 h-1 rounded-full bg-white/20 mx-auto -mt-1" />
-
-        {/* Display */}
-        <div className="rounded-2xl px-5 py-4 text-center"
-          style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}>
-          <div className="text-4xl font-extrabold tracking-widest text-white min-h-[48px]">
-            {value || <span className="text-gray-700">—</span>}
-          </div>
-          <div className="text-xs mt-1.5 font-medium" style={{ color: statusColor }}>{statusText}</div>
-        </div>
-
-        {/* Keypad */}
-        <div className="grid grid-cols-3 gap-2">
-          {KEYS.map((k) => {
-            const isConfirm = k === '✓';
-            const isBack = k === '⌫';
-            return (
-              <button key={k} onClick={() => press(k)}
-                className="rounded-2xl py-4 text-xl font-bold transition-all active:scale-95"
-                style={isConfirm ? {
-                  background: status === 'found' || status === 'selected' ? 'linear-gradient(135deg,#4ade80,#16a34a)' : 'rgba(255,255,255,0.04)',
-                  color: status === 'found' || status === 'selected' ? '#111' : '#374151',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                } : isBack ? {
-                  background: 'rgba(239,68,68,0.12)',
-                  color: '#f87171',
-                  border: '1px solid rgba(239,68,68,0.2)',
-                } : {
-                  background: 'rgba(255,255,255,0.06)',
-                  color: '#e2e8f0',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                }}>
-                {k}
-              </button>
-            );
-          })}
-        </div>
-      </div>
     </div>
   );
 };
