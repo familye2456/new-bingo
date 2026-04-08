@@ -118,7 +118,17 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (accessToken) localStorage.setItem('access_token', accessToken);
       await dbPut('user', user, 'me');
 
-      if (user.paymentType === 'prepaid') {
+      // Apply admin-set default voice if this is the first login
+      const defaultVoice = localStorage.getItem(`default_voice_${user.username}`);
+      if (defaultVoice === 'boy sound' || defaultVoice === 'girl sound') {
+        const existing = localStorage.getItem('game-settings');
+        if (!existing) {
+          localStorage.setItem('game-settings', JSON.stringify({ state: { voice: defaultVoice, autoCallInterval: 5 }, version: 0 }));
+        }
+        localStorage.removeItem(`default_voice_${user.username}`);
+      }
+
+      if (user.paymentType === 'prepaid' && user.role !== 'admin') {
         // Skip download screen if already cached for this user
         const cacheKey = `sw_cached_${user.id}`;
         const alreadyCached = localStorage.getItem(cacheKey) === '1';

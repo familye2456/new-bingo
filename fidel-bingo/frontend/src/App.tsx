@@ -5,6 +5,29 @@ import { useAuthStore } from './store/authStore';
 import { LoginPage } from './pages/LoginPage';
 import { GamePage } from './pages/GamePage';
 
+// Error boundary — catches extension-injected DOM conflicts and other runtime errors
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: Error | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen flex items-center justify-center p-6" style={{ background: '#0b1120' }}>
+          <div className="text-center">
+            <div className="text-red-400 text-sm mb-3">Something went wrong. Please refresh.</div>
+            <button onClick={() => window.location.reload()}
+              className="px-4 py-2 rounded-xl text-sm font-semibold"
+              style={{ background: '#fbbf24', color: '#111' }}>
+              Refresh
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // User layout + pages
 import { UserLayout } from './components/UserLayout';
 import { UserDashboard } from './pages/user/UserDashboard';
@@ -245,9 +268,11 @@ const AppRoutes: React.FC = () => {
 };
 
 const App: React.FC = () => (
-  <QueryClientProvider client={queryClient}>
-    <AppRoutes />
-  </QueryClientProvider>
+  <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <AppRoutes />
+    </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;

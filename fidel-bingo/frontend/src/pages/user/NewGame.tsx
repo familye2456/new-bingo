@@ -67,9 +67,9 @@ export const NewGame: React.FC = () => {
   useEffect(() => { voiceRef.current = voice; }, [voice]);
 
   const _prefs = loadPrefs();
-  const [bet, setBet] = useState(_prefs?.bet ?? 5);
-  const [houseCut, setHouseCut] = useState<number | ''>(_prefs?.houseCut ?? '');
-  const [pattern, setPattern] = useState(_prefs?.pattern ?? 'line1');
+  const [bet, setBet] = useState(_prefs?.bet ?? 10);
+  const [houseCut, setHouseCut] = useState<number | ''>(_prefs?.houseCut ?? 25);
+  const [pattern, setPattern] = useState(_prefs?.pattern ?? 'line2');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(_prefs?.selectedIds ?? []));
   const [rememberActive, setRememberActive] = useState(true);
   const [showQuickAdd, setShowQuickAdd] = useState(false);

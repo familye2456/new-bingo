@@ -8,7 +8,7 @@ interface UserRecord {
   status: string; paymentType: 'prepaid' | 'postpaid'; balance: number;
 }
 
-const emptyForm = { username: '', email: '', password: '', paymentType: 'prepaid' as 'prepaid' | 'postpaid' };
+const emptyForm = { username: '', email: '', password: '', paymentType: 'prepaid' as 'prepaid' | 'postpaid', voice: 'boy sound' as 'boy sound' | 'girl sound' };
 type ModalType = 'create' | 'edit' | 'topup' | 'cartela' | null;
 
 interface CartelaRecord { id: string; cardNumber?: number; isActive: boolean; assignedAt: string; }
@@ -70,7 +70,14 @@ export const UserManagement: React.FC = () => {
 
   const createMutation = useMutation({
     mutationFn: () => adminApi.createUser(form),
-    onSuccess: () => { invalidate(); closeModal(); },
+    onSuccess: (res) => {
+      // Seed default voice for this user so it's applied on first login
+      const username = res.data?.data?.username ?? form.username;
+      if (username) {
+        localStorage.setItem(`default_voice_${username}`, form.voice);
+      }
+      invalidate(); closeModal();
+    },
   });
   const updateMutation = useMutation({
     mutationFn: () => adminApi.updateUser(editUser!.id, { email: form.email, username: form.username, paymentType: form.paymentType }),
@@ -178,6 +185,26 @@ export const UserManagement: React.FC = () => {
                 <option value="postpaid">Postpaid</option>
               </select>
             </div>
+            {modal === 'create' && (
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Default Caller Voice</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['boy sound', 'girl sound'] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, voice: v }))}
+                      className="py-2.5 rounded-xl text-sm font-medium border-2 transition-colors"
+                      style={form.voice === v
+                        ? { borderColor: '#3b82f6', background: '#eff6ff', color: '#1d4ed8' }
+                        : { borderColor: '#e5e7eb', background: '#fff', color: '#6b7280' }}
+                    >
+                      {v === 'boy sound' ? '👦 Boy' : '👧 Girl'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {modal === 'create' && (
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">Password</label>
