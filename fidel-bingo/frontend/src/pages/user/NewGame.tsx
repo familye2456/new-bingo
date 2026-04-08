@@ -13,9 +13,13 @@ if (typeof window !== 'undefined') {
   window.addEventListener('keydown', mark, { once: true });
 }
 
-function playSound(name: string, category: string) {
+// Always reads latest voice from store — never stale
+function playSound(name: string) {
   if (!_userInteracted) return;
-  playCachedSound(`/sounds/${encodeURIComponent(category)}/${name}`).catch(() => {});
+  const category = useGameSettings.getState().voice;
+  const ext = category === 'girl sound' ? '.mp3' : '.wav';
+  const file = name.includes('.') ? name : `${name}${ext}`;
+  playCachedSound(`/sounds/${encodeURIComponent(category)}/${file}`).catch(() => {});
 }
 
 interface CartelaRecord {
@@ -105,7 +109,7 @@ export const NewGame: React.FC = () => {
       });
     },
     onSuccess: (res) => {
-      playSound('start.wav', voiceRef.current);
+      playSound('start');
       const game = res?.data?.data?.data ?? res?.data?.data ?? res?.data;
       const id = game?.id;
       if (id) {

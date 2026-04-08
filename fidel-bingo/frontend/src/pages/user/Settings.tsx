@@ -176,7 +176,8 @@ export const Settings: React.FC = () => {
             <button
               onClick={() => {
                 const n = Math.floor(Math.random() * 75) + 1;
-                new Audio(`/sounds/${encodeURIComponent(voice)}/${n}.wav`).play().catch(() => {});
+                const ext = voice === 'girl sound' ? '.mp3' : '.wav';
+                new Audio(`/sounds/${encodeURIComponent(voice)}/${n}${ext}`).play().catch(() => {});
               }}
               className="w-full py-2.5 rounded-xl text-sm font-medium transition-all"
               style={{ background: '#0e1a35', border: '1px solid rgba(255,255,255,0.07)', color: '#9ca3af' }}

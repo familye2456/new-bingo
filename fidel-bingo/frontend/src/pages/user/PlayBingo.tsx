@@ -13,9 +13,13 @@ if (typeof window !== 'undefined') {
   window.addEventListener('keydown', mark, { once: true });
 }
 
-function playSound(name: string, category: string) {
+// Always reads latest voice from store — never stale
+function playSound(name: string) {
   if (!_userInteracted) return;
-  playCachedSound(`/sounds/${encodeURIComponent(category)}/${name}`).catch(() => {});
+  const category = useGameSettings.getState().voice;
+  const ext = category === 'girl sound' ? '.mp3' : '.wav';
+  const file = name.includes('.') ? name : `${name}${ext}`;
+  playCachedSound(`/sounds/${encodeURIComponent(category)}/${file}`).catch(() => {});
 }
 
 interface Game {
@@ -45,6 +49,7 @@ export const PlayBingo: React.FC = () => {
   const { refreshBalance } = useAuthStore();
   const { voice } = useGameSettings();
   const voiceRef = useRef(voice);
+  // Keep ref in sync — also re-read from store directly on each sound call for safety
   useEffect(() => { voiceRef.current = voice; }, [voice]);
   const queryClient = useQueryClient();
 
@@ -161,16 +166,16 @@ export const PlayBingo: React.FC = () => {
       const result = await offlineGameApi.checkCartela(game.id, num);
       setCheckResult(result);
       if (result.registered) {
-        const isBoy = voiceRef.current === 'boy sound';
+        const isBoy = useGameSettings.getState().voice === 'boy sound';
         if (result.isWinner) {
-          playSound(isBoy ? 'winner.wav' : 'winner.mp3', voiceRef.current);
+          playSound('winner');
           setWinnerInfo({
             cardNumber: num,
             amount: Number(game?.prizePool ?? 0),
             pattern: result.winPattern ?? '',
           });
         } else if (isBoy) {
-          playSound('notwinner.wav', voiceRef.current);
+          playSound('notwinner');
         }
       }
     } catch {
@@ -186,7 +191,7 @@ export const PlayBingo: React.FC = () => {
   const prevCalledRef = useRef<number[]>([]);
   useEffect(() => {
     const newNums = sessionCalledNumbers.filter((n) => !prevCalledRef.current.includes(n));
-    if (newNums.length > 0) playSound(`${newNums[newNums.length - 1]}.wav`, voiceRef.current);
+    if (newNums.length > 0) playSound(`${newNums[newNums.length - 1]}`);
     prevCalledRef.current = sessionCalledNumbers;
   }, [sessionCalledNumbers]);
 
@@ -254,7 +259,7 @@ export const PlayBingo: React.FC = () => {
             <CtrlBtn
               label="🔀"
               purple
-              onClick={() => { playSound('shuffle-audio-TfqyAnvz.mp3', voiceRef.current); setTimeout(() => window.location.reload(), 3000); }}
+              onClick={() => { playSound('shuffle-audio-TfqyAnvz.mp3'); setTimeout(() => window.location.reload(), 3000); }}
             />
           </div>
 

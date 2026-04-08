@@ -18,14 +18,15 @@ if (typeof window !== 'undefined') {
 
 function playNumberSound(number: number, category: string) {
   if (!_userInteracted) return;
-  const audio = new Audio(`/sounds/${encodeURIComponent(category)}/${number}.wav`);
-  audio.play().catch(() => {});
+  const ext = category === 'girl sound' ? '.mp3' : '.wav';
+  new Audio(`/sounds/${encodeURIComponent(category)}/${number}${ext}`).play().catch(() => {});
 }
 
 function playSound(name: string, category: string) {
   if (!_userInteracted) return;
-  const audio = new Audio(`/sounds/${encodeURIComponent(category)}/${name}`);
-  audio.play().catch(() => {});
+  const ext = category === 'girl sound' ? '.mp3' : '.wav';
+  const file = name.includes('.') ? name : `${name}${ext}`;
+  new Audio(`/sounds/${encodeURIComponent(category)}/${file}`).play().catch(() => {});
 }
 
 export const GamePage: React.FC = () => {
@@ -80,7 +81,7 @@ export const GamePage: React.FC = () => {
     if (socket.connected) joinGame();
     socket.on('game_state', (game: any) => {
       if (game.status === 'active' && gameStatusRef.current !== 'active') {
-        playSound('start.wav', voiceRef.current);
+        playSound('start', voiceRef.current);
       }
       setGame(game);
     });
