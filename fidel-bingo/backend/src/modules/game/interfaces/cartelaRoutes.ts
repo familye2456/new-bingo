@@ -117,23 +117,35 @@ router.patch('/mine/:id', async (req: AuthRequest, res: Response) => {
   if (!assignment) throw new AppError(404, 'NOT_FOUND', 'Cartela not found in your collection');
 
   const { numbers, cardNumber } = req.body as { numbers?: number[]; cardNumber?: number };
-  const cartela = await cartelaRepo.findOne({ where: { id: req.params.id } });
-  if (!cartela) throw new AppError(404, 'NOT_FOUND', 'Cartela not found');
+  const original = await cartelaRepo.findOne({ where: { id: req.params.id } });
+  if (!original) throw new AppError(404, 'NOT_FOUND', 'Cartela not found');
 
-  if (numbers !== undefined) {
-    if (!Array.isArray(numbers) || numbers.length !== 25)
-      throw new AppError(400, 'INVALID_NUMBERS', 'numbers must be an array of 25 integers');
-    cartela.numbers = numbers;
-  }
-  if (cardNumber !== undefined) {
-    const existing = await cartelaRepo.findOne({ where: { cardNumber } });
-    if (existing && existing.id !== cartela.id)
-      throw new AppError(409, 'DUPLICATE_CARD_NUMBER', `Card #${cardNumber} already exists`);
-    cartela.cardNumber = cardNumber;
-  }
+  // Always create a new cartela record for this user's edit
+  // so the original admin-assigned cartela is never mutated
+  const { CartelaGenerator } = await import('../application/CartelaGenerator');
+  const generator = new CartelaGenerator();
 
-  await cartelaRepo.save(cartela);
-  res.json({ success: true, data: { ...cartela, assignedAt: assignment.assignedAt } });
+  const newNumbers = numbers ?? original.numbers;
+  const newCardNumber = cardNumber ?? original.cardNumber;
+
+  if (numbers !== undefined && (!Array.isArray(numbers) || numbers.length !== 25))
+    throw new AppError(400, 'INVALID_NUMBERS', 'numbers must be an array of 25 integers');
+
+  const newCartela = cartelaRepo.create({
+    cardNumber: newCardNumber,
+    numbers: newNumbers,
+    patternMask: generator.generateMask(),
+    isActive: original.isActive,
+    isWinner: false,
+    purchasePrice: 0,
+  });
+  await cartelaRepo.save(newCartela);
+
+  // Repoint this user's assignment to the new record
+  assignment.cartelaId = newCartela.id;
+  await ucRepo.save(assignment);
+
+  res.json({ success: true, data: { ...newCartela, assignedAt: assignment.assignedAt } });
 });
 
 // ─── Admin only below ────────────────────────────────────────────────────────
