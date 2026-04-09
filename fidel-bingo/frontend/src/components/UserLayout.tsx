@@ -38,10 +38,17 @@ const NAV = [
 ];
 
 export const UserLayout: React.FC = () => {
-  const { user, logout } = useAuthStore();
+  const { user, logout, swReady, dismissSwReady } = useAuthStore();
   const [open, setOpen] = useState(false);
   const online = useOnlineStatus();
   const initials = (user?.username ?? 'U').slice(0, 2).toUpperCase();
+
+  // Auto-dismiss the SW ready toast after 6 seconds
+  useEffect(() => {
+    if (!swReady) return;
+    const t = setTimeout(dismissSwReady, 6000);
+    return () => clearTimeout(t);
+  }, [swReady, dismissSwReady]);
 
   return (
     <div className="h-screen flex overflow-hidden" style={{ background: '#0a1628', color: '#fff' }}>
@@ -193,6 +200,43 @@ export const UserLayout: React.FC = () => {
 
       {/* ── Main content ── */}
       <main className="flex-1 overflow-hidden h-full" style={{ background: '#0e1a35' }}>
+        {/* SW ready toast */}
+        {swReady && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl"
+            style={{
+              background: 'linear-gradient(135deg, #064e3b, #065f46)',
+              border: '1px solid rgba(52,211,153,0.35)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(52,211,153,0.1)',
+              minWidth: 260,
+            }}
+          >
+            {/* Wifi-off icon */}
+            <span className="shrink-0 text-emerald-400">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
+                <path d="M5 12.55a11 11 0 0114.08 0" strokeLinecap="round" />
+                <path d="M1.42 9a16 16 0 0121.16 0" strokeLinecap="round" />
+                <path d="M8.53 16.11a6 6 0 016.95 0" strokeLinecap="round" />
+                <circle cx="12" cy="20" r="1" fill="currentColor" />
+              </svg>
+            </span>
+            <div className="flex-1">
+              <div className="text-emerald-300 font-semibold text-sm leading-tight">Ready to go offline</div>
+              <div className="text-emerald-500 text-xs mt-0.5">App & data fully cached</div>
+            </div>
+            <button
+              onClick={dismissSwReady}
+              aria-label="Dismiss"
+              className="shrink-0 text-emerald-600 hover:text-emerald-300 transition-colors ml-1"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-4 h-4">
+                <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+        )}
         <Outlet />
       </main>
     </div>

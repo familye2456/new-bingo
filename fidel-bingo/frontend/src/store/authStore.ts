@@ -28,11 +28,13 @@ interface AuthState {
   loading: boolean;
   initialized: boolean;
   cacheSteps: CacheStep[];
+  swReady: boolean;
   login: (identifier: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   fetchMe: () => Promise<void>;
   refreshBalance: () => Promise<void>;
   adjustUserBalance: (delta: number) => void;
+  dismissSwReady: () => void;
 }
 
 const STEPS: CacheStep[] = [
@@ -109,6 +111,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   loading: false,
   initialized: false,
   cacheSteps: [],
+  swReady: false,
 
   login: async (identifier, password) => {
     set({ loading: true, cacheSteps: [] });
@@ -147,64 +150,66 @@ export const useAuthStore = create<AuthState>((set) => ({
             set({ cacheSteps: [...steps] });
           };
 
-          const fetches: Array<{ url: string; store: string; key?: string }> = [
-            { url: '/users/me',              store: 'user',         key: 'me' },
-            { url: '/cartelas/mine',         store: 'cartelas' },
-            { url: '/games/mine',            store: 'games' },
-            { url: '/users/me/transactions', store: 'transactions' },
+          const fetches: Array<{ url: string; store: string; key?: string; index: number }> = [
+            { url: '/users/me',              store: 'user',         key: 'me', index: 0 },
+            { url: '/cartelas/mine',         store: 'cartelas',                index: 1 },
+            { url: '/games/mine',            store: 'games',                   index: 2 },
+            { url: '/users/me/transactions', store: 'transactions',            index: 3 },
           ];
 
-          for (let i = 0; i < fetches.length; i++) {
-            mark(i, 'loading');
+          // Mark all data steps as loading immediately, then fetch in parallel
+          fetches.forEach(f => mark(f.index, 'loading'));
+
+          const { dbClear: _dbClear } = await import('../services/db');
+
+          await Promise.all(fetches.map(async (f) => {
             try {
-              const r = await api.get(fetches[i].url);
+              const r = await api.get(f.url);
               const data = r.data.data;
-              if (fetches[i].key) {
-                await dbPut(fetches[i].store, data, fetches[i].key);
-                mark(i, 'done', 1);
+              if (f.key) {
+                await dbPut(f.store, data, f.key);
+                mark(f.index, 'done', 1);
               } else {
                 const items: any[] = data ?? [];
-                // Clear the store first so no previous user's data leaks in
-                if (fetches[i].store === 'cartelas') {
-                  await (await import('../services/db')).dbClear('cartelas');
-                  for (const item of items) await dbPut(fetches[i].store, { ...item, userId: user.id });
+                if (f.store === 'cartelas') {
+                  await _dbClear('cartelas');
+                  for (const item of items) await dbPut(f.store, { ...item, userId: user.id });
                 } else {
-                  for (const item of items) await dbPut(fetches[i].store, item);
+                  for (const item of items) await dbPut(f.store, item);
                 }
-                mark(i, 'done', items.length);
+                mark(f.index, 'done', items.length);
               }
             } catch {
-              mark(i, 'skipped');
+              mark(f.index, 'skipped');
             }
-          }
+          }));
 
           // Mark as cached now (data is in IndexedDB) so next login skips this screen
-          // even if the user closes before the SW finishes installing
           localStorage.setItem(cacheKey, '1');
 
-          // Wait for service worker to finish caching all app assets & sounds
-          // Only block if SW is still installing (first install). Skip if already active.
-          mark(4, 'loading');
-          const swAlreadyActive = await (async () => {
-            if (!('serviceWorker' in navigator)) return true;
+          // Let the SW install in the background — don't block the user
+          mark(4, 'done');
+          set({ initialized: true });
+
+          // Kick off SW caching without blocking
+          (async () => {
+            if (!('serviceWorker' in navigator)) return;
             try {
               const reg = await navigator.serviceWorker.ready;
-              return !reg.installing && !reg.waiting;
-            } catch { return true; }
+              if (reg.installing || reg.waiting) {
+                waitForSWReady((cached, total) => {
+                  steps[4] = { ...steps[4], status: 'loading', cached, total };
+                  set({ cacheSteps: [...steps] });
+                }).then(() => {
+                  mark(4, 'done', steps[4].cached);
+                  set({ swReady: true });
+                }).catch(() => {});
+              } else {
+                // SW already active — mark ready immediately
+                set({ swReady: true });
+              }
+            } catch {}
           })();
-
-          if (swAlreadyActive) {
-            mark(4, 'done');
-          } else {
-            await waitForSWReady((cached, total) => {
-              steps[4] = { ...steps[4], status: 'loading', cached, total };
-              set({ cacheSteps: [...steps] });
-            });
-            mark(4, 'done', steps[4].cached);
-          }
-
-          // All done — now open the app
-          set({ initialized: true });
         }
       } else {
         // Non-prepaid: clear any previous user's cartelas, then open immediately
@@ -216,6 +221,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       throw err;
     }
   },
+
+  dismissSwReady: () => set({ swReady: false }),
 
   logout: async () => {
     try { await authApi.logout(); } catch {}
