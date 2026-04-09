@@ -42,10 +42,12 @@ router.post('/generate', async (req: AuthRequest, res: Response) => {
   if (requestedCardNumber !== undefined) {
     const existing = await cartelaRepo.findOne({ where: { cardNumber: requestedCardNumber } });
     if (existing) {
-      // Card exists — check if it's already assigned to this user
+      // Card exists — check if already assigned to this user
       const alreadyOwned = await ucRepo.findOne({ where: { cartelaId: existing.id, userId: req.user!.id } });
       if (alreadyOwned) throw new AppError(409, 'DUPLICATE_CARD_NUMBER', `Card #${requestedCardNumber} is already in your collection`);
-      // Not assigned to this user — just reassign it (reuse the existing card)
+      // Update the card's numbers with the new data provided by this user
+      if (customNumbers) existing.numbers = customNumbers;
+      await cartelaRepo.save(existing);
       await ucRepo.save(ucRepo.create({ userId: req.user!.id, cartelaId: existing.id }));
       return res.status(201).json({ success: true, data: { ...existing, assignedAt: new Date() } });
     }
