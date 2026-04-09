@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { offlineUserApi } from '../../services/offlineApi';
 import { api, userApi } from '../../services/api';
+import { dbDelete, dbPut } from '../../services/db';
 
 const COLS = ['B', 'I', 'N', 'G', 'O'];
 const RANGES = [[1,15],[16,30],[31,45],[46,60],[61,75]];
@@ -187,20 +188,32 @@ export const MyCartelas: React.FC = () => {
   const createMutation = useMutation({
     mutationFn: ({ numbers, cardNumber }: { numbers: number[]; cardNumber: number }) =>
       api.post('/cartelas/generate', { numbers, cardNumber }),
-    onSuccess: () => { invalidate(); setShowCreate(false); setMutError(''); },
+    onSuccess: async (res) => {
+      const created = res?.data?.data;
+      if (created) await dbPut('cartelas', created);
+      invalidate(); setShowCreate(false); setMutError('');
+    },
     onError: (e: any) => setMutError(e?.response?.data?.error?.message ?? 'Failed to create'),
   });
 
   const editMutation = useMutation({
     mutationFn: ({ id, numbers, cardNumber }: { id: string; numbers: number[]; cardNumber: number }) =>
       userApi.updateCartela(id, { numbers, cardNumber }),
-    onSuccess: () => { invalidate(); setEditCartela(null); setMutError(''); },
+    onSuccess: async (res, vars) => {
+      const updated = res?.data?.data;
+      if (updated) await dbPut('cartelas', updated);
+      invalidate(); setEditCartela(null); setMutError('');
+    },
     onError: (e: any) => setMutError(e?.response?.data?.error?.message ?? 'Failed to update'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => userApi.deleteCartela(id),
-    onSuccess: () => invalidate(),
+    onSuccess: async (_, id) => {
+      // Remove from IndexedDB immediately so offline reads don't show stale data
+      await dbDelete('cartelas', id);
+      invalidate();
+    },
   });
 
   return (
