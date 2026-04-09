@@ -45,11 +45,33 @@ router.post('/generate', async (req: AuthRequest, res: Response) => {
       // Card exists — check if already assigned to this user
       const alreadyOwned = await ucRepo.findOne({ where: { cartelaId: existing.id, userId: req.user!.id } });
       if (alreadyOwned) throw new AppError(409, 'DUPLICATE_CARD_NUMBER', `Card #${requestedCardNumber} is already in your collection`);
-      // Update the card's numbers with the new data provided by this user
-      if (customNumbers) existing.numbers = customNumbers;
-      await cartelaRepo.save(existing);
-      await ucRepo.save(ucRepo.create({ userId: req.user!.id, cartelaId: existing.id }));
-      return res.status(201).json({ success: true, data: { ...existing, assignedAt: new Date() } });
+
+      // Check if other users also own this card
+      const otherOwners = await ucRepo.count({ where: { cartelaId: existing.id } });
+      if (otherOwners === 0) {
+        // No one else owns it — safe to update numbers in place
+        if (customNumbers) existing.numbers = customNumbers;
+        await cartelaRepo.save(existing);
+        await ucRepo.save(ucRepo.create({ userId: req.user!.id, cartelaId: existing.id }));
+        return res.status(201).json({ success: true, data: { ...existing, assignedAt: new Date() } });
+      } else {
+        // Other users own this card — create a new cartela record with the same cardNumber
+        // so their data is not affected
+        const { CartelaGenerator: CG } = await import('../application/CartelaGenerator');
+        const gen = new CG();
+        const nums = customNumbers ?? gen.generate();
+        const newCartela = cartelaRepo.create({
+          cardNumber: requestedCardNumber,
+          numbers: nums,
+          patternMask: gen.generateMask(),
+          isActive: true,
+          isWinner: false,
+          purchasePrice: 0,
+        });
+        await cartelaRepo.save(newCartela);
+        await ucRepo.save(ucRepo.create({ userId: req.user!.id, cartelaId: newCartela.id }));
+        return res.status(201).json({ success: true, data: { ...newCartela, assignedAt: new Date() } });
+      }
     }
     nextCardNumber = requestedCardNumber;
   } else {
