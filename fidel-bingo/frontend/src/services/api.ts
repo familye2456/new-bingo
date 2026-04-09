@@ -93,6 +93,9 @@ export const userApi = {
     api.patch('/users/me', data),
   myCartelas: () => api.get('/cartelas/mine'),
   myTransactions: () => api.get('/users/me/transactions'),
+  deleteCartela: (id: string) => api.delete(`/cartelas/mine/${id}`),
+  updateCartela: (id: string, data: { numbers?: number[]; cardNumber?: number }) =>
+    api.patch(`/cartelas/mine/${id}`, data),
 };
 
 export const gameApi = {

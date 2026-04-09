@@ -29,12 +29,17 @@ function isSynced(id: string): boolean { return getSyncedIds().has(id); }
 
 export async function refreshCache() {
   try {
-    const [meRes, cartelasRes, gamesRes, txRes] = await Promise.all([
+    const cachedCartelas = await dbGetAll<any>('cartelas');
+    const fetchCartelas = cachedCartelas.length === 0;
+
+    const requests: Promise<any>[] = [
       api.get('/users/me'),
-      api.get('/cartelas/mine'),
+      fetchCartelas ? api.get('/cartelas/mine') : Promise.resolve(null),
       api.get('/games/mine'),
       api.get('/users/me/transactions'),
-    ]);
+    ];
+
+    const [meRes, cartelasRes, gamesRes, txRes] = await Promise.all(requests);
 
     const meData = meRes.data?.data ?? meRes.data;
 
@@ -48,8 +53,12 @@ export async function refreshCache() {
 
     const toList = (d: any) => Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : Array.isArray(d?.data?.data) ? d.data.data : [];
 
-    await dbClear('cartelas');
-    await Promise.all(toList(cartelasRes.data).map((c: any) => dbPut('cartelas', c)));
+    // Only update cartelas store if we fetched fresh data
+    if (fetchCartelas && cartelasRes) {
+      const userId = meData?.id;
+      await dbClear('cartelas');
+      await Promise.all(toList(cartelasRes.data).map((c: any) => dbPut('cartelas', { ...c, userId })));
+    }
 
     const serverGames = toList(gamesRes.data);
     const localGames = await dbGetAll<any>('games');

@@ -163,8 +163,14 @@ export const useAuthStore = create<AuthState>((set) => ({
                 await dbPut(fetches[i].store, data, fetches[i].key);
                 mark(i, 'done', 1);
               } else {
-                const items = data ?? [];
-                for (const item of items) await dbPut(fetches[i].store, item);
+                const items: any[] = data ?? [];
+                // Clear the store first so no previous user's data leaks in
+                if (fetches[i].store === 'cartelas') {
+                  await (await import('../services/db')).dbClear('cartelas');
+                  for (const item of items) await dbPut(fetches[i].store, { ...item, userId: user.id });
+                } else {
+                  for (const item of items) await dbPut(fetches[i].store, item);
+                }
                 mark(i, 'done', items.length);
               }
             } catch {
@@ -201,7 +207,8 @@ export const useAuthStore = create<AuthState>((set) => ({
           set({ initialized: true });
         }
       } else {
-        // Non-prepaid: no cache needed, open immediately
+        // Non-prepaid: clear any previous user's cartelas, then open immediately
+        await (await import('../services/db')).dbClear('cartelas');
         set({ user, loading: false, initialized: true });
       }
     } catch (err) {

@@ -93,14 +93,41 @@ export const offlineUserApi = {
   updateMe: (data: object) => api.patch('/users/me', data),
 
   myCartelas: async (): Promise<any[]> => {
-    // Return IDB cache immediately, then refresh in background
-    const cached = await dbGetAll<any>('cartelas');
-    const result = await tryApi(() => api.get('/cartelas/mine'));
-    if (result.ok) {
-      const list = toList(result.data);
-      await Promise.all(list.map((c: any) => dbPut('cartelas', c)));
-      return list;
+    // Always scope to the current user — never return another user's cached cartelas
+    const currentUser = await dbGet<any>('user', 'me');
+    const currentUserId: string | undefined = currentUser?.id;
+
+    const allCached = await dbGetAll<any>('cartelas');
+    // Filter to only cartelas that belong to the current user (have a userId field)
+    // or all cached entries if userId is not stored on the cartela (legacy)
+    const cached = currentUserId
+      ? allCached.filter((c: any) => !c.userId || c.userId === currentUserId)
+      : allCached;
+
+    // Online + cache populated → return cache immediately, refresh in background
+    if (navigator.onLine && cached.length > 0) {
+      tryApi(() => api.get('/cartelas/mine')).then((result) => {
+        if (result.ok) {
+          const list = toList(result.data);
+          // Tag each cartela with the current userId before storing
+          const tagged = list.map((c: any) => ({ ...c, userId: currentUserId }));
+          Promise.all(tagged.map((c: any) => dbPut('cartelas', c)));
+        }
+      });
+      return cached;
     }
+
+    // Online + cache empty → blocking fetch to populate IDB
+    if (navigator.onLine) {
+      const result = await tryApi(() => api.get('/cartelas/mine'));
+      if (result.ok) {
+        const list = toList(result.data);
+        const tagged = list.map((c: any) => ({ ...c, userId: currentUserId }));
+        await Promise.all(tagged.map((c: any) => dbPut('cartelas', c)));
+        return tagged;
+      }
+    }
+
     return cached;
   },
 

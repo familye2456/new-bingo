@@ -24,7 +24,7 @@ router.get('/mine', async (req: AuthRequest, res: Response) => {
 
 // Generate a new cartela for the current user (auto card number)
 router.post('/generate', async (req: AuthRequest, res: Response) => {
-  const { numbers: customNumbers } = req.body as { numbers?: number[] };
+  const { numbers: customNumbers, cardNumber: requestedCardNumber } = req.body as { numbers?: number[]; cardNumber?: number };
 
   const cartelaRepo = AppDataSource.getRepository(Cartela);
   const ucRepo = AppDataSource.getRepository(UserCartela);
@@ -37,21 +37,19 @@ router.post('/generate', async (req: AuthRequest, res: Response) => {
       throw new AppError(400, 'INVALID_NUMBERS', 'numbers must be an array of 25 integers');
   }
 
-  // Get next card number for this user
-  const lastAssignment = await ucRepo
-    .createQueryBuilder('uc')
-    .innerJoin('uc.cartela', 'c')
-    .where('uc.userId = :userId', { userId: req.user!.id })
-    .orderBy('c.cardNumber', 'DESC')
-    .select(['uc.cartelaId'])
-    .getOne();
-
-  // Find the max card number globally to assign next
-  const maxCard = await cartelaRepo
-    .createQueryBuilder('c')
-    .select('MAX(c.cardNumber)', 'max')
-    .getRawOne();
-  const nextCardNumber = (maxCard?.max ?? 0) + 1;
+  // Determine card number
+  let nextCardNumber: number;
+  if (requestedCardNumber !== undefined) {
+    const existing = await cartelaRepo.findOne({ where: { cardNumber: requestedCardNumber } });
+    if (existing) throw new AppError(409, 'DUPLICATE_CARD_NUMBER', `Card #${requestedCardNumber} already exists`);
+    nextCardNumber = requestedCardNumber;
+  } else {
+    const maxCard = await cartelaRepo
+      .createQueryBuilder('c')
+      .select('MAX(c.card_number)', 'max')
+      .getRawOne();
+    nextCardNumber = (parseInt(maxCard?.max ?? '0', 10) || 0) + 1;
+  }
 
   const numbers = customNumbers ?? generator.generate();
   const cartela = cartelaRepo.create({
@@ -66,6 +64,45 @@ router.post('/generate', async (req: AuthRequest, res: Response) => {
   await ucRepo.save(ucRepo.create({ userId: req.user!.id, cartelaId: cartela.id }));
 
   res.status(201).json({ success: true, data: { ...cartela, assignedAt: new Date() } });
+});
+
+// Delete own cartela (unassign only — cartela stays in system)
+router.delete('/mine/:id', async (req: AuthRequest, res: Response) => {
+  const ucRepo = AppDataSource.getRepository(UserCartela);
+
+  const assignment = await ucRepo.findOne({ where: { cartelaId: req.params.id, userId: req.user!.id } });
+  if (!assignment) throw new AppError(404, 'NOT_FOUND', 'Cartela not found in your collection');
+
+  await ucRepo.remove(assignment);
+  res.json({ success: true });
+});
+
+// Update own cartela numbers and/or cardNumber
+router.patch('/mine/:id', async (req: AuthRequest, res: Response) => {
+  const ucRepo = AppDataSource.getRepository(UserCartela);
+  const cartelaRepo = AppDataSource.getRepository(Cartela);
+
+  const assignment = await ucRepo.findOne({ where: { cartelaId: req.params.id, userId: req.user!.id } });
+  if (!assignment) throw new AppError(404, 'NOT_FOUND', 'Cartela not found in your collection');
+
+  const { numbers, cardNumber } = req.body as { numbers?: number[]; cardNumber?: number };
+  const cartela = await cartelaRepo.findOne({ where: { id: req.params.id } });
+  if (!cartela) throw new AppError(404, 'NOT_FOUND', 'Cartela not found');
+
+  if (numbers !== undefined) {
+    if (!Array.isArray(numbers) || numbers.length !== 25)
+      throw new AppError(400, 'INVALID_NUMBERS', 'numbers must be an array of 25 integers');
+    cartela.numbers = numbers;
+  }
+  if (cardNumber !== undefined) {
+    const existing = await cartelaRepo.findOne({ where: { cardNumber } });
+    if (existing && existing.id !== cartela.id)
+      throw new AppError(409, 'DUPLICATE_CARD_NUMBER', `Card #${cardNumber} already exists`);
+    cartela.cardNumber = cardNumber;
+  }
+
+  await cartelaRepo.save(cartela);
+  res.json({ success: true, data: { ...cartela, assignedAt: assignment.assignedAt } });
 });
 
 // ─── Admin only below ────────────────────────────────────────────────────────
