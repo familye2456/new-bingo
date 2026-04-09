@@ -173,6 +173,7 @@ export const MyCartelas: React.FC = () => {
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [editCartela, setEditCartela] = useState<CartelaRecord | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [mutError, setMutError] = useState('');
 
   const { data: cartelas = [], isLoading } = useQuery<CartelaRecord[]>({
@@ -250,7 +251,7 @@ export const MyCartelas: React.FC = () => {
               key={c.id}
               cartela={c}
               onEdit={() => { setMutError(''); setEditCartela(c); }}
-              onDelete={() => deleteMutation.mutate(c.id)}
+              onDelete={() => setConfirmDeleteId(c.id)}
               deleting={deleteMutation.isPending && deleteMutation.variables === c.id}
             />
           ))}
@@ -274,6 +275,30 @@ export const MyCartelas: React.FC = () => {
           saving={editMutation.isPending}
           error={mutError}
         />
+      )}
+
+      {confirmDeleteId && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+          onClick={() => setConfirmDeleteId(null)}>
+          <div className="bg-[#1e1e1e] rounded-2xl p-6 w-72 shadow-2xl text-center"
+            onClick={e => e.stopPropagation()}>
+            <div className="text-3xl mb-3">🗑️</div>
+            <div className="text-white font-bold text-base mb-1">Remove Cartela?</div>
+            <div className="text-gray-400 text-sm mb-5">This will unassign the card from your account.</div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { deleteMutation.mutate(confirmDeleteId); setConfirmDeleteId(null); }}
+                disabled={deleteMutation.isPending}
+                className="flex-1 bg-red-500 text-white py-2.5 rounded-xl font-bold text-sm hover:bg-red-600 disabled:opacity-50">
+                Yes, Remove
+              </button>
+              <button onClick={() => setConfirmDeleteId(null)}
+                className="flex-1 bg-white/10 text-gray-300 py-2.5 rounded-xl text-sm hover:bg-white/20">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
