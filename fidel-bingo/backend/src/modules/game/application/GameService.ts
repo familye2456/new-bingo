@@ -350,8 +350,8 @@ export class GameService {
       activeGames.dec();
       logger.info('Bingo claimed', { gameId, userId, amount: shareAmount });
 
-      // Check and apply daily bonus after game finishes via bingo claim
-      this.applyDailyBonusIfEligible(userId).catch(() => {});
+      // Apply daily bonus to the game CREATOR (who earns the house cut), not the winner
+      this.applyDailyBonusIfEligible(game.creatorId).catch(() => {});
 
       return { valid: true, amount: shareAmount };
     });
