@@ -420,14 +420,14 @@ export class GameService {
       logger.info('Daily bonus check', { userId, dailyHouseCut, threshold: BONUS_THRESHOLD });
       if (dailyHouseCut < BONUS_THRESHOLD) return;
 
-      // Apply bonus
+      // Apply bonus — for both prepaid (adds to balance) and postpaid (reduces debt)
       await userRepo.increment({ id: userId }, 'balance', BONUS_AMOUNT);
       await txRepo.save(txRepo.create({
         userId,
         transactionType: 'bonus',
         amount: BONUS_AMOUNT,
         status: 'completed',
-        description: `Daily bonus: reached ${BONUS_THRESHOLD} Birr house profit`,
+        description: `Daily bonus: reached ${BONUS_THRESHOLD} Birr house profit (${user.paymentType})`,
         processedAt: new Date(),
       }));
 

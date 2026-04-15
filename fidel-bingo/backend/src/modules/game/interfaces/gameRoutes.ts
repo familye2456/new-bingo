@@ -49,27 +49,8 @@ router.get('/mine', async (req: AuthRequest, res: Response) => {
 router.get('/', listGames);
 // Only players (not admins) can create games
 router.post('/', authorize('player', 'operator'), createGame);
-router.get('/:gameId', getGame);
-router.post('/:gameId/join', joinGame);
-router.post('/:gameId/start', startGame);
-router.post('/:gameId/call', callNumber);
-router.post('/:gameId/reset', resetGame);
-router.get('/:gameId/check/:cardNumber', checkCartela);
-router.post('/:gameId/finish', finishGame);
-router.post('/:gameId/bingo', claimBingo);
-router.post('/cartelas/:cartelaId/mark', markNumber);
 
-// Get cartelas linked to a game (for the current user)
-router.get('/:gameId/cartelas', async (req: AuthRequest, res: Response) => {
-  const gcRepo = AppDataSource.getRepository(GameCartela);
-  const entries = await gcRepo.find({
-    where: { gameId: req.params.gameId },
-    relations: ['cartela'],
-  });
-  res.json({ success: true, data: entries.map((e) => ({ ...e.cartela, betAmount: e.betAmount })) });
-});
-
-// Daily bonus status for current user
+// Daily bonus status — must be before /:gameId to avoid conflict
 router.get('/bonus/today', async (req: AuthRequest, res: Response) => {
   const userId = req.user!.id;
   const txRepo = AppDataSource.getRepository(Transaction);
@@ -93,20 +74,37 @@ router.get('/bonus/today', async (req: AuthRequest, res: Response) => {
   ]);
 
   const dailyHouseCut = parseFloat(houseCutResult?.total ?? '0') || 0;
-  const BONUS_THRESHOLD = 1000;
-  const BONUS_AMOUNT = 200;
-
   res.json({
     success: true,
     data: {
       bonusApplied: !!bonusTx,
-      bonusAmount: bonusTx ? BONUS_AMOUNT : 0,
+      bonusAmount: bonusTx ? 200 : 0,
       bonusAppliedAt: bonusTx?.createdAt ?? null,
       dailyHouseCut,
-      threshold: BONUS_THRESHOLD,
-      progress: Math.min(100, Math.round((dailyHouseCut / BONUS_THRESHOLD) * 100)),
+      threshold: 1000,
+      progress: Math.min(100, Math.round((dailyHouseCut / 1000) * 100)),
     },
   });
+});
+
+router.get('/:gameId', getGame);
+router.post('/:gameId/join', joinGame);
+router.post('/:gameId/start', startGame);
+router.post('/:gameId/call', callNumber);
+router.post('/:gameId/reset', resetGame);
+router.get('/:gameId/check/:cardNumber', checkCartela);
+router.post('/:gameId/finish', finishGame);
+router.post('/:gameId/bingo', claimBingo);
+router.post('/cartelas/:cartelaId/mark', markNumber);
+
+// Get cartelas linked to a game (for the current user)
+router.get('/:gameId/cartelas', async (req: AuthRequest, res: Response) => {
+  const gcRepo = AppDataSource.getRepository(GameCartela);
+  const entries = await gcRepo.find({
+    where: { gameId: req.params.gameId },
+    relations: ['cartela'],
+  });
+  res.json({ success: true, data: entries.map((e) => ({ ...e.cartela, betAmount: e.betAmount })) });
 });
 
 export default router;
