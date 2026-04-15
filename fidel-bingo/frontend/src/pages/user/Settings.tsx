@@ -138,8 +138,8 @@ export const Settings: React.FC = () => {
             {/* Voice */}
             <div>
               <div className="text-xs font-medium mb-2.5" style={{ color: '#6b7280' }}>Caller Voice</div>
-              <div className="grid grid-cols-2 gap-2">
-                {(['boy sound', 'girl sound'] as VoiceCategory[]).map((v) => (
+              <div className="grid grid-cols-3 gap-2">
+                {(['boy sound', 'girl sound', 'boy1 sound'] as VoiceCategory[]).map((v) => (
                   <button
                     key={v}
                     onClick={() => setVoice(v)}
@@ -149,7 +149,7 @@ export const Settings: React.FC = () => {
                       : { background: '#0e1a35', border: '1px solid rgba(255,255,255,0.07)', color: '#6b7280' }
                     }
                   >
-                    {v === 'boy sound' ? '👦 Boy' : '👧 Girl'}
+                    {v === 'boy sound' ? '👦 Boy' : v === 'girl sound' ? '👧 Girl' : '👦 Boy 1'}
                   </button>
                 ))}
               </div>
@@ -176,7 +176,7 @@ export const Settings: React.FC = () => {
             <button
               onClick={() => {
                 const n = Math.floor(Math.random() * 75) + 1;
-                const ext = voice === 'girl sound' ? '.mp3' : '.wav';
+                const ext = voice === 'boy sound' ? '.wav' : '.mp3';
                 new Audio(`/sounds/${encodeURIComponent(voice)}/${n}${ext}`).play().catch(() => {});
               }}
               className="w-full py-2.5 rounded-xl text-sm font-medium transition-all"

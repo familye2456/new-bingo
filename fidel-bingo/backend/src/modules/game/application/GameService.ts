@@ -349,6 +349,10 @@ export class GameService {
 
       activeGames.dec();
       logger.info('Bingo claimed', { gameId, userId, amount: shareAmount });
+
+      // Check and apply daily bonus after game finishes via bingo claim
+      this.applyDailyBonusIfEligible(userId).catch(() => {});
+
       return { valid: true, amount: shareAmount };
     });
   }
@@ -367,7 +371,69 @@ export class GameService {
     try { await redisClient.del(`game:${gameId}`); } catch {}
     activeGames.dec();
     logger.info('Game finished manually', { gameId, userId });
+
+    // Check and apply daily bonus after game finishes
+    await this.applyDailyBonusIfEligible(userId);
+
     return game;
+  }
+
+  /**
+   * Apply a 200 Birr bonus if the user's total house cut today reaches 1000 Birr.
+   * - Prepaid: add 200 to balance
+   * - Postpaid: subtract 200 from their daily house cut debt (increment balance by 200)
+   * Only applies once per day (checks for existing bonus transaction today).
+   */
+  private async applyDailyBonusIfEligible(userId: string): Promise<void> {
+    try {
+      const BONUS_THRESHOLD = 1000;
+      const BONUS_AMOUNT = 200;
+
+      const userRepo = AppDataSource.getRepository(User);
+      const txRepo = AppDataSource.getRepository(Transaction);
+      const gameRepo = AppDataSource.getRepository(Game);
+
+      const user = await userRepo.findOne({ where: { id: userId } });
+      if (!user) return;
+
+      // Check if bonus already applied today
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const alreadyBonused = await txRepo
+        .createQueryBuilder('t')
+        .where('t.userId = :userId', { userId })
+        .andWhere('t.transactionType = :type', { type: 'bonus' })
+        .andWhere('t.createdAt >= :todayStart', { todayStart })
+        .getOne();
+      if (alreadyBonused) return;
+
+      // Sum today's house cut from finished games
+      const result = await gameRepo
+        .createQueryBuilder('g')
+        .select('SUM(g.houseCut)', 'total')
+        .where('g.creatorId = :userId', { userId })
+        .andWhere('g.status = :status', { status: 'finished' })
+        .andWhere('g.finishedAt >= :todayStart', { todayStart })
+        .getRawOne();
+
+      const dailyHouseCut = parseFloat(result?.total ?? '0') || 0;
+      if (dailyHouseCut < BONUS_THRESHOLD) return;
+
+      // Apply bonus
+      await userRepo.increment({ id: userId }, 'balance', BONUS_AMOUNT);
+      await txRepo.save(txRepo.create({
+        userId,
+        transactionType: 'bonus',
+        amount: BONUS_AMOUNT,
+        status: 'completed',
+        description: `Daily bonus: reached ${BONUS_THRESHOLD} Birr house profit`,
+        processedAt: new Date(),
+      }));
+
+      logger.info('Daily bonus applied', { userId, dailyHouseCut, bonus: BONUS_AMOUNT });
+    } catch (err) {
+      logger.warn('Daily bonus check failed', { userId, err });
+    }
   }
 
   async getGame(gameId: string): Promise<Game> {

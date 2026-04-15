@@ -4,7 +4,7 @@ import {
 } from 'typeorm';
 import { User } from '../../user/domain/User';
 
-export type TransactionType = 'deposit' | 'withdrawal' | 'bet' | 'win' | 'refund' | 'house_cut';
+export type TransactionType = 'deposit' | 'withdrawal' | 'bet' | 'win' | 'refund' | 'house_cut' | 'bonus';
 export type TransactionStatus = 'pending' | 'completed' | 'failed' | 'refunded';
 
 @Entity('transactions')
@@ -14,7 +14,7 @@ export class Transaction {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ name: 'transaction_type', type: 'enum', enum: ['deposit', 'withdrawal', 'bet', 'win', 'refund', 'house_cut'] })
+  @Column({ name: 'transaction_type', type: 'enum', enum: ['deposit', 'withdrawal', 'bet', 'win', 'refund', 'house_cut', 'bonus'] })
   transactionType!: TransactionType;
 
   @Column({ type: 'enum', enum: ['pending', 'completed', 'failed', 'refunded'], default: 'pending' })

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type VoiceCategory = 'boy sound' | 'girl sound';
+export type VoiceCategory = 'boy sound' | 'girl sound' | 'boy1 sound';
 
 interface GameSettingsState {
   voice: VoiceCategory;

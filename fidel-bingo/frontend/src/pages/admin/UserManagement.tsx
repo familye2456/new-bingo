@@ -8,7 +8,7 @@ interface UserRecord {
   status: string; paymentType: 'prepaid' | 'postpaid'; balance: number;
 }
 
-const emptyForm = { username: '', email: '', password: '', paymentType: 'prepaid' as 'prepaid' | 'postpaid', voice: 'boy sound' as 'boy sound' | 'girl sound' };
+const emptyForm = { username: '', email: '', password: '', paymentType: 'prepaid' as 'prepaid' | 'postpaid', voice: 'boy sound' as 'boy sound' | 'girl sound' | 'boy1 sound' };
 type ModalType = 'create' | 'edit' | 'topup' | 'deduct' | 'cartela' | null;
 
 interface CartelaRecord { id: string; cardNumber?: number; isActive: boolean; assignedAt: string; }
@@ -194,8 +194,8 @@ export const UserManagement: React.FC = () => {
             {modal === 'create' && (
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">Default Caller Voice</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(['boy sound', 'girl sound'] as const).map((v) => (
+                <div className="grid grid-cols-3 gap-2">
+                  {(['boy sound', 'girl sound', 'boy1 sound'] as const).map((v) => (
                     <button
                       key={v}
                       type="button"
@@ -205,7 +205,7 @@ export const UserManagement: React.FC = () => {
                         ? { borderColor: '#3b82f6', background: '#eff6ff', color: '#1d4ed8' }
                         : { borderColor: '#e5e7eb', background: '#fff', color: '#6b7280' }}
                     >
-                      {v === 'boy sound' ? '👦 Boy' : '👧 Girl'}
+                      {v === 'boy sound' ? '👦 Boy' : v === 'girl sound' ? '👧 Girl' : '👦 Boy 1'}
                     </button>
                   ))}
                 </div>

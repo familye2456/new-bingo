@@ -18,13 +18,13 @@ if (typeof window !== 'undefined') {
 
 function playNumberSound(number: number, category: string) {
   if (!_userInteracted) return;
-  const ext = category === 'girl sound' ? '.mp3' : '.wav';
+  const ext = category === 'boy sound' ? '.wav' : '.mp3';
   new Audio(`/sounds/${encodeURIComponent(category)}/${number}${ext}`).play().catch(() => {});
 }
 
 function playSound(name: string, category: string) {
   if (!_userInteracted) return;
-  const ext = category === 'girl sound' ? '.mp3' : '.wav';
+  const ext = category === 'boy sound' ? '.wav' : '.mp3';
   const file = name.includes('.') ? name : `${name}${ext}`;
   new Audio(`/sounds/${encodeURIComponent(category)}/${file}`).play().catch(() => {});
 }

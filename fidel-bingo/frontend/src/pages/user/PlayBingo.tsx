@@ -17,7 +17,7 @@ if (typeof window !== 'undefined') {
 function playSound(name: string) {
   if (!_userInteracted) return;
   const category = useGameSettings.getState().voice;
-  const ext = category === 'girl sound' ? '.mp3' : '.wav';
+  const ext = category === 'boy sound' ? '.wav' : '.mp3';
   const file = name.includes('.') ? name : `${name}${ext}`;
   playCachedSound(`/sounds/${encodeURIComponent(category)}/${file}`).catch(() => {});
 }
@@ -166,7 +166,7 @@ export const PlayBingo: React.FC = () => {
       const result = await offlineGameApi.checkCartela(game.id, num);
       setCheckResult(result);
       if (result.registered) {
-        const isBoy = useGameSettings.getState().voice === 'boy sound';
+        const isBoy = useGameSettings.getState().voice !== 'girl sound';
         if (result.isWinner) {
           playSound('winner');
           setWinnerInfo({
