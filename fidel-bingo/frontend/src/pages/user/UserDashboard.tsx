@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { offlineGameApi } from '../../services/offlineApi';
 import { useAuthStore } from '../../store/authStore';
+import { api } from '../../services/api';
 
 interface Game {
   id: string; status: string; betAmount: number; cartelaCount: number;
@@ -172,6 +173,12 @@ export const UserDashboard: React.FC = () => {
     queryFn: () => offlineGameApi.myGames() as Promise<Game[]>,
   });
 
+  const { data: bonusStatus } = useQuery({
+    queryKey: ['bonus-today'],
+    queryFn: () => api.get('/games/bonus/today').then(r => r.data.data),
+    refetchInterval: 60_000,
+  });
+
   const daily   = calcStats(games, 1);
   const weekly  = calcStats(games, 7);
   const fifteen = calcStats(games, 15);
@@ -232,6 +239,38 @@ export const UserDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* ── Bonus Banner ── */}
+        {bonusStatus && (
+          bonusStatus.bonusApplied ? (
+            <div className="rounded-2xl px-4 py-3 flex items-center gap-3"
+              style={{ background: 'linear-gradient(135deg,rgba(251,191,36,0.15),rgba(251,191,36,0.05))', border: '1px solid rgba(251,191,36,0.3)' }}>
+              <span className="text-2xl">🎉</span>
+              <div className="flex-1">
+                <div className="text-sm font-bold text-yellow-400">Daily Bonus Applied!</div>
+                <div className="text-xs mt-0.5" style={{ color: 'rgba(251,191,36,0.6)' }}>
+                  +200 Birr bonus added · resets at midnight
+                </div>
+              </div>
+              <div className="text-yellow-400 font-black text-lg">+200</div>
+            </div>
+          ) : bonusStatus.dailyHouseCut > 0 ? (
+            <div className="rounded-2xl px-4 py-3"
+              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold" style={{ color: '#6b7280' }}>Daily Bonus Progress</span>
+                <span className="text-xs font-bold text-yellow-400">{fmt(bonusStatus.dailyHouseCut)} / 1,000 Birr</span>
+              </div>
+              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                <div className="h-full rounded-full transition-all duration-500"
+                  style={{ width: `${bonusStatus.progress}%`, background: 'linear-gradient(90deg,#fbbf24,#f59e0b)' }} />
+              </div>
+              <div className="text-xs mt-1.5" style={{ color: '#4b5563' }}>
+                Reach 1,000 Birr house profit today to earn 200 Birr bonus
+              </div>
+            </div>
+          ) : null
+        )}
 
         {/* ── KPI grid ── */}
         {isLoading

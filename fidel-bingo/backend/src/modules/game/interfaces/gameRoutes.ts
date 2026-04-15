@@ -5,6 +5,7 @@ import { AppDataSource } from '../../../config/database';
 import { GameCartela } from '../domain/GameCartela';
 import { Game } from '../domain/Game';
 import { UserCartela } from '../domain/UserCartela';
+import { Transaction } from '../../payment/domain/Transaction';
 import { AuthRequest } from '../../../shared/middleware/authMiddleware';
 import { Response } from 'express';
 
@@ -66,6 +67,46 @@ router.get('/:gameId/cartelas', async (req: AuthRequest, res: Response) => {
     relations: ['cartela'],
   });
   res.json({ success: true, data: entries.map((e) => ({ ...e.cartela, betAmount: e.betAmount })) });
+});
+
+// Daily bonus status for current user
+router.get('/bonus/today', async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id;
+  const txRepo = AppDataSource.getRepository(Transaction);
+  const gameRepo = AppDataSource.getRepository(Game);
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const [bonusTx, houseCutResult] = await Promise.all([
+    txRepo.createQueryBuilder('t')
+      .where('t.userId = :userId', { userId })
+      .andWhere('t.transactionType = :type', { type: 'bonus' })
+      .andWhere('t.createdAt >= :todayStart', { todayStart })
+      .getOne(),
+    gameRepo.createQueryBuilder('g')
+      .select('SUM(g.houseCut)', 'total')
+      .where('g.creatorId = :userId', { userId })
+      .andWhere('g.status = :status', { status: 'finished' })
+      .andWhere('(g.finishedAt >= :todayStart OR g.createdAt >= :todayStart)', { todayStart })
+      .getRawOne(),
+  ]);
+
+  const dailyHouseCut = parseFloat(houseCutResult?.total ?? '0') || 0;
+  const BONUS_THRESHOLD = 1000;
+  const BONUS_AMOUNT = 200;
+
+  res.json({
+    success: true,
+    data: {
+      bonusApplied: !!bonusTx,
+      bonusAmount: bonusTx ? BONUS_AMOUNT : 0,
+      bonusAppliedAt: bonusTx?.createdAt ?? null,
+      dailyHouseCut,
+      threshold: BONUS_THRESHOLD,
+      progress: Math.min(100, Math.round((dailyHouseCut / BONUS_THRESHOLD) * 100)),
+    },
+  });
 });
 
 export default router;
