@@ -413,10 +413,11 @@ export class GameService {
         .select('SUM(g.houseCut)', 'total')
         .where('g.creatorId = :userId', { userId })
         .andWhere('g.status = :status', { status: 'finished' })
-        .andWhere('g.finishedAt >= :todayStart', { todayStart })
+        .andWhere('(g.finishedAt >= :todayStart OR g.createdAt >= :todayStart)', { todayStart })
         .getRawOne();
 
       const dailyHouseCut = parseFloat(result?.total ?? '0') || 0;
+      logger.info('Daily bonus check', { userId, dailyHouseCut, threshold: BONUS_THRESHOLD });
       if (dailyHouseCut < BONUS_THRESHOLD) return;
 
       // Apply bonus
