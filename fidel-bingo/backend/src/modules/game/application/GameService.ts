@@ -256,6 +256,19 @@ export class GameService {
     try { await redisClient.setEx(`game:${gameId}`, 3600, JSON.stringify(game)); } catch {}
   }
 
+  async startGame(gameId: string, userId: string): Promise<Game> {
+    const game = await this.gameRepo.findOne({ where: { id: gameId } });
+    if (!game) throw new AppError(404, 'GAME_NOT_FOUND', 'Game not found');
+    if (game.creatorId !== userId) throw new AppError(403, 'FORBIDDEN', 'Only creator can start the game');
+    if (game.status !== 'pending') throw new AppError(400, 'INVALID_STATE', 'Game cannot be started');
+    game.status = 'active';
+    game.startedAt = new Date();
+    await this.gameRepo.save(game);
+    try { await redisClient.setEx(`game:${gameId}`, 3600, JSON.stringify(game)); } catch {}
+    logger.info('Game started', { gameId });
+    return game;
+  }
+
   async joinGame(gameId: string, userId: string, cartelaCount: number): Promise<UserCartela[]> {
     const game = await this.gameRepo.findOne({ where: { id: gameId } });
     if (!game || game.status !== 'pending') throw new AppError(400, 'GAME_NOT_JOINABLE', 'Game is not joinable');
