@@ -35,10 +35,10 @@ export class UserCartela {
   @Column({ name: 'card_number', nullable: true })
   cardNumber?: number;
 
-  @Column({ name: 'numbers', type: 'int', array: true })
+  @Column({ name: 'numbers', type: 'int', array: true, nullable: true })
   numbers!: number[];
 
-  @Column({ name: 'pattern_mask', type: 'boolean', array: true })
+  @Column({ name: 'pattern_mask', type: 'boolean', array: true, nullable: true })
   patternMask!: boolean[];
 
   @Column({ name: 'is_active', default: true })

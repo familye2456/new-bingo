@@ -180,12 +180,27 @@ const start = async () => {
         END $$
       `).catch(() => {/* ignore */});
 
+      // Drop old FK on user_cartelas.cartela_id if still exists
+      await migDs.query(`
+        DO $$ DECLARE r RECORD; BEGIN
+          FOR r IN
+            SELECT conname FROM pg_constraint
+            WHERE conrelid = 'user_cartelas'::regclass
+              AND contype = 'f'
+          LOOP
+            EXECUTE 'ALTER TABLE user_cartelas DROP CONSTRAINT "' || r.conname || '"';
+          END LOOP;
+        END $$
+      `).catch(() => {/* ignore */});
+
       await migDs.destroy();
       logger.info('Pre-migration complete');
     } catch (migErr) {
       logger.warn('Pre-migration warning (non-fatal)', { migErr });
+      console.error('PRE-MIGRATION ERROR:', migErr);
     }
 
+    logger.info('Initializing database...');
     await AppDataSource.initialize();
     logger.info('Database connected');
 
@@ -226,6 +241,7 @@ const start = async () => {
     });
   } catch (err) {
     logger.error('Failed to start server', { err });
+    console.error('FATAL SERVER ERROR:', err);
     process.exit(1);
   }
 };
