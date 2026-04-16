@@ -148,15 +148,25 @@ router.patch('/:id/deactivate', authorize('admin'), async (req: AuthRequest, res
   res.json({ success: true, message: 'User deactivated' });
 });
 
-// Delete a user (soft delete via TypeORM DeleteDateColumn)
+// Delete a user and all related data
 router.delete('/:id', authorize('admin'), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(User);
   const user = await repo.findOne({ where: { id: req.params.id } });
   if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
   if (user.role === 'admin') throw new AppError(403, 'FORBIDDEN', 'Cannot delete another admin');
 
-  await repo.softDelete(req.params.id);
-  res.json({ success: true, message: 'User deleted' });
+  const id = req.params.id;
+
+  // Delete in dependency order to satisfy FK constraints
+  await AppDataSource.query(`DELETE FROM game_cartelas WHERE user_id = $1`, [id]);
+  await AppDataSource.query(`DELETE FROM user_cartelas WHERE user_id = $1`, [id]);
+  await AppDataSource.query(`DELETE FROM transactions WHERE user_id = $1`, [id]);
+  await AppDataSource.query(`DELETE FROM refresh_tokens WHERE user_id = $1`, [id]).catch(() => {});
+  await AppDataSource.query(`DELETE FROM audit_logs WHERE user_id = $1`, [id]).catch(() => {});
+  await AppDataSource.query(`DELETE FROM games WHERE creator_id = $1`, [id]);
+  await repo.delete(id);
+
+  res.json({ success: true, message: 'User and all related data deleted' });
 });
 
 // Get user's transactions
