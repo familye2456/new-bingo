@@ -23,13 +23,11 @@ import { setupGameGateway } from './modules/game/infrastructure/GameGateway';
 const app = express();
 const httpServer = createServer(app);
 
-// Socket.io
 const io = new Server(httpServer, {
   cors: { origin: env.FRONTEND_URL, credentials: true },
   transports: ['websocket', 'polling'],
 });
 
-// Security middleware
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -43,17 +41,11 @@ app.use(helmet({
   hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
 }));
 
-const allowedOrigins = [
-  env.FRONTEND_URL,
-  'https://f-bingo.vercel.app',
-  'http://localhost:5173',
-].filter(Boolean);
-
+const allowedOrigins = [env.FRONTEND_URL, 'https://f-bingo.vercel.app', 'http://localhost:5173'].filter(Boolean);
 const corsOptions = {
   origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
-    if (!origin) return cb(null, true); // allow non-browser requests
+    if (!origin) return cb(null, true);
     if (allowedOrigins.includes(origin)) return cb(null, true);
-    // Allow any vercel.app or netlify.app preview deployments
     if (origin.endsWith('.vercel.app') || origin.endsWith('.netlify.app')) return cb(null, true);
     return cb(null, false);
   },
@@ -68,39 +60,28 @@ app.use(express.json({ limit: '10kb' }));
 app.use(cookieParser());
 app.use(metricsMiddleware);
 
-// Rate limiting — general API (per IP)
 app.use('/api/', rateLimit({
-  windowMs: 1 * 60 * 1000,
-  max: env.NODE_ENV === 'development' ? 10000 : 600,
-  standardHeaders: true,
-  legacyHeaders: false,
+  windowMs: 60_000, max: env.NODE_ENV === 'development' ? 10000 : 600,
+  standardHeaders: true, legacyHeaders: false,
   message: { success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests' } },
 }));
-
-// Auth routes — stricter, only failed attempts count
 app.use('/api/auth/login', rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: env.NODE_ENV === 'development' ? 10000 : 30,
+  windowMs: 15 * 60_000, max: env.NODE_ENV === 'development' ? 10000 : 30,
   skipSuccessfulRequests: true,
   message: { success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many login attempts' } },
 }));
-
-// Postpaid game creation — stricter limit to prevent credit abuse
 app.use('/api/games', rateLimit({
-  windowMs: 1 * 60 * 1000,
-  max: env.NODE_ENV === 'development' ? 10000 : 20,
+  windowMs: 60_000, max: env.NODE_ENV === 'development' ? 10000 : 20,
   keyGenerator: (req) => `postpaid:${(req as any).user?.id ?? req.ip}`,
   skip: (req) => req.method !== 'POST',
   message: { success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many game creation requests' } },
 }));
 
-// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/games', gameRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/cartelas', cartelaRoutes);
 
-// Health & metrics
 app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date() }));
 app.get('/ready', (_req, res) => res.json({ status: 'ready' }));
 app.get('/metrics', async (_req, res) => {
@@ -108,16 +89,13 @@ app.get('/metrics', async (_req, res) => {
   res.end(await register.metrics());
 });
 
-// WebSocket
 setupGameGateway(io);
-
-// Error handler (must be last)
 app.use(errorHandler);
 
 const start = async () => {
   try {
-    // ── Run schema migrations BEFORE TypeORM initializes ──────────────────────
-    // Use a temporary DataSource with synchronize:false to run raw DDL safely
+    // ── Pre-migration: add new columns / drop stale constraints ───────────────
+    // Runs BEFORE AppDataSource.initialize() so TypeORM never sees old schema
     try {
       const { DataSource } = await import('typeorm');
       const migDs = new DataSource({
@@ -129,81 +107,61 @@ const start = async () => {
       });
       await migDs.initialize();
 
-      await migDs.query(`
-        ALTER TABLE user_cartelas
-          ADD COLUMN IF NOT EXISTS card_number integer,
-          ADD COLUMN IF NOT EXISTS numbers integer[],
-          ADD COLUMN IF NOT EXISTS pattern_mask boolean[],
-          ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true,
-          ADD COLUMN IF NOT EXISTS is_winner boolean NOT NULL DEFAULT false,
-          ADD COLUMN IF NOT EXISTS win_pattern varchar,
-          ADD COLUMN IF NOT EXISTS win_amount numeric(10,2),
-          ADD COLUMN IF NOT EXISTS source_cartela_id uuid
-      `);
+      // user_cartelas — add each column individually so one failure doesn't block others
+      const ucCols = [
+        `ALTER TABLE user_cartelas ADD COLUMN IF NOT EXISTS card_number integer`,
+        `ALTER TABLE user_cartelas ADD COLUMN IF NOT EXISTS numbers integer[]`,
+        `ALTER TABLE user_cartelas ADD COLUMN IF NOT EXISTS pattern_mask boolean[]`,
+        `ALTER TABLE user_cartelas ADD COLUMN IF NOT EXISTS win_pattern varchar`,
+        `ALTER TABLE user_cartelas ADD COLUMN IF NOT EXISTS win_amount numeric(10,2)`,
+        `ALTER TABLE user_cartelas ADD COLUMN IF NOT EXISTS source_cartela_id uuid`,
+        `ALTER TABLE user_cartelas ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true`,
+        `ALTER TABLE user_cartelas ADD COLUMN IF NOT EXISTS is_winner boolean NOT NULL DEFAULT false`,
+        `ALTER TABLE game_cartelas ADD COLUMN IF NOT EXISTS user_cartela_id uuid`,
+        `ALTER TABLE game_cartelas ALTER COLUMN cartela_id DROP NOT NULL`,
+      ];
+      for (const sql of ucCols) { await migDs.query(sql).catch(() => {}); }
 
-      await migDs.query(`
-        ALTER TABLE game_cartelas
-          ADD COLUMN IF NOT EXISTS user_cartela_id uuid
-      `);
+      // Drop all FKs on user_cartelas (old cartela_id → cartelas FK)
+      const ucFKs: any[] = await migDs.query(
+        `SELECT conname FROM pg_constraint WHERE conrelid='user_cartelas'::regclass AND contype='f'`
+      ).catch(() => []);
+      for (const fk of ucFKs) {
+        await migDs.query(`ALTER TABLE user_cartelas DROP CONSTRAINT "${fk.conname}"`).catch(() => {});
+      }
 
-      await migDs.query(`
-        ALTER TABLE game_cartelas ALTER COLUMN cartela_id DROP NOT NULL
-      `).catch(() => {/* already nullable */});
+      // Drop old FKs on game_cartelas that reference cartelas (not user_cartelas)
+      const gcFKs: any[] = await migDs.query(`
+        SELECT conname FROM pg_constraint
+        WHERE conrelid='game_cartelas'::regclass AND contype='f'
+        AND pg_get_constraintdef(oid) NOT ILIKE '%user_cartela%'
+        AND pg_get_constraintdef(oid) ILIKE '%cartela%'
+      `).catch(() => []);
+      for (const fk of gcFKs) {
+        await migDs.query(`ALTER TABLE game_cartelas DROP CONSTRAINT "${fk.conname}"`).catch(() => {});
+      }
 
-      // Drop old FK on cartela_id pointing to cartelas table
-      await migDs.query(`
-        DO $$ DECLARE r RECORD; BEGIN
-          FOR r IN
-            SELECT conname FROM pg_constraint
-            WHERE conrelid = 'game_cartelas'::regclass
-              AND contype = 'f'
-              AND pg_get_constraintdef(oid) ILIKE '%cartelas%'
-              AND conname NOT ILIKE '%user_cartela%'
-          LOOP
-            EXECUTE 'ALTER TABLE game_cartelas DROP CONSTRAINT "' || r.conname || '"';
-          END LOOP;
-        END $$
-      `).catch(() => {/* ignore */});
-
-      // Drop old unique constraint on (gameId, cartelaId)
-      await migDs.query(`
-        DO $$ DECLARE r RECORD; BEGIN
-          FOR r IN
-            SELECT conname FROM pg_constraint
-            WHERE conrelid = 'game_cartelas'::regclass
-              AND contype = 'u'
-              AND pg_get_constraintdef(oid) ILIKE '%cartela_id%'
-              AND pg_get_constraintdef(oid) NOT ILIKE '%user_cartela_id%'
-          LOOP
-            EXECUTE 'ALTER TABLE game_cartelas DROP CONSTRAINT "' || r.conname || '"';
-          END LOOP;
-        END $$
-      `).catch(() => {/* ignore */});
-
-      // Drop old FK on user_cartelas.cartela_id if still exists
-      await migDs.query(`
-        DO $$ DECLARE r RECORD; BEGIN
-          FOR r IN
-            SELECT conname FROM pg_constraint
-            WHERE conrelid = 'user_cartelas'::regclass
-              AND contype = 'f'
-          LOOP
-            EXECUTE 'ALTER TABLE user_cartelas DROP CONSTRAINT "' || r.conname || '"';
-          END LOOP;
-        END $$
-      `).catch(() => {/* ignore */});
+      // Drop old unique constraints on game_cartelas
+      const gcUQs: any[] = await migDs.query(`
+        SELECT conname FROM pg_constraint
+        WHERE conrelid='game_cartelas'::regclass AND contype='u'
+        AND pg_get_constraintdef(oid) ILIKE '%cartela_id%'
+        AND pg_get_constraintdef(oid) NOT ILIKE '%user_cartela_id%'
+      `).catch(() => []);
+      for (const uq of gcUQs) {
+        await migDs.query(`ALTER TABLE game_cartelas DROP CONSTRAINT "${uq.conname}"`).catch(() => {});
+      }
 
       await migDs.destroy();
       logger.info('Pre-migration complete');
     } catch (migErr) {
-      logger.warn('Pre-migration warning (non-fatal)', { migErr });
+      logger.warn('Pre-migration warning (non-fatal)');
       console.error('PRE-MIGRATION ERROR:', migErr);
     }
 
     logger.info('Initializing database...');
     await AppDataSource.initialize();
     logger.info('Database connected');
-
 
     // Auto-seed admin on first run
     try {
@@ -214,15 +172,9 @@ const start = async () => {
       if (!existing) {
         const passwordHash = await bcrypt.hash('Admin@2024!', 12);
         await userRepo.save(userRepo.create({
-          username: 'amouradmin',
-          email: 'admin@fidelbingo.com',
-          passwordHash,
-          role: 'admin',
-          status: 'active',
-          balance: 0,
-          kycLevel: 0,
-          mfaEnabled: false,
-          loginAttempts: 0,
+          username: 'amouradmin', email: 'admin@fidelbingo.com',
+          passwordHash, role: 'admin', status: 'active',
+          balance: 0, kycLevel: 0, mfaEnabled: false, loginAttempts: 0,
         }));
         logger.info('Default admin created: amouradmin / Admin@2024!');
       }
@@ -230,9 +182,7 @@ const start = async () => {
       logger.warn('Admin seed skipped', { err });
     }
 
-    try {
-      await connectRedis();
-    } catch (err) {
+    try { await connectRedis(); } catch (err) {
       logger.warn('Redis unavailable, running without cache', { err });
     }
 

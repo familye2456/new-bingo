@@ -14,7 +14,7 @@ export const AppDataSource = new DataSource({
   type: 'postgres',
   url: env.DATABASE_URL.replace('?sslmode=require', ''),
   ssl: { rejectUnauthorized: false },
-  synchronize: true,
+  synchronize: false,
   logging: false,
   poolSize: 20,
   extra: {
