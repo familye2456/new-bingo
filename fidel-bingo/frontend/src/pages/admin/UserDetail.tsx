@@ -10,7 +10,7 @@ interface UserRecord {
   status: string; paymentType: 'prepaid' | 'postpaid';
   balance: number; createdAt: string;
 }
-interface CartelaRecord { id: string; cardNumber?: number; isActive: boolean; assignedAt: string; }
+interface CartelaRecord { id: string; cardNumber?: number; isActive: boolean; assignedAt: string; numbers?: number[]; }
 interface TxRecord {
   id: string; transactionType: string; status: string;
   amount: number; description?: string; createdAt: string; gameId?: string;
@@ -34,6 +34,7 @@ export const UserDetail: React.FC = () => {
   const [assignError, setAssignError] = useState('');
   const [copyFromUserId, setCopyFromUserId] = useState('');
   const [copyResult, setCopyResult] = useState<{ copied: number; total: number } | null>(null);
+  const [viewCartela, setViewCartela] = useState<CartelaRecord | null>(null);
 
   const { data: user, isLoading: loadingUser } = useQuery<UserRecord>({
     queryKey: ['admin-user', id],
@@ -101,6 +102,7 @@ export const UserDetail: React.FC = () => {
   ];
 
   return (
+    <>
     <div className="p-4 sm:p-6 max-w-5xl space-y-5">
       {/* Back */}
       <button onClick={() => navigate('/admin/users')}
@@ -227,7 +229,11 @@ export const UserDetail: React.FC = () => {
                 {cartelas.map((c) => (
                   <div key={c.id}
                     className="flex flex-col items-center gap-1 bg-gradient-to-b from-yellow-400 to-yellow-500 rounded-xl px-3.5 py-2.5 shadow-sm min-w-[56px]">
-                    <span className="font-bold text-gray-900 text-sm">#{c.cardNumber ?? '?'}</span>
+                    <button
+                      onClick={() => setViewCartela(c)}
+                      className="font-bold text-gray-900 text-sm hover:underline">
+                      #{c.cardNumber ?? '?'}
+                    </button>
                     <button
                       onClick={() => unassignMutation.mutate(c.id)}
                       disabled={unassignMutation.isPending}
@@ -328,5 +334,62 @@ export const UserDetail: React.FC = () => {
         </div>
       )}
     </div>
+
+    {/* Cartela detail modal */}
+    {viewCartela && (
+      <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+        onClick={() => setViewCartela(null)}>
+        <div className="bg-white rounded-2xl shadow-2xl p-5 w-full max-w-xs"
+          onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between mb-4">
+            <span className="font-bold text-gray-900 text-base">Card #{viewCartela.cardNumber ?? '?'}</span>
+            <button onClick={() => setViewCartela(null)}
+              className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+          </div>
+
+          {/* Column headers */}
+          <div className="grid grid-cols-5 gap-1 mb-1">
+            {['B','I','N','G','O'].map((col) => (
+              <div key={col}
+                className="flex items-center justify-center rounded-lg aspect-square text-sm font-extrabold text-gray-900 bg-gradient-to-b from-yellow-400 to-yellow-500">
+                {col}
+              </div>
+            ))}
+          </div>
+
+          {/* Grid */}
+          {viewCartela.numbers && viewCartela.numbers.length === 25 ? (
+            <div className="grid grid-cols-5 gap-1">
+              {viewCartela.numbers.map((num, idx) => (
+                <div key={idx}
+                  className={`flex items-center justify-center rounded-lg aspect-square text-sm font-bold ${
+                    idx === 12
+                      ? 'bg-gradient-to-b from-yellow-400 to-yellow-500 text-gray-900'
+                      : 'bg-gray-100 text-gray-800'
+                  }`}>
+                  {idx === 12 ? 'FREE' : num || '?'}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-6 text-center text-gray-400 text-sm">Grid data not available</div>
+          )}
+
+          <div className="mt-4 flex gap-2">
+            <button
+              onClick={() => { unassignMutation.mutate(viewCartela.id); setViewCartela(null); }}
+              disabled={unassignMutation.isPending}
+              className="flex-1 py-2 rounded-xl text-sm font-medium bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 border border-red-200">
+              Remove
+            </button>
+            <button onClick={() => setViewCartela(null)}
+              className="flex-1 py-2 rounded-xl text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   );
 };
