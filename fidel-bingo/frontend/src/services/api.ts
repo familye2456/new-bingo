@@ -86,6 +86,8 @@ export const cartelaAdminApi = {
     api.post('/cartelas/unassign-range', data),
   update: (id: string, data: { isActive?: boolean; userId?: string; numbers?: number[] }) =>
     api.patch(`/cartelas/${id}`, data),
+  copyFrom: (fromUserId: string, toUserId: string) =>
+    api.post('/cartelas/copy-from', { fromUserId, toUserId }),
 };
 
 export const userApi = {

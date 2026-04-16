@@ -32,6 +32,8 @@ export const UserDetail: React.FC = () => {
   const [tab, setTab] = useState<Tab>('cartelas');
   const [cardNumber, setCardNumber] = useState('');
   const [assignError, setAssignError] = useState('');
+  const [copyFromUserId, setCopyFromUserId] = useState('');
+  const [copyResult, setCopyResult] = useState<{ copied: number; total: number } | null>(null);
 
   const { data: user, isLoading: loadingUser } = useQuery<UserRecord>({
     queryKey: ['admin-user', id],
@@ -60,6 +62,19 @@ export const UserDetail: React.FC = () => {
   const unassignMutation = useMutation({
     mutationFn: (cartelaId: string) => cartelaAdminApi.unassign(cartelaId, id!),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['user-cartelas', id] }),
+  });
+
+  const { data: allUsers = [] } = useQuery<{ id: string; username: string }[]>({
+    queryKey: ['admin-users'],
+    queryFn: () => adminApi.listUsers().then((r) => r.data.data),
+  });
+
+  const copyMutation = useMutation({
+    mutationFn: () => cartelaAdminApi.copyFrom(copyFromUserId, id!),
+    onSuccess: (res) => {
+      setCopyResult(res.data.data);
+      qc.invalidateQueries({ queryKey: ['user-cartelas', id] });
+    },
   });
 
   const totalBet     = transactions.filter(t => t.transactionType === 'bet').reduce((s, t) => s + Number(t.amount), 0);
@@ -159,6 +174,43 @@ export const UserDetail: React.FC = () => {
               </button>
             </div>
             {assignError && <p className="text-xs text-red-500 mt-2">{assignError}</p>}
+          </div>
+
+          {/* Copy from user */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <div className="font-medium text-gray-700 mb-1 text-sm">Copy cartelas from another user</div>
+            <p className="text-xs text-gray-400 mb-3">All cartelas assigned to the selected user will be copied to {user.username}.</p>
+            <div className="flex items-center gap-3 flex-wrap">
+              <select
+                value={copyFromUserId}
+                onChange={(e) => { setCopyFromUserId(e.target.value); setCopyResult(null); }}
+                className="border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm flex-1 min-w-0 focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400">
+                <option value="">— select source user —</option>
+                {allUsers.filter(u => u.id !== id).map((u) => (
+                  <option key={u.id} value={u.id}>{u.username}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => { setCopyResult(null); copyMutation.mutate(); }}
+                disabled={!copyFromUserId || copyMutation.isPending}
+                className="bg-purple-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                {copyMutation.isPending ? 'Copying...' : 'Copy'}
+              </button>
+            </div>
+            {copyResult && (
+              <div className="mt-2 flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-sm text-emerald-700">
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {copyResult.copied} new cartelas copied ({copyResult.total - copyResult.copied} already assigned).
+              </div>
+            )}
+            {copyMutation.isError && (
+              <p className="text-xs text-red-500 mt-2">{(copyMutation.error as any)?.response?.data?.error?.message ?? 'Copy failed'}</p>
+            )}
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

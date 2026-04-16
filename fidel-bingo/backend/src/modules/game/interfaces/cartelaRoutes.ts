@@ -251,8 +251,29 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
   });
 });
 
-// Assign a specific card number to a user
-router.post('/assign', async (req: AuthRequest, res: Response) => {
+// Copy all cartelas from one user to another
+router.post('/copy-from', async (req: AuthRequest, res: Response) => {
+  const { fromUserId, toUserId } = req.body as { fromUserId: string; toUserId: string };
+  if (!fromUserId || !toUserId) throw new AppError(400, 'MISSING_FIELDS', 'fromUserId and toUserId are required');
+  if (fromUserId === toUserId) throw new AppError(400, 'SAME_USER', 'Cannot copy to the same user');
+
+  const ucRepo = AppDataSource.getRepository(UserCartela);
+
+  const sourceAssignments = await ucRepo.find({ where: { userId: fromUserId }, select: ['cartelaId'] });
+  if (sourceAssignments.length === 0) throw new AppError(404, 'NO_CARTELAS', 'Source user has no cartelas');
+
+  const alreadyOwned = await ucRepo.find({ where: { userId: toUserId }, select: ['cartelaId'] });
+  const ownedIds = new Set(alreadyOwned.map(a => a.cartelaId));
+
+  let copied = 0;
+  for (const { cartelaId } of sourceAssignments) {
+    if (ownedIds.has(cartelaId)) continue;
+    await ucRepo.save(ucRepo.create({ userId: toUserId, cartelaId }));
+    copied++;
+  }
+
+  res.json({ success: true, data: { copied, total: sourceAssignments.length } });
+});
   const { userId, cardNumber } = req.body as { userId: string; cardNumber: number };
   if (!userId || !cardNumber) throw new AppError(400, 'MISSING_FIELDS', 'userId and cardNumber are required');
 
