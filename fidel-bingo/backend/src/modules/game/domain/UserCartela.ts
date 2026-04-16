@@ -28,7 +28,7 @@ export class UserCartela {
   user!: User;
 
   // ── Optional back-reference to admin pool ──────────────────────────────────
-  @Column({ name: 'source_cartela_id', nullable: true, default: null })
+  @Column({ name: 'source_cartela_id', type: 'uuid', nullable: true, default: null })
   sourceCartelaId?: string | null;
 
   // ── Cartela grid data (owned by this user row) ─────────────────────────────
