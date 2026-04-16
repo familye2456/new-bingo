@@ -60,7 +60,10 @@ router.post('/', authorize('admin'), async (req: AuthRequest, res: Response) => 
 
   const passwordHash = await bcrypt.hash(String(password), 12);
   const user = repo.create({
-    username, email, passwordHash, firstName, lastName, phone,
+    username, email, passwordHash,
+    firstName: firstName || null,
+    lastName: lastName || null,
+    phone: phone || null,
     role: 'player', status: 'active', balance: 0,
     paymentType: paymentType === 'postpaid' ? 'postpaid' : 'prepaid',
   });
