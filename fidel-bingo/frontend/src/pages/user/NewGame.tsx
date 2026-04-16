@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { offlineUserApi, offlineGameApi } from '../../services/offlineApi';
 import { useGameSettings } from '../../store/gameSettingsStore';
 import { useAuthStore } from '../../store/authStore';
-import { playCachedSound } from '../../services/db';
+import { playCachedSound, isVoiceFullyCached } from '../../services/db';
 
 let _userInteracted = false;
 if (typeof window !== 'undefined') {
@@ -75,6 +75,15 @@ export const NewGame: React.FC = () => {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [quickAddValue, setQuickAddValue] = useState('');
   const quickAddRef = useRef<HTMLInputElement>(null);
+  const [voiceCached, setVoiceCached] = useState(true); // optimistic
+
+  useEffect(() => {
+    if (!navigator.onLine) {
+      isVoiceFullyCached(voice).then(setVoiceCached);
+    } else {
+      setVoiceCached(true);
+    }
+  }, [voice]);
 
   // Persist whenever any selection changes
   useEffect(() => { savePrefs(bet, pattern, selectedIds, houseCut); }, [bet, pattern, selectedIds, houseCut]);
@@ -161,7 +170,7 @@ export const NewGame: React.FC = () => {
     }
   };
   const houseCutValid = typeof houseCut === 'number' && houseCut >= 10 && houseCut <= 45;
-  const canStart = selectedIds.size >= MIN_CARTELAS && houseCutValid;
+  const canStart = selectedIds.size >= MIN_CARTELAS && houseCutValid && voiceCached;
   const totalPrize = bet * selectedIds.size;
 
   return (
@@ -234,7 +243,7 @@ export const NewGame: React.FC = () => {
               color: '#4b5563',
               border: '1px solid rgba(255,255,255,0.08)',
             }}>
-            {createMutation.isPending ? '...' : canStart ? `▶ Start · ${selectedIds.size}` : !houseCutValid ? `Set house %` : `▶ Start (${selectedIds.size}/${MIN_CARTELAS})`}
+            {createMutation.isPending ? '...' : canStart ? `▶ Start · ${selectedIds.size}` : !houseCutValid ? `Set house %` : !voiceCached ? '⬇ Download sounds first' : `▶ Start (${selectedIds.size}/${MIN_CARTELAS})`}
           </button>
         </div>
         {createMutation.isError && (

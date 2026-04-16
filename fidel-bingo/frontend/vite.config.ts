@@ -24,7 +24,7 @@ export default defineConfig({
       },
       workbox: {
         // Cache only app shell assets (JS/CSS/HTML/sounds) — no API caching
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,mp3,wav}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/admin/],

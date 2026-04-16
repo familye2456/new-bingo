@@ -119,3 +119,65 @@ export async function playCachedSound(path: string): Promise<void> {
     // Cache Storage not available or sound not cached — silently ignore
   }
 }
+
+// ── Voice sound pre-caching ──────────────────────────────────────────────────
+
+const VOICE_CACHE = 'fidel-voice-sounds-v1';
+const SOUND_FILES = [
+  ...Array.from({ length: 75 }, (_, i) => `${i + 1}`),
+  'start', 'winner', 'notwinner',
+];
+
+export function getVoiceExt(voice: string): string {
+  return voice === 'girl sound' ? '.mp3' : '.wav';
+}
+
+export function getVoiceSoundUrls(voice: string): string[] {
+  const ext = getVoiceExt(voice);
+  return SOUND_FILES.map((f) => `/sounds/${encodeURIComponent(voice)}/${f}${ext}`);
+}
+
+/** Check how many of the voice sounds are already cached */
+export async function getVoiceCacheStatus(voice: string): Promise<{ cached: number; total: number }> {
+  const urls = getVoiceSoundUrls(voice);
+  if (!('caches' in window)) return { cached: 0, total: urls.length };
+  try {
+    const cache = await caches.open(VOICE_CACHE);
+    let cached = 0;
+    for (const url of urls) {
+      const match = await cache.match(url);
+      if (match) cached++;
+    }
+    return { cached, total: urls.length };
+  } catch {
+    return { cached: 0, total: urls.length };
+  }
+}
+
+/** Download all sounds for the given voice category into Cache Storage */
+export async function downloadVoiceSounds(
+  voice: string,
+  onProgress?: (cached: number, total: number) => void
+): Promise<void> {
+  if (!('caches' in window)) return;
+  const urls = getVoiceSoundUrls(voice);
+  const cache = await caches.open(VOICE_CACHE);
+  let done = 0;
+  for (const url of urls) {
+    const existing = await cache.match(url);
+    if (!existing) {
+      try {
+        const res = await fetch(url);
+        if (res.ok) await cache.put(url, res);
+      } catch { /* skip failed files */ }
+    }
+    done++;
+    onProgress?.(done, urls.length);
+  }
+}
+
+/** Check if all sounds for the given voice are fully cached */
+export async function isVoiceFullyCached(voice: string): Promise<boolean> {
+  const { cached, total } = await getVoiceCacheStatus(voice);
+  return cached >= total;
+}
