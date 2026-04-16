@@ -102,9 +102,9 @@ router.get('/:gameId/cartelas', async (req: AuthRequest, res: Response) => {
   const gcRepo = AppDataSource.getRepository(GameCartela);
   const entries = await gcRepo.find({
     where: { gameId: req.params.gameId },
-    relations: ['cartela'],
+    relations: ['userCartela'],
   });
-  res.json({ success: true, data: entries.map((e) => ({ ...e.cartela, betAmount: e.betAmount })) });
+  res.json({ success: true, data: entries.map((e) => ({ ...e.userCartela, betAmount: e.betAmount })) });
 });
 
 export default router;

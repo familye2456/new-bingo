@@ -168,12 +168,11 @@ router.get('/:id/transactions', authorize('admin'), async (req: AuthRequest, res
 
 // Get user's assigned cartelas
 router.get('/:id/cartelas', authorize('admin'), async (req: AuthRequest, res: Response) => {
-  const assignments = await AppDataSource.getRepository(UserCartela).find({
+  const cartelas = await AppDataSource.getRepository(UserCartela).find({
     where: { userId: req.params.id },
-    relations: ['cartela'],
-    order: { assignedAt: 'DESC' },
+    order: { assignedAt: 'ASC' },
   });
-  res.json({ success: true, data: assignments.map((a) => ({ ...a.cartela, assignedAt: a.assignedAt })) });
+  res.json({ success: true, data: cartelas });
 });
 
 export default router;

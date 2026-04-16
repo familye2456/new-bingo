@@ -3,11 +3,15 @@ import {
   CreateDateColumn, ManyToOne, JoinColumn, Unique, Index
 } from 'typeorm';
 import { Game } from './Game';
-import { Cartela } from './Cartela';
+import { UserCartela } from './UserCartela';
 import { User } from '../../user/domain/User';
 
+/**
+ * Links a user's cartela (from user_cartelas) to a specific game.
+ * userCartelaId references user_cartelas.id — not the shared cartelas pool.
+ */
 @Entity('game_cartelas')
-@Unique(['gameId', 'cartelaId'])
+@Unique(['gameId', 'userCartelaId'])
 @Index('idx_game_cartelas_game_id', ['gameId'])
 @Index('idx_game_cartelas_user_id', ['userId'])
 export class GameCartela {
@@ -21,12 +25,12 @@ export class GameCartela {
   @JoinColumn({ name: 'game_id' })
   game!: Game;
 
-  @Column({ name: 'cartela_id' })
-  cartelaId!: string;
+  @Column({ name: 'user_cartela_id' })
+  userCartelaId!: string;
 
-  @ManyToOne(() => Cartela, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'cartela_id' })
-  cartela!: Cartela;
+  @ManyToOne(() => UserCartela, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'user_cartela_id' })
+  userCartela!: UserCartela;
 
   @Column({ name: 'user_id', nullable: true })
   userId!: string;
