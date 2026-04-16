@@ -274,6 +274,9 @@ router.post('/copy-from', async (req: AuthRequest, res: Response) => {
 
   res.json({ success: true, data: { copied, total: sourceAssignments.length } });
 });
+
+// Assign a specific card number to a user
+router.post('/assign', async (req: AuthRequest, res: Response) => {
   const { userId, cardNumber } = req.body as { userId: string; cardNumber: number };
   if (!userId || !cardNumber) throw new AppError(400, 'MISSING_FIELDS', 'userId and cardNumber are required');
 
