@@ -16,14 +16,13 @@ export const AppDataSource = new DataSource({
   ssl: { rejectUnauthorized: false },
   synchronize: true,
   logging: false,
-  // Connection pool — keep connections warm, reduce wait time under load
   poolSize: 20,
   extra: {
     max: 20,
     min: 2,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 3000,
-    statement_timeout: 8000,       // kill queries taking > 8s
+    connectionTimeoutMillis: 5000,
+    statement_timeout: 60000,      // allow up to 60s for schema sync on startup
   },
   entities: [User, Game, Cartela, UserCartela, GameCartela, Transaction, Account, AuditLog, RefreshToken],
   migrations: ['dist/migrations/*.js'],

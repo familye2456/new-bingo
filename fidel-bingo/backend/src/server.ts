@@ -119,6 +119,42 @@ const start = async () => {
     await AppDataSource.initialize();
     logger.info('Database connected');
 
+    // ── Run schema migrations for new user_cartelas architecture ──────────────
+    // These are idempotent — safe to run on every startup
+    try {
+      await AppDataSource.query(`
+        ALTER TABLE user_cartelas
+          ADD COLUMN IF NOT EXISTS card_number integer,
+          ADD COLUMN IF NOT EXISTS numbers integer[],
+          ADD COLUMN IF NOT EXISTS pattern_mask boolean[],
+          ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true,
+          ADD COLUMN IF NOT EXISTS is_winner boolean NOT NULL DEFAULT false,
+          ADD COLUMN IF NOT EXISTS win_pattern varchar,
+          ADD COLUMN IF NOT EXISTS win_amount numeric(10,2),
+          ADD COLUMN IF NOT EXISTS source_cartela_id uuid
+      `);
+      await AppDataSource.query(`
+        ALTER TABLE game_cartelas
+          ADD COLUMN IF NOT EXISTS user_cartela_id uuid,
+          ALTER COLUMN cartela_id DROP NOT NULL
+      `);
+      // Drop stale unique constraint if it still exists
+      await AppDataSource.query(`
+        DO $$ BEGIN
+          IF EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'UQ_game_cartelas_game_id_cartela_id'
+          ) THEN
+            ALTER TABLE game_cartelas DROP CONSTRAINT "UQ_game_cartelas_game_id_cartela_id";
+          END IF;
+        END $$
+      `);
+      logger.info('Schema migration complete');
+    } catch (migErr) {
+      logger.warn('Schema migration warning (non-fatal)', { err: migErr });
+    }
+
+
     // Auto-seed admin on first run
     try {
       const bcrypt = await import('bcryptjs');
