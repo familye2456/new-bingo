@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { offlineUserApi } from '../../services/offlineApi';
 import { api, userApi } from '../../services/api';
 import { dbDelete, dbPut } from '../../services/db';
+import { useAuthStore } from '../../store/authStore';
 
 const COLS = ['B', 'I', 'N', 'G', 'O'];
 const RANGES = [[1,15],[16,30],[31,45],[46,60],[61,75]];
@@ -171,20 +172,21 @@ const EditorModal: React.FC<{
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export const MyCartelas: React.FC = () => {
   const qc = useQueryClient();
+  const { user } = useAuthStore();
   const [showCreate, setShowCreate] = useState(false);
   const [editCartela, setEditCartela] = useState<CartelaRecord | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [mutError, setMutError] = useState('');
 
   const { data: cartelas = [], isLoading } = useQuery<CartelaRecord[]>({
-    queryKey: ['my-cartelas'],
+    queryKey: ['my-cartelas', user?.id],
     queryFn: async () => {
       const list = await offlineUserApi.myCartelas();
       return [...list].sort((a: CartelaRecord, b: CartelaRecord) => (a.cardNumber ?? 0) - (b.cardNumber ?? 0));
     },
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['my-cartelas'] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['my-cartelas', user?.id] });
 
   const createMutation = useMutation({
     mutationFn: ({ numbers, cardNumber }: { numbers: number[]; cardNumber: number }) =>

@@ -98,11 +98,10 @@ export const offlineUserApi = {
     const currentUserId: string | undefined = currentUser?.id;
 
     const allCached = await dbGetAll<any>('cartelas');
-    // Filter to only cartelas that belong to the current user (have a userId field)
-    // or all cached entries if userId is not stored on the cartela (legacy)
+    // Only return cartelas explicitly tagged to the current user
     const cached = currentUserId
-      ? allCached.filter((c: any) => !c.userId || c.userId === currentUserId)
-      : allCached;
+      ? allCached.filter((c: any) => c.userId === currentUserId)
+      : [];
 
     // Online + cache populated → return cache immediately, refresh in background
     if (navigator.onLine && cached.length > 0) {

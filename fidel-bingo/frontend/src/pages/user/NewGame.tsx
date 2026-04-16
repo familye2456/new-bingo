@@ -62,7 +62,7 @@ export const NewGame: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { voice } = useGameSettings();
-  const { refreshBalance } = useAuthStore();
+  const { user, refreshBalance } = useAuthStore();
   const voiceRef = useRef(voice);
   useEffect(() => { voiceRef.current = voice; }, [voice]);
 
@@ -89,7 +89,7 @@ export const NewGame: React.FC = () => {
   useEffect(() => { savePrefs(bet, pattern, selectedIds, houseCut); }, [bet, pattern, selectedIds, houseCut]);
 
   const { data: cartelas = [], isLoading } = useQuery<CartelaRecord[]>({
-    queryKey: ['my-cartelas'],
+    queryKey: ['my-cartelas', user?.id],
     queryFn: () => offlineUserApi.myCartelas(),
   });
 

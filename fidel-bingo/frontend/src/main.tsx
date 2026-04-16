@@ -4,9 +4,90 @@ import App from './App';
 import './index.css';
 import { registerSW } from 'virtual:pwa-register';
 
-// Register service worker — auto-updates silently
-registerSW({ immediate: true });
+const root = ReactDOM.createRoot(document.getElementById('root')!);
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <App />
-);
+// Show a splash screen while the SW downloads and caches all assets.
+// Once the SW is installed (or if there's no SW support), render the app.
+function renderApp() {
+  root.render(<App />);
+}
+
+function renderSplash() {
+  root.render(
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: '100vh',
+      background: '#0e1a35',
+      color: '#fff',
+      fontFamily: 'sans-serif',
+      gap: '1.5rem',
+    }}>
+      <img src="/icons/icon-192.svg" width={80} height={80} alt="Fidel Bingo" />
+      <p style={{ fontSize: '1.1rem', opacity: 0.85 }}>Downloading app, please wait…</p>
+      <div style={{
+        width: 200,
+        height: 6,
+        background: 'rgba(255,255,255,0.15)',
+        borderRadius: 3,
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          height: '100%',
+          width: '40%',
+          background: '#f59e0b',
+          borderRadius: 3,
+          animation: 'pwa-progress 1.4s ease-in-out infinite',
+        }} />
+      </div>
+      <style>{`
+        @keyframes pwa-progress {
+          0%   { transform: translateX(-100%); width: 40%; }
+          50%  { width: 60%; }
+          100% { transform: translateX(350%); width: 40%; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+if (!('serviceWorker' in navigator)) {
+  // No SW support — just render immediately
+  renderApp();
+} else {
+  renderSplash();
+
+  registerSW({
+    immediate: true,
+    onRegisteredSW(_swUrl, registration) {
+      if (!registration) { renderApp(); return; }
+
+      const sw = registration.installing ?? registration.waiting ?? registration.active;
+
+      if (registration.active && !registration.installing && !registration.waiting) {
+        // SW already active from a previous install — app is ready
+        renderApp();
+        return;
+      }
+
+      // Wait for the installing SW to reach 'activated' state
+      const target = registration.installing ?? registration.waiting;
+      if (target) {
+        target.addEventListener('statechange', function handler() {
+          if (this.state === 'activated') {
+            target.removeEventListener('statechange', handler);
+            renderApp();
+          }
+        });
+      } else {
+        renderApp();
+      }
+    },
+    onOfflineReady() {
+      // All assets cached — render if not already rendered
+      renderApp();
+    },
+  });
+}

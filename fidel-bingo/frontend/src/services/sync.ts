@@ -29,12 +29,9 @@ function isSynced(id: string): boolean { return getSyncedIds().has(id); }
 
 export async function refreshCache() {
   try {
-    const cachedCartelas = await dbGetAll<any>('cartelas');
-    const fetchCartelas = cachedCartelas.length === 0;
-
     const requests: Promise<any>[] = [
       api.get('/users/me'),
-      fetchCartelas ? api.get('/cartelas/mine') : Promise.resolve(null),
+      api.get('/cartelas/mine'),  // always fetch — never skip based on cache
       api.get('/games/mine'),
       api.get('/users/me/transactions'),
     ];
@@ -53,8 +50,8 @@ export async function refreshCache() {
 
     const toList = (d: any) => Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : Array.isArray(d?.data?.data) ? d.data.data : [];
 
-    // Only update cartelas store if we fetched fresh data
-    if (fetchCartelas && cartelasRes) {
+    // Always clear and repopulate cartelas — ensures no stale data from another user
+    {
       const userId = meData?.id;
       await dbClear('cartelas');
       await Promise.all(toList(cartelasRes.data).map((c: any) => dbPut('cartelas', { ...c, userId })));
