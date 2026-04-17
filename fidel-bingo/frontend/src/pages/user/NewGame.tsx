@@ -22,6 +22,12 @@ function playSound(name: string) {
   playCachedSound(`/sounds/${encodeURIComponent(category)}/${file}`).catch(() => {});
 }
 
+// Play a root-level sound (not category-specific)
+function playRootSound(filename: string) {
+  if (!_userInteracted) return;
+  new Audio(`/sounds/${filename}`).play().catch(() => {});
+}
+
 interface CartelaRecord {
   id: string;
   cardNumber?: number;
@@ -120,7 +126,7 @@ export const NewGame: React.FC = () => {
       });
     },
     onSuccess: (res) => {
-      playSound('start');
+      playRootSound('start.wav');
       const game = res?.data?.data?.data ?? res?.data?.data ?? res?.data;
       const id = game?.id;
       if (id) {

@@ -5,7 +5,7 @@ import { gameApi } from '../services/api';
 import { getSocket } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 import { useAuthStore } from '../store/authStore';
-import { useGameSettings } from '../store/gameSettingsStore';
+import { useGameSettings, ALL_VOICE_CATEGORIES } from '../store/gameSettingsStore';
 import { CartelaCard } from '../components/CartelaCard';
 import { NumberBoard } from '../components/NumberBoard';
 
@@ -27,6 +27,11 @@ function playSound(name: string, category: string) {
   const ext = category === 'boy sound' ? '.wav' : '.mp3';
   const file = name.includes('.') ? name : `${name}${ext}`;
   new Audio(`/sounds/${encodeURIComponent(category)}/${file}`).play().catch(() => {});
+}
+
+function playRootSound(filename: string) {
+  if (!_userInteracted) return;
+  new Audio(`/sounds/${filename}`).play().catch(() => {});
 }
 
 export const GamePage: React.FC = () => {
@@ -81,7 +86,7 @@ export const GamePage: React.FC = () => {
     if (socket.connected) joinGame();
     socket.on('game_state', (game: any) => {
       if (game.status === 'active' && gameStatusRef.current !== 'active') {
-        playSound('start', voiceRef.current);
+        playRootSound('start.wav');
       }
       setGame(game);
     });
@@ -241,7 +246,11 @@ export const GamePage: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-700">Auto Call</span>
                     <button
-                      onClick={() => setAutoCall((v) => !v)}
+                      onClick={() => setAutoCall((v) => {
+                        const next = !v;
+                        playRootSound(next ? 'aac_resumed.mp3' : 'aac_ended.mp3');
+                        return next;
+                      })}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                         autoCall ? 'bg-green-500' : 'bg-gray-300'
                       }`}
@@ -252,7 +261,7 @@ export const GamePage: React.FC = () => {
                     </button>
                   </div>
                   <div className="text-xs text-gray-400 text-center">
-                    Interval: {autoCallInterval}s · Voice: {voice === 'boy sound' ? '👦 Boy' : '👧 Girl'}
+                    Interval: {autoCallInterval}s · Voice: {ALL_VOICE_CATEGORIES.find(c => c.value === voice)?.label ?? voice}
                   </div>
                 </div>
               </div>

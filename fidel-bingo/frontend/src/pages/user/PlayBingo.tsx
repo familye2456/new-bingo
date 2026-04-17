@@ -22,6 +22,12 @@ function playSound(name: string) {
   playCachedSound(`/sounds/${encodeURIComponent(category)}/${file}`).catch(() => {});
 }
 
+// Play a root-level sound (not category-specific)
+function playRootSound(filename: string) {
+  if (!_userInteracted) return;
+  new Audio(`/sounds/${filename}`).play().catch(() => {});
+}
+
 interface Game {
   id: string;
   gameNumber?: number;
@@ -109,9 +115,10 @@ export const PlayBingo: React.FC = () => {
     offlineGameApi.getCartelas(game.id).catch(() => {});
   }, [game?.id]);
 
-  const stopAuto = useCallback(() => {
+  const stopAuto = useCallback((silent = false) => {
     if (autoRef.current) { clearInterval(autoRef.current); autoRef.current = null; }
     setAutoOn(false);
+    if (!silent) playRootSound('aac_ended.mp3');
   }, []);
 
   const callMutation = useMutation({
@@ -121,13 +128,13 @@ export const PlayBingo: React.FC = () => {
       if (num != null) setSessionCalledNumbers((prev) => prev.includes(num) ? prev : [...prev, num]);
       queryClient.invalidateQueries({ queryKey: ['games'] });
     },
-    onError: (err: any) => { console.error('[callNumber]', err?.response?.data ?? err.message); stopAuto(); },
+    onError: (err: any) => { console.error('[callNumber]', err?.response?.data ?? err.message); stopAuto(true); },
   });
 
   const finishMutation = useMutation({
     mutationFn: () => offlineGameApi.finish(game!.id),
     onSuccess: () => {
-      stopAuto();
+      stopAuto(true);
       queryClient.invalidateQueries({ queryKey: ['games'] });
       refreshBalance();
       navigate('/new-game');
@@ -141,6 +148,7 @@ export const PlayBingo: React.FC = () => {
 
   const startAuto = useCallback(() => {
     if (!game || game.status !== 'active') return;
+    playRootSound('aac_resumed.mp3');
     setAutoOn(true);
     let elapsed = 0;
     autoRef.current = setInterval(() => {
@@ -152,8 +160,8 @@ export const PlayBingo: React.FC = () => {
     }, 500);
   }, [game, callMutation, stopAuto]);
 
-  useEffect(() => () => stopAuto(), [stopAuto]);
-  useEffect(() => { if (sessionCalledNumbers.length >= 75 && autoOn) stopAuto(); }, [sessionCalledNumbers.length, autoOn, stopAuto]);
+  useEffect(() => () => stopAuto(true), [stopAuto]);
+  useEffect(() => { if (sessionCalledNumbers.length >= 75 && autoOn) stopAuto(true); }, [sessionCalledNumbers.length, autoOn, stopAuto]);
 
   const toggleAuto = () => autoOn ? stopAuto() : startAuto();
 
@@ -166,16 +174,15 @@ export const PlayBingo: React.FC = () => {
       const result = await offlineGameApi.checkCartela(game.id, num);
       setCheckResult(result);
       if (result.registered) {
-        const isBoy = useGameSettings.getState().voice !== 'girl sound';
         if (result.isWinner) {
-          playSound('winner');
+          playRootSound('winner.wav');
           setWinnerInfo({
             cardNumber: num,
             amount: Number(game?.prizePool ?? 0),
             pattern: result.winPattern ?? '',
           });
-        } else if (isBoy) {
-          playSound('notwinner');
+        } else {
+          playRootSound('aac_locked.mp3');
         }
       }
     } catch {
@@ -252,14 +259,14 @@ export const PlayBingo: React.FC = () => {
             />
             <CtrlBtn
               label={finishMutation.isPending ? '...' : 'Finish'}
-              onClick={() => { stopAuto(); finishMutation.mutate(); }}
+              onClick={() => { stopAuto(true); finishMutation.mutate(); }}
               disabled={!isCreator || game.status !== 'active' || finishMutation.isPending}
               danger
             />
             <CtrlBtn
               label="🔀"
               purple
-              onClick={() => { playSound('shuffle-audio-TfqyAnvz.mp3'); setTimeout(() => window.location.reload(), 3000); }}
+              onClick={() => { playRootSound('shuffle-audio-TfqyAnvz.mp3'); setTimeout(() => window.location.reload(), 3000); }}
             />
           </div>
 

@@ -123,7 +123,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
       // Apply admin-set default voice if this is the first login
       const defaultVoice = localStorage.getItem(`default_voice_${user.username}`);
-      if (defaultVoice === 'boy sound' || defaultVoice === 'girl sound' || defaultVoice === 'boy1 sound') {
+      const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina'];
+      if (defaultVoice && validVoices.includes(defaultVoice)) {
         const existing = localStorage.getItem('game-settings');
         if (!existing) {
           localStorage.setItem('game-settings', JSON.stringify({ state: { voice: defaultVoice, autoCallInterval: 5 }, version: 0 }));

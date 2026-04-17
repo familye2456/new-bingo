@@ -2,13 +2,14 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi, cartelaAdminApi } from '../../services/api';
+import { ALL_VOICE_CATEGORIES, VoiceCategory } from '../../store/gameSettingsStore';
 
 interface UserRecord {
   id: string; username: string; email: string;
   status: string; paymentType: 'prepaid' | 'postpaid'; balance: number;
 }
 
-const emptyForm = { username: '', email: '', password: '', paymentType: 'prepaid' as 'prepaid' | 'postpaid', voice: 'boy sound' as 'boy sound' | 'girl sound' | 'boy1 sound' };
+const emptyForm = { username: '', email: '', password: '', paymentType: 'prepaid' as 'prepaid' | 'postpaid', voice: 'boy sound' as VoiceCategory };
 type ModalType = 'create' | 'edit' | 'topup' | 'deduct' | 'cartela' | null;
 
 interface CartelaRecord { id: string; cardNumber?: number; isActive: boolean; assignedAt: string; }
@@ -194,18 +195,18 @@ export const UserManagement: React.FC = () => {
             {modal === 'create' && (
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">Default Caller Voice</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['boy sound', 'girl sound', 'boy1 sound'] as const).map((v) => (
+                <div className="grid grid-cols-2 gap-2">
+                  {ALL_VOICE_CATEGORIES.map(({ value, label }) => (
                     <button
-                      key={v}
+                      key={value}
                       type="button"
-                      onClick={() => setForm(f => ({ ...f, voice: v }))}
+                      onClick={() => setForm(f => ({ ...f, voice: value }))}
                       className="py-2.5 rounded-xl text-sm font-medium border-2 transition-colors"
-                      style={form.voice === v
+                      style={form.voice === value
                         ? { borderColor: '#3b82f6', background: '#eff6ff', color: '#1d4ed8' }
                         : { borderColor: '#e5e7eb', background: '#fff', color: '#6b7280' }}
                     >
-                      {v === 'boy sound' ? '👦 Boy' : v === 'girl sound' ? '👧 Girl' : '👦 Boy 1'}
+                      {label}
                     </button>
                   ))}
                 </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { userApi } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
-import { useGameSettings, VoiceCategory } from '../../store/gameSettingsStore';
+import { useGameSettings, VoiceCategory, ALL_VOICE_CATEGORIES, voiceExt } from '../../store/gameSettingsStore';
 import { getVoiceCacheStatus, downloadVoiceSounds } from '../../services/db';
 
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
@@ -219,14 +219,14 @@ export const Settings: React.FC = () => {
           <div className="space-y-5">
             <div>
               <div className="text-xs font-medium mb-2.5" style={{ color: '#6b7280' }}>Caller Voice</div>
-              <div className="grid grid-cols-3 gap-2">
-                {(['boy sound', 'girl sound', 'boy1 sound'] as VoiceCategory[]).map((v) => (
-                  <button key={v} onClick={() => setVoice(v)}
+              <div className="grid grid-cols-2 gap-2">
+                {ALL_VOICE_CATEGORIES.map(({ value, label }) => (
+                  <button key={value} onClick={() => setVoice(value)}
                     className="py-3 rounded-xl text-sm font-medium transition-all"
-                    style={voice === v
+                    style={voice === value
                       ? { background: 'rgba(251,191,36,0.15)', border: '1.5px solid rgba(251,191,36,0.5)', color: '#fbbf24' }
                       : { background: '#0e1a35', border: '1px solid rgba(255,255,255,0.07)', color: '#6b7280' }}>
-                    {v === 'boy sound' ? '👦 Boy' : v === 'girl sound' ? '👧 Girl' : '👦 Boy 1'}
+                    {label}
                   </button>
                 ))}
               </div>
@@ -247,7 +247,7 @@ export const Settings: React.FC = () => {
             <button
               onClick={() => {
                 const n = Math.floor(Math.random() * 75) + 1;
-                const ext = voice === 'boy sound' ? '.wav' : '.mp3';
+                const ext = voiceExt(voice);
                 new Audio(`/sounds/${encodeURIComponent(voice)}/${n}${ext}`).play().catch(() => {});
               }}
               className="w-full py-2.5 rounded-xl text-sm font-medium transition-all"
