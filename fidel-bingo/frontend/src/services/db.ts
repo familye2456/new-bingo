@@ -135,6 +135,7 @@ const ROOT_SOUND_FILES = [
   '/sounds/shuffle-audio-TfqyAnvz.mp3',
   '/sounds/start.wav',
   '/sounds/winner.wav',
+  '/sounds/notregisterd.m4a',
 ];
 
 export function getVoiceExt(voice: string): string {

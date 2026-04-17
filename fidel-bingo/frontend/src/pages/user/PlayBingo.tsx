@@ -184,6 +184,8 @@ export const PlayBingo: React.FC = () => {
         } else {
           playRootSound('aac_locked.mp3');
         }
+      } else {
+        playRootSound('notregisterd.m4a');
       }
     } catch {
       setCheckResult({ registered: false, isWinner: false, winPattern: null });
