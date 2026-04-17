@@ -324,6 +324,14 @@ router.delete('/user/:userId/:id', async (req: AuthRequest, res: Response) => {
   res.json({ success: true });
 });
 
+// Clear ALL cartelas for a user
+router.delete('/user/:userId/all', async (req: AuthRequest, res: Response) => {
+  const ucRepo = AppDataSource.getRepository(UserCartela);
+  const cartelas = await ucRepo.find({ where: { userId: req.params.userId } });
+  if (cartelas.length > 0) await ucRepo.remove(cartelas);
+  res.json({ success: true, data: { removed: cartelas.length } });
+});
+
 // Update a user's cartela (numbers / cardNumber)
 router.patch('/:id', async (req: AuthRequest, res: Response) => {
   const ucRepo = AppDataSource.getRepository(UserCartela);

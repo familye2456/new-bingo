@@ -88,6 +88,7 @@ export const cartelaAdminApi = {
     api.patch(`/cartelas/${id}`, data),
   copyFrom: (fromUserId: string, toUserId: string) =>
     api.post('/cartelas/copy-from', { fromUserId, toUserId }),
+  clearAll: (userId: string) => api.delete(`/cartelas/user/${userId}/all`),
 };
 
 export const userApi = {

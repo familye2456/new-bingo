@@ -78,6 +78,11 @@ export const UserDetail: React.FC = () => {
     },
   });
 
+  const clearAllMutation = useMutation({
+    mutationFn: () => cartelaAdminApi.clearAll(id!),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['user-cartelas', id] }),
+  });
+
   const totalBet     = transactions.filter(t => t.transactionType === 'bet').reduce((s, t) => s + Number(t.amount), 0);
   const totalWin     = transactions.filter(t => t.transactionType === 'win').reduce((s, t) => s + Number(t.amount), 0);
   const totalDeposit = transactions.filter(t => t.transactionType === 'deposit').reduce((s, t) => s + Number(t.amount), 0);
@@ -218,7 +223,17 @@ export const UserDetail: React.FC = () => {
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
               <span className="text-sm font-medium text-gray-700">Assigned Cards</span>
-              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{cartelas.length}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{cartelas.length}</span>
+                {cartelas.length > 0 && (
+                  <button
+                    onClick={() => { if (window.confirm(`Remove all ${cartelas.length} cartelas from ${user.username}?`)) clearAllMutation.mutate(); }}
+                    disabled={clearAllMutation.isPending}
+                    className="text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50">
+                    {clearAllMutation.isPending ? 'Clearing...' : 'Clear All'}
+                  </button>
+                )}
+              </div>
             </div>
             {loadingCartelas ? (
               <div className="py-10 text-center text-gray-400 text-sm">Loading...</div>
