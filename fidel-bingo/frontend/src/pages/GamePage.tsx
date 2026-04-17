@@ -6,6 +6,7 @@ import { getSocket } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 import { useAuthStore } from '../store/authStore';
 import { useGameSettings, ALL_VOICE_CATEGORIES } from '../store/gameSettingsStore';
+import { playCachedSound } from '../services/db';
 import { CartelaCard } from '../components/CartelaCard';
 import { NumberBoard } from '../components/NumberBoard';
 
@@ -31,7 +32,7 @@ function playSound(name: string, category: string) {
 
 function playRootSound(filename: string) {
   if (!_userInteracted) return;
-  new Audio(`/sounds/${filename}`).play().catch(() => {});
+  playCachedSound(`/sounds/${filename}`).catch(() => {});
 }
 
 export const GamePage: React.FC = () => {

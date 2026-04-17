@@ -125,11 +125,20 @@ export async function playCachedSound(path: string): Promise<void> {
 const VOICE_CACHE = 'fidel-voice-sounds-v1';
 const SOUND_FILES = [
   ...Array.from({ length: 75 }, (_, i) => `${i + 1}`),
-  'start', 'winner', 'notwinner',
+];
+
+// Root-level event sounds (not category-specific)
+const ROOT_SOUND_FILES = [
+  '/sounds/aac_ended.mp3',
+  '/sounds/aac_locked.mp3',
+  '/sounds/aac_resumed.mp3',
+  '/sounds/shuffle-audio-TfqyAnvz.mp3',
+  '/sounds/start.wav',
+  '/sounds/winner.wav',
 ];
 
 export function getVoiceExt(voice: string): string {
-  return voice === 'girl sound' ? '.mp3' : '.wav';
+  return voice === 'boy sound' ? '.wav' : '.mp3';
 }
 
 export function getVoiceSoundUrls(voice: string): string[] {
@@ -160,7 +169,7 @@ export async function downloadVoiceSounds(
   onProgress?: (cached: number, total: number) => void
 ): Promise<void> {
   if (!('caches' in window)) return;
-  const urls = getVoiceSoundUrls(voice);
+  const urls = [...getVoiceSoundUrls(voice), ...ROOT_SOUND_FILES];
   const cache = await caches.open(VOICE_CACHE);
   let done = 0;
   for (const url of urls) {
