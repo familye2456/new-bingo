@@ -315,6 +315,14 @@ router.post('/user/:userId/add', async (req: AuthRequest, res: Response) => {
   res.status(201).json({ success: true, data: uc });
 });
 
+// Clear ALL cartelas for a user (must be before /:id to avoid route conflict)
+router.delete('/user/:userId/all', async (req: AuthRequest, res: Response) => {
+  const ucRepo = AppDataSource.getRepository(UserCartela);
+  const cartelas = await ucRepo.find({ where: { userId: req.params.userId } });
+  if (cartelas.length > 0) await ucRepo.remove(cartelas);
+  res.json({ success: true, data: { removed: cartelas.length } });
+});
+
 // Remove a specific user cartela by its user_cartela id
 router.delete('/user/:userId/:id', async (req: AuthRequest, res: Response) => {
   const ucRepo = AppDataSource.getRepository(UserCartela);
@@ -322,14 +330,6 @@ router.delete('/user/:userId/:id', async (req: AuthRequest, res: Response) => {
   if (!uc) throw new AppError(404, 'NOT_FOUND', 'Cartela not found for this user');
   await ucRepo.remove(uc);
   res.json({ success: true });
-});
-
-// Clear ALL cartelas for a user
-router.delete('/user/:userId/all', async (req: AuthRequest, res: Response) => {
-  const ucRepo = AppDataSource.getRepository(UserCartela);
-  const cartelas = await ucRepo.find({ where: { userId: req.params.userId } });
-  if (cartelas.length > 0) await ucRepo.remove(cartelas);
-  res.json({ success: true, data: { removed: cartelas.length } });
 });
 
 // Update a user's cartela (numbers / cardNumber)
