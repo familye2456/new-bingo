@@ -467,6 +467,9 @@ function getWinIndices(mask: boolean[], pattern: string | null): number[] {
     const frame=[0,1,2,3,4,5,9,10,14,15,19,20,21,22,23,24];
     return frame.every(i=>mask[i]) ? frame : [];
   }
+  if (pattern === 'middleCorners') {
+    return mask[11] && mask[7] && mask[13] && mask[17] ? [7,11,13,17] : [];
+  }
 
   // line-based: highlight all completed lines
   const result = new Set<number>();

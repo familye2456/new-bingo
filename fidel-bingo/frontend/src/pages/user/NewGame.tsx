@@ -45,7 +45,8 @@ const PATTERNS: { label: string; value: string; icon: string }[] = [
   { label: 'Plus',         value: 'plus',        icon: '✚' },
   { label: 'T Shape',      value: 'T',           icon: '⊤' },
   { label: 'L Shape',      value: 'L',           icon: '⌐' },
-  { label: 'Frame',        value: 'frame',       icon: '▣' },
+  { label: 'Frame',        value: 'frame',         icon: '▣' },
+  { label: 'Middle Corners', value: 'middleCorners', icon: '✦' },
 ];
 
 const MIN_CARTELAS = 3;
