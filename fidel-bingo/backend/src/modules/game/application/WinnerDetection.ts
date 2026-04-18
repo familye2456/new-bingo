@@ -13,7 +13,8 @@
  *   T           — top row + middle column
  *   L           — left column + bottom row
  *   frame          — all 16 outer edge cells
- *   middleCorners  — 4 edge midpoints (top, left, right, bottom middle cells)
+ *   middleCorners  — diamond: I3, N2, G3, N4
+ *   roundFree      — 8 cells surrounding the free center space
  */
 export class WinnerDetection {
 
@@ -31,6 +32,8 @@ export class WinnerDetection {
     if (mask[0] && mask[4] && mask[20] && mask[24]) count++;
     // Diamond (middleCorners) counts as a line: I3(11), N2(7), G3(13), N4(17)
     if (mask[7] && mask[11] && mask[13] && mask[17]) count++;
+    // Round Free — 8 cells surrounding center counts as a line
+    if ([6,7,8,11,13,16,17,18].every(i => mask[i])) count++;
     return count;
   }
 
@@ -54,6 +57,8 @@ export class WinnerDetection {
       case 'frame':      return [0,1,2,3,4,5,9,10,14,15,19,20,21,22,23,24].every(i => mask[i]);
       // Middle Corners — diamond around center: I3(11), N2(7), G3(13), N4(17)
       case 'middleCorners': return mask[11] && mask[7] && mask[13] && mask[17];
+      // Round Free — 8 cells surrounding the free center (index 12)
+      case 'roundFree': return [6,7,8,11,13,16,17,18].every(i => mask[i]);
       // legacy aliases
       case 'any':        return this.countLines(mask) >= 1;
       case 'row':        return [0,1,2,3,4].some(r => [0,1,2,3,4].every(c => mask[r*5+c]));
@@ -72,6 +77,7 @@ export class WinnerDetection {
     if (this.checkWin(mask, 'T')) return 'T';
     if (this.checkWin(mask, 'L')) return 'L';
     if (this.checkWin(mask, 'middleCorners')) return 'middleCorners';
+    if (this.checkWin(mask, 'roundFree')) return 'roundFree';
     if (this.checkWin(mask, 'fourCorners')) return 'fourCorners';
     const lines = this.countLines(mask);
     if (lines === 0) return null;

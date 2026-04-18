@@ -47,6 +47,7 @@ const PATTERNS: { label: string; value: string; icon: string }[] = [
   { label: 'L Shape',      value: 'L',           icon: '⌐' },
   { label: 'Frame',        value: 'frame',         icon: '▣' },
   { label: 'Middle Corners', value: 'middleCorners', icon: '✦' },
+  { label: 'Round Free',    value: 'roundFree',     icon: '◎' },
 ];
 
 const MIN_CARTELAS = 3;
