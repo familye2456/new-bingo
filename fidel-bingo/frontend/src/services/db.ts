@@ -90,17 +90,18 @@ export async function getAllQueued(): Promise<SyncItem[]> {
  * Play a sound file. Tries the network first; if offline or fetch fails,
  * falls back to the service worker cache (works for both prepaid and postpaid).
  */
-export async function playCachedSound(path: string): Promise<void> {
+export async function playCachedSound(path: string, volume = 1): Promise<HTMLAudioElement | undefined> {
   // Try direct Audio element first (works when online or SW has it cached)
   try {
     const audio = new Audio(path);
+    audio.volume = volume;
     await audio.play();
-    return;
+    return audio;
   } catch {
     // Might be a network error — try Cache Storage fallback
   }
 
-  if (!('caches' in window)) return;
+  if (!('caches' in window)) return undefined;
   try {
     const cacheNames = await caches.keys();
     for (const name of cacheNames) {
@@ -110,14 +111,16 @@ export async function playCachedSound(path: string): Promise<void> {
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
+        audio.volume = volume;
         audio.onended = () => URL.revokeObjectURL(url);
         await audio.play();
-        return;
+        return audio;
       }
     }
   } catch {
     // Cache Storage not available or sound not cached — silently ignore
   }
+  return undefined;
 }
 
 // ── Voice sound pre-caching ──────────────────────────────────────────────────
@@ -135,6 +138,7 @@ const ROOT_SOUND_FILES = [
   '/sounds/shuffle-audio-TfqyAnvz.mp3',
   '/sounds/start.wav',
   '/sounds/winner.wav',
+  '/sounds/notregisterd.mp3',
   '/sounds/notregisterd.m4a',
 ];
 
@@ -190,4 +194,50 @@ export async function downloadVoiceSounds(
 export async function isVoiceFullyCached(voice: string): Promise<boolean> {
   const { cached, total } = await getVoiceCacheStatus(voice);
   return cached >= total;
+}
+
+// ── Audio queue ──────────────────────────────────────────────────────────────
+
+/**
+ * Serialises sound playback so no two sounds overlap.
+ * Tasks are played one at a time in FIFO order.
+ */
+export class AudioQueue {
+  private queue: Array<() => Promise<void>> = [];
+  playing = false;
+
+  enqueue(task: () => Promise<void>): void {
+    this.queue.push(task);
+    if (!this.playing) {
+      this.drain();
+    }
+  }
+
+  private async drain(): Promise<void> {
+    if (this.queue.length === 0) {
+      this.playing = false;
+      return;
+    }
+    this.playing = true;
+    const task = this.queue.shift()!;
+    try {
+      await task();
+    } catch {
+      // Error in task — continue to next
+    }
+    this.drain();
+  }
+}
+
+/** Singleton queue for all number sound playback */
+export const audioQueue = new AudioQueue();
+
+/**
+ * Enqueue a number sound for sequential playback via the AudioQueue.
+ * Routes through playCachedSound so offline cache is used when available.
+ */
+export function playNumberSoundQueued(number: number, voice: string, volume?: number): void {
+  const ext = getVoiceExt(voice);
+  const path = `/sounds/${encodeURIComponent(voice)}/${number}${ext}`;
+  audioQueue.enqueue(() => playCachedSound(path, volume));
 }

@@ -6,32 +6,28 @@ import { getSocket } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 import { useAuthStore } from '../store/authStore';
 import { useGameSettings, ALL_VOICE_CATEGORIES } from '../store/gameSettingsStore';
-import { playCachedSound } from '../services/db';
+import { playCachedSound, playNumberSoundQueued, downloadVoiceSounds, audioQueue } from '../services/db';
 import { CartelaCard } from '../components/CartelaCard';
 import { NumberBoard } from '../components/NumberBoard';
 
-let _userInteracted = false;
+// ── Audio unlock (Task 3.5) ──────────────────────────────────────────────────
+let _unlocked = false;
 if (typeof window !== 'undefined') {
-  const markInteracted = () => { _userInteracted = true; };
-  window.addEventListener('click', markInteracted, { once: true });
-  window.addEventListener('keydown', markInteracted, { once: true });
-}
-
-function playNumberSound(number: number, category: string) {
-  if (!_userInteracted) return;
-  const ext = category === 'boy sound' ? '.wav' : '.mp3';
-  new Audio(`/sounds/${encodeURIComponent(category)}/${number}${ext}`).play().catch(() => {});
-}
-
-function playSound(name: string, category: string) {
-  if (!_userInteracted) return;
-  const ext = category === 'boy sound' ? '.wav' : '.mp3';
-  const file = name.includes('.') ? name : `${name}${ext}`;
-  new Audio(`/sounds/${encodeURIComponent(category)}/${file}`).play().catch(() => {});
+  const unlock = () => {
+    if (_unlocked) return;
+    _unlocked = true;
+    try {
+      // Satisfy iOS Web Audio API requirement
+      new AudioContext().resume();
+    } catch { /* browser without AudioContext */ }
+  };
+  document.addEventListener('pointerdown', unlock, { capture: true, once: true });
+  document.addEventListener('touchstart', unlock, { capture: true, once: true });
+  document.addEventListener('keydown', unlock, { capture: true, once: true });
 }
 
 function playRootSound(filename: string) {
-  if (!_userInteracted) return;
+  if (!_unlocked) return;
   playCachedSound(`/sounds/${filename}`).catch(() => {});
 }
 
@@ -41,12 +37,14 @@ export const GamePage: React.FC = () => {
   const { user } = useAuthStore();
   const { currentGame, lastCalledNumber, setGame, addCalledNumber, updateCartela } = useGameStore();
 
-  const { voice, autoCallInterval } = useGameSettings();
+  const { voice, autoCallInterval, volume } = useGameSettings();
   const [autoCall, setAutoCall] = useState(false);
   const autoCallRef = useRef(false);
-  const intervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const voiceRef = useRef(voice);
   useEffect(() => { voiceRef.current = voice; }, [voice]);
+  const volumeRef = useRef(volume);
+  useEffect(() => { volumeRef.current = volume; }, [volume]);
   const gameStatusRef = useRef(currentGame?.status);
   useEffect(() => { gameStatusRef.current = currentGame?.status; }, [currentGame?.status]);
 
@@ -65,6 +63,11 @@ export const GamePage: React.FC = () => {
   useEffect(() => {
     if (data) setGame({ ...data, cartelas: cartelasData ?? data.cartelas ?? [] });
   }, [data, cartelasData, setGame]);
+
+  // ── Auto-preload voice pack (Task 3.8) ───────────────────────────────────
+  useEffect(() => {
+    downloadVoiceSounds(voice);
+  }, [voice]);
 
   useEffect(() => {
     if (!gameId) return;
@@ -94,9 +97,11 @@ export const GamePage: React.FC = () => {
     socket.on('number_called', ({ number }: { number: number }) => {
       console.log('[Socket] number_called received:', number, 'voice:', voiceRef.current);
       addCalledNumber(number);
-      playNumberSound(number, voiceRef.current);
+      playNumberSoundQueued(number, voiceRef.current, volumeRef.current);
     });
     socket.on('game_finished', () => {
+      // Task 3.7: play winner sound on game_finished
+      playCachedSound('/sounds/winner.wav', volumeRef.current).catch(() => {});
       setAutoCall(false);
       setTimeout(() => navigate('/dashboard'), 3000);
     });
@@ -111,7 +116,7 @@ export const GamePage: React.FC = () => {
     };
   }, [gameId, setGame, addCalledNumber, navigate]);
 
-  // ── Auto-call logic ──────────────────────────────────────────────────────
+  // ── Auto-call logic (Task 3.9) ───────────────────────────────────────────
   const doCallNumber = useCallback(() => {
     if (!gameId) return;
     const socket = getSocket();
@@ -123,20 +128,47 @@ export const GamePage: React.FC = () => {
   }, [autoCall]);
 
   useEffect(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
     if (!autoCall || currentGame?.status !== 'active') return;
 
-    // Call immediately then on interval
-    doCallNumber();
-    intervalRef.current = setInterval(() => {
-      if (!autoCallRef.current) {
-        clearInterval(intervalRef.current!);
-        return;
-      }
-      doCallNumber();
-    }, autoCallInterval * 1000);
+    // Recursive setTimeout: call immediately, then wait for both the interval
+    // AND the AudioQueue to drain before scheduling the next call.
+    const scheduleNext = () => {
+      if (!autoCallRef.current) return;
 
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+      const intervalMs = autoCallInterval * 1000;
+      const startTime = Date.now();
+
+      const waitAndCall = () => {
+        if (!autoCallRef.current) return;
+        // If queue is still playing, poll until drained
+        if (audioQueue.playing) {
+          timeoutRef.current = setTimeout(waitAndCall, 100);
+          return;
+        }
+        // Ensure minimum interval has elapsed
+        const elapsed = Date.now() - startTime;
+        const remaining = intervalMs - elapsed;
+        if (remaining > 0) {
+          timeoutRef.current = setTimeout(() => {
+            if (!autoCallRef.current) return;
+            doCallNumber();
+            scheduleNext();
+          }, remaining);
+        } else {
+          doCallNumber();
+          scheduleNext();
+        }
+      };
+
+      doCallNumber();
+      // Start waiting after the call
+      timeoutRef.current = setTimeout(waitAndCall, intervalMs);
+    };
+
+    scheduleNext();
+
+    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
   }, [autoCall, autoCallInterval, currentGame?.status, doCallNumber]);
 
   // Stop auto-call when game ends
@@ -174,6 +206,8 @@ export const GamePage: React.FC = () => {
     if (!gameId) return;
     try {
       await gameApi.claimBingo(gameId, cartelaId);
+      // Task 3.7: play winner sound after successful bingo claim
+      playCachedSound('/sounds/winner.wav', volumeRef.current).catch(() => {});
     } catch (err) {
       console.error('Failed to claim bingo', err);
     }

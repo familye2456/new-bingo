@@ -26,15 +26,14 @@ export const ALL_VOICE_CATEGORIES: { value: VoiceCategory; label: string }[] = [
   { value: 'men tigrina',     label: '🎙 Men Tigrina' },
 ];
 
-export function voiceExt(category: VoiceCategory): string {
-  return category === 'boy sound' ? '.wav' : '.mp3';
-}
 
 interface GameSettingsState {
   voice: VoiceCategory;
   autoCallInterval: number;
+  volume: number;
   setVoice: (v: VoiceCategory) => void;
   setAutoCallInterval: (s: number) => void;
+  setVolume: (v: number) => void;
 }
 
 export const useGameSettings = create<GameSettingsState>()(
@@ -42,8 +41,10 @@ export const useGameSettings = create<GameSettingsState>()(
     (set) => ({
       voice: 'boy sound',
       autoCallInterval: 5,
+      volume: 1,
       setVoice: (voice) => set({ voice }),
       setAutoCallInterval: (autoCallInterval) => set({ autoCallInterval }),
+      setVolume: (volume) => set({ volume }),
     }),
     { name: 'game-settings' }
   )

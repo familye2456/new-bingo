@@ -185,7 +185,10 @@ export const PlayBingo: React.FC = () => {
           playRootSound('aac_locked.mp3');
         }
       } else {
-        playRootSound('notregisterd.m4a');
+        // Task 3.10: try .mp3 first, fall back to .m4a for older Android WebViews
+        playCachedSound('/sounds/notregisterd.mp3').catch(() => {
+          playCachedSound('/sounds/notregisterd.m4a').catch(() => {});
+        });
       }
     } catch {
       setCheckResult({ registered: false, isWinner: false, winPattern: null });

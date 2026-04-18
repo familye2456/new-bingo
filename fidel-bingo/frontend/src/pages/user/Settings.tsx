@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { userApi } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
-import { useGameSettings, VoiceCategory, ALL_VOICE_CATEGORIES, voiceExt } from '../../store/gameSettingsStore';
-import { getVoiceCacheStatus, downloadVoiceSounds } from '../../services/db';
+import { useGameSettings, VoiceCategory, ALL_VOICE_CATEGORIES } from '../../store/gameSettingsStore';
+import { getVoiceCacheStatus, downloadVoiceSounds, getVoiceExt } from '../../services/db';
 
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <div>
@@ -247,7 +247,7 @@ export const Settings: React.FC = () => {
             <button
               onClick={() => {
                 const n = Math.floor(Math.random() * 75) + 1;
-                const ext = voiceExt(voice);
+                const ext = getVoiceExt(voice);
                 new Audio(`/sounds/${encodeURIComponent(voice)}/${n}${ext}`).play().catch(() => {});
               }}
               className="w-full py-2.5 rounded-xl text-sm font-medium transition-all"
