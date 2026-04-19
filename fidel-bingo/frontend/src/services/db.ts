@@ -239,5 +239,5 @@ export const audioQueue = new AudioQueue();
 export function playNumberSoundQueued(number: number, voice: string, volume?: number): void {
   const ext = getVoiceExt(voice);
   const path = `/sounds/${encodeURIComponent(voice)}/${number}${ext}`;
-  audioQueue.enqueue(() => playCachedSound(path, volume));
+  audioQueue.enqueue(() => playCachedSound(path, volume).then(() => {}));
 }

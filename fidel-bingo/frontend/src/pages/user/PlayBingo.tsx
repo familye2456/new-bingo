@@ -25,7 +25,7 @@ function playSound(name: string) {
 // Play a root-level sound (not category-specific), works offline via cache
 function playRootSound(filename: string): Promise<void> {
   if (!_userInteracted) return Promise.resolve();
-  return playCachedSound(`/sounds/${filename}`);
+  return playCachedSound(`/sounds/${filename}`).then(() => {});
 }
 
 interface Game {
