@@ -379,6 +379,7 @@ const HouseCutPicker: React.FC<{
   onChange: (v: number | '') => void;
 }> = ({ value, onChange }) => {
   const [open, setOpen] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -391,7 +392,7 @@ const HouseCutPicker: React.FC<{
   }, [open]);
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative flex items-center gap-1">
       {/* Trigger */}
       <button
         onClick={() => setOpen((v) => !v)}
@@ -411,13 +412,37 @@ const HouseCutPicker: React.FC<{
           House
         </span>
         <span className="flex-1 text-center">
-          {value !== '' ? `${value}%` : '—'}
+          {value === '' ? '—' : hidden ? '••%' : `${value}%`}
         </span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}
           className="w-3 h-3 shrink-0 transition-transform duration-200"
           style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', color: value !== '' ? '#fbbf24' : '#4b5563' }}>
           <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
+      </button>
+
+      {/* Eye toggle */}
+      <button
+        onClick={() => setHidden((h) => !h)}
+        className="flex items-center justify-center w-7 h-7 rounded-lg transition-all hover:brightness-125"
+        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#6b7280' }}
+        title={hidden ? 'Show house cut' : 'Hide house cut'}
+      >
+        {hidden ? (
+          /* eye-off */
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+            <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M14.12 14.12A3 3 0 119.88 9.88" strokeLinecap="round" strokeLinejoin="round"/>
+            <line x1="1" y1="1" x2="23" y2="23" strokeLinecap="round"/>
+          </svg>
+        ) : (
+          /* eye */
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" strokeLinecap="round" strokeLinejoin="round"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        )}
       </button>
 
       {/* Dropdown */}
