@@ -379,7 +379,7 @@ const HouseCutPicker: React.FC<{
   onChange: (v: number | '') => void;
 }> = ({ value, onChange }) => {
   const [open, setOpen] = useState(false);
-  const [hidden, setHidden] = useState(false);
+  const [hidden, setHidden] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
