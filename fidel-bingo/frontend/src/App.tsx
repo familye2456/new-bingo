@@ -261,7 +261,7 @@ const AppRoutes: React.FC = () => {
             <Route path="packages" element={<PackageManagement />} />
           </Route>
 
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/play" replace />} />
         </Routes>
       </BrowserRouter>
   );
