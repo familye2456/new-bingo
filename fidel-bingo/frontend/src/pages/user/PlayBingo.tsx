@@ -271,7 +271,10 @@ export const PlayBingo: React.FC = () => {
             <CtrlBtn
               label="🔀"
               purple
-              onClick={() => { playRootSound('shuffle-audio-TfqyAnvz.mp3'); setTimeout(() => window.location.reload(), 5000); }}
+              onClick={() => {
+                playCachedSound('/sounds/shuffle-audio-TfqyAnvz.mp3').catch(() => {});
+                setTimeout(() => window.location.reload(), 5000);
+              }}
             />
           </div>
 
