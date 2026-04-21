@@ -107,6 +107,25 @@ const start = async () => {
       });
       await migDs.initialize();
 
+      // ── Agent role + createdBy column ─────────────────────────────────────
+      // Add 'agent' to the role enum if not already present
+      await migDs.query(`
+        DO $$ BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_enum
+            WHERE enumlabel = 'agent'
+            AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'users_role_enum')
+          ) THEN
+            ALTER TYPE users_role_enum ADD VALUE 'agent';
+          END IF;
+        END $$;
+      `).catch(() => {});
+
+      // Add created_by column to users table
+      await migDs.query(
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS created_by uuid REFERENCES users(id) ON DELETE SET NULL`
+      ).catch(() => {});
+
       // user_cartelas — add each column individually so one failure doesn't block others
       const ucCols = [
         `ALTER TABLE user_cartelas ADD COLUMN IF NOT EXISTS card_number integer`,
