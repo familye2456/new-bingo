@@ -11,7 +11,8 @@ interface UserRecord {
 }
 
 const emptyForm = { username: '', email: '', password: '', paymentType: 'prepaid' as 'prepaid' | 'postpaid', voice: 'boy sound' as VoiceCategory, role: 'player' as 'player' | 'agent' };
-type ModalType = 'create' | 'edit' | 'topup' | 'deduct' | 'cartela' | 'assign-agent' | null;
+const emptyAgentForm = { username: '', email: '', password: '', firstName: '', lastName: '', phone: '' };
+type ModalType = 'create' | 'create-agent' | 'edit' | 'topup' | 'deduct' | 'cartela' | 'assign-agent' | null;
 
 interface CartelaRecord { id: string; cardNumber?: number; isActive: boolean; assignedAt: string; }
 
@@ -57,6 +58,7 @@ export const UserManagement: React.FC = () => {
   const [removeError, setRemoveError] = useState('');
   const [removeSuccess, setRemoveSuccess] = useState('');
   const [form, setForm] = useState(emptyForm);
+  const [agentForm, setAgentForm] = useState(emptyAgentForm);
   const [topUpAmount, setTopUpAmount] = useState('');
   const [deductAmount, setDeductAmount] = useState('');
   const [search, setSearch] = useState('');
@@ -79,13 +81,15 @@ export const UserManagement: React.FC = () => {
   const createMutation = useMutation({
     mutationFn: () => adminApi.createUser({ ...form, role: form.role }),
     onSuccess: (res) => {
-      // Seed default voice for this user so it's applied on first login
       const username = res.data?.data?.username ?? form.username;
-      if (username) {
-        localStorage.setItem(`default_voice_${username}`, form.voice);
-      }
+      if (username) localStorage.setItem(`default_voice_${username}`, form.voice);
       invalidate(); closeModal();
     },
+  });
+
+  const createAgentMutation = useMutation({
+    mutationFn: () => adminApi.createUser({ ...agentForm, role: 'agent', paymentType: 'prepaid' }),
+    onSuccess: () => { invalidate(); closeModal(); },
   });
   const updateMutation = useMutation({
     mutationFn: () => adminApi.updateUser(editUser!.id, { email: form.email, username: form.username, paymentType: form.paymentType }),
@@ -173,7 +177,8 @@ export const UserManagement: React.FC = () => {
   const closeModal = () => {
     setModal(null); setEditUser(null); setTopUpUser(null); setDeductUser(null); setCartelaUser(null);
     setAssignAgentUser(null); setSelectedAgentId('');
-    setForm(emptyForm); setTopUpAmount(''); setDeductAmount(''); setRangeFrom(''); setRangeTo(''); setAssignCartelaError(''); setAssignCartelaSuccess('');
+    setForm(emptyForm); setAgentForm(emptyAgentForm);
+    setTopUpAmount(''); setDeductAmount(''); setRangeFrom(''); setRangeTo(''); setAssignCartelaError(''); setAssignCartelaSuccess('');
     setRemoveFrom(''); setRemoveTo(''); setRemoveError(''); setRemoveSuccess('');
   };
 
@@ -471,18 +476,93 @@ export const UserManagement: React.FC = () => {
         </ModalWrap>
       )}
 
+      {modal === 'create-agent' && isAdmin && (
+        <ModalWrap title="Create New Agent" onClose={closeModal}>
+          <div className="space-y-4">
+            <div className="rounded-xl px-4 py-3 text-sm text-purple-700 mb-1"
+              style={{ background: 'rgba(147,51,234,0.08)', border: '1px solid rgba(147,51,234,0.2)' }}>
+              Agents can create and manage their own users with full admin permissions.
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Username *</label>
+                <input value={agentForm.username} onChange={e => setAgentForm(f => ({ ...f, username: e.target.value }))}
+                  className={inputCls} placeholder="agent_john" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Email *</label>
+                <input type="email" value={agentForm.email} onChange={e => setAgentForm(f => ({ ...f, email: e.target.value }))}
+                  className={inputCls} placeholder="john@example.com" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">First Name</label>
+                <input value={agentForm.firstName} onChange={e => setAgentForm(f => ({ ...f, firstName: e.target.value }))}
+                  className={inputCls} placeholder="John" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Last Name</label>
+                <input value={agentForm.lastName} onChange={e => setAgentForm(f => ({ ...f, lastName: e.target.value }))}
+                  className={inputCls} placeholder="Doe" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Phone</label>
+              <input value={agentForm.phone} onChange={e => setAgentForm(f => ({ ...f, phone: e.target.value }))}
+                className={inputCls} placeholder="+251..." />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Password *</label>
+              <input type="password" value={agentForm.password} onChange={e => setAgentForm(f => ({ ...f, password: e.target.value }))}
+                className={inputCls} placeholder="••••••••" />
+            </div>
+            {createAgentMutation.isError && (
+              <p className="text-xs text-red-500">{(createAgentMutation.error as any)?.response?.data?.error?.message ?? 'Failed to create agent'}</p>
+            )}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => createAgentMutation.mutate()}
+                disabled={createAgentMutation.isPending || !agentForm.username || !agentForm.email || !agentForm.password}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium disabled:opacity-50 transition-colors text-white"
+                style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}
+              >
+                {createAgentMutation.isPending ? 'Creating...' : 'Create Agent'}
+              </button>
+              <button onClick={closeModal} className="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </ModalWrap>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <p className="text-sm text-gray-500">{users.length} total users</p>
-        <button
-          onClick={() => { setModal('create'); setForm(emptyForm); }}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl hover:bg-blue-700 text-sm font-medium transition-colors shadow-sm"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          New User
-        </button>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button
+              onClick={() => { setModal('create-agent'); setAgentForm(emptyAgentForm); }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-sm text-white"
+              style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              New Agent
+            </button>
+          )}
+          <button
+            onClick={() => { setModal('create'); setForm(emptyForm); }}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl hover:bg-blue-700 text-sm font-medium transition-colors shadow-sm"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New User
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
