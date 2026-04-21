@@ -40,7 +40,12 @@ export const UserManagement: React.FC = () => {
   const queryClient = useQueryClient();
   const { user: currentUser } = useAuthStore();
   const isAdmin = currentUser?.role === 'admin';
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    queryClient.invalidateQueries({ queryKey: ['admin-agents'] });
+  };
+
+  const [tab, setTab] = useState<'users' | 'agents'>('users');
 
   const [modal, setModal] = useState<ModalType>(null);
   const [editUser, setEditUser] = useState<UserRecord | null>(null);
@@ -539,7 +544,23 @@ export const UserManagement: React.FC = () => {
 
       {/* Header */}
       <div className="flex items-center justify-between mb-4 sm:mb-6">
-        <p className="text-sm text-gray-500">{users.length} total users</p>
+        {/* Tabs */}
+        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
+          <button
+            onClick={() => setTab('users')}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${tab === 'users' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            Users <span className="ml-1 text-xs text-gray-400">{users.length}</span>
+          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setTab('agents')}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${tab === 'agents' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Agents <span className="ml-1 text-xs text-gray-400">{agents.length}</span>
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           {isAdmin && (
             <button
@@ -565,7 +586,71 @@ export const UserManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Agents tab */}
+      {tab === 'agents' && isAdmin && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          {agents.length === 0 ? (
+            <div className="py-16 text-center text-gray-400 text-sm">No agents yet. Click "New Agent" to create one.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    {['Agent', 'Status', 'Actions'].map(h => (
+                      <th key={h} className="text-left px-6 py-3.5 text-xs font-medium text-gray-400 uppercase tracking-wide">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {(agents as any[]).map((a) => (
+                    <tr key={a.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                            style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}>
+                            {a.username[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="font-medium text-gray-800">{a.username}</div>
+                            <div className="text-xs text-gray-400">{a.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${a.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
+                          {a.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1">
+                          {a.status === 'active' ? (
+                            <button onClick={() => deactivateMutation.mutate(a.id)} title="Deactivate"
+                              className="p-1.5 rounded-lg hover:bg-amber-50 text-gray-400 hover:text-amber-600 transition-colors">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+                            </button>
+                          ) : (
+                            <button onClick={() => activateMutation.mutate(a.id)} title="Activate"
+                              className="p-1.5 rounded-lg hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 transition-colors">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            </button>
+                          )}
+                          <button onClick={() => { if (confirm(`Delete agent ${a.username}?`)) deleteMutation.mutate(a.id); }} title="Delete"
+                            className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Users tab content */}
+      {tab === 'users' && (<>
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4 mb-4 flex flex-wrap gap-2 sm:gap-3 items-center">
         <div className="relative flex-1 min-w-[140px]">
           <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -780,5 +865,6 @@ export const UserManagement: React.FC = () => {
         ))}
       </div>
     </div>
+    </>)}
   );
 };
