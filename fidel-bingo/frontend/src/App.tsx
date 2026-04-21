@@ -190,8 +190,8 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean 
   }
 
   if (!user) return <Navigate to="/login" replace />;
-  if (adminOnly && user.role !== 'admin') return <Navigate to="/admin" replace />;
-  if (!adminOnly && user.role === 'admin') return <Navigate to="/admin" replace />;
+  if (adminOnly && user.role !== 'admin' && user.role !== 'agent') return <Navigate to="/dashboard" replace />;
+  if (!adminOnly && (user.role === 'admin' || user.role === 'agent')) return <Navigate to="/admin" replace />;
   return <>{children}</>;
 };
 

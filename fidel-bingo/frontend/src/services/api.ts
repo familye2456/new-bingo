@@ -73,6 +73,8 @@ export const adminApi = {
   deductBalance: (id: string, amount: number) => api.patch(`/users/${id}/balance/deduct`, { amount }),
   getUserTransactions: (id: string) => api.get(`/users/${id}/transactions`),
   getUserCartelas: (id: string) => api.get(`/users/${id}/cartelas`),
+  listAgents: () => api.get('/users/agents'),
+  assignAgent: (userId: string, agentId: string | null) => api.patch(`/users/${userId}/assign-agent`, { agentId }),
 };
 
 export const cartelaAdminApi = {

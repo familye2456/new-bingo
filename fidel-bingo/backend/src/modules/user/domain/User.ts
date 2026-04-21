@@ -3,7 +3,7 @@ import {
   CreateDateColumn, UpdateDateColumn, DeleteDateColumn
 } from 'typeorm';
 
-export type UserRole = 'player' | 'admin' | 'operator';
+export type UserRole = 'player' | 'admin' | 'operator' | 'agent';
 export type UserStatus = 'active' | 'suspended' | 'self_excluded' | 'banned';
 export type PaymentType = 'prepaid' | 'postpaid';
 
@@ -24,7 +24,7 @@ export class User {
   @Column({ name: 'password_hash' })
   passwordHash!: string;
 
-  @Column({ type: 'enum', enum: ['player', 'admin', 'operator'], default: 'player' })
+  @Column({ type: 'enum', enum: ['player', 'admin', 'operator', 'agent'], default: 'player' })
   role!: UserRole;
 
   @Column({ type: 'enum', enum: ['active', 'suspended', 'self_excluded', 'banned'], default: 'active' })
@@ -78,6 +78,10 @@ export class User {
 
   @Column({ name: 'last_login_ip', nullable: true })
   lastLoginIp?: string;
+
+  /** ID of the admin/agent who created this user (null = created by self-registration or system) */
+  @Column({ name: 'created_by', nullable: true, type: 'uuid' })
+  createdBy?: string;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;

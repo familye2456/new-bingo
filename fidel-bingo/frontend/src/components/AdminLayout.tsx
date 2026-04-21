@@ -125,7 +125,7 @@ export const AdminLayout: React.FC = () => {
             </div>
             <div className="min-w-0">
               <div className="text-white text-xs font-medium truncate">{user?.username}</div>
-              <div className="text-slate-400 text-[10px]">Administrator</div>
+              <div className="text-slate-400 text-[10px]">{user?.role === 'agent' ? 'Agent' : 'Administrator'}</div>
             </div>
           </div>
           <button

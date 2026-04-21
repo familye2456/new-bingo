@@ -10,6 +10,16 @@ import bcrypt from 'bcryptjs';
 const router = Router();
 router.use(authenticate);
 
+// ─── Helper: verify an agent owns the target user ───────────────────────────
+
+function assertAgentOwns(actor: { id: string; role: string }, target: User) {
+  if (actor.role === 'admin') return; // admins can do anything
+  // agents can only touch users they created (or legacy users with no createdBy)
+  if (target.createdBy !== null && target.createdBy !== undefined && target.createdBy !== actor.id) {
+    throw new AppError(403, 'FORBIDDEN', 'You can only manage users you created');
+  }
+}
+
 // ─── Player: own profile ────────────────────────────────────────────────────
 
 router.get('/me', async (req: AuthRequest, res: Response) => {
@@ -35,24 +45,52 @@ router.get('/me/transactions', async (req: AuthRequest, res: Response) => {
   res.json({ success: true, data: txs });
 });
 
-// ─── Admin: user management ─────────────────────────────────────────────────
+// ─── Admin / Agent: user management ─────────────────────────────────────────
 
-// List all regular users
-router.get('/', authorize('admin'), async (_req: AuthRequest, res: Response) => {
+// List all agents (admin only — for the assign-agent dropdown)
+router.get('/agents', authorize('admin'), async (_req: AuthRequest, res: Response) => {
   const users = await AppDataSource.getRepository(User).find({
-    where: { role: 'player' },
+    where: { role: 'agent' },
     order: { createdAt: 'DESC' },
   });
   res.json({ success: true, data: users.map((u) => u.sanitize()) });
 });
 
-// Create a regular user
-router.post('/', authorize('admin'), async (req: AuthRequest, res: Response) => {
+// List users — admins see all players, agents see only their own
+router.get('/', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(User);
-  const { username, email, password, firstName, lastName, phone, paymentType } = req.body;
+  const actor = req.user!;
+
+  let users: User[];
+  if (actor.role === 'admin') {
+    users = await repo.find({ where: { role: 'player' }, order: { createdAt: 'DESC' } });
+  } else {
+    // agent: only players they created
+    users = await repo
+      .createQueryBuilder('u')
+      .where('u.role = :role', { role: 'player' })
+      .andWhere('u.created_by = :id', { id: actor.id })
+      .orderBy('u.created_at', 'DESC')
+      .getMany();
+  }
+  res.json({ success: true, data: users.map((u) => u.sanitize()) });
+});
+
+// Create a user — admins can create players & agents; agents can only create players
+router.post('/', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
+  const repo = AppDataSource.getRepository(User);
+  const actor = req.user!;
+  const { username, email, password, firstName, lastName, phone, paymentType, role: requestedRole } = req.body;
 
   if (!username || !email || !password) {
     throw new AppError(400, 'VALIDATION_ERROR', 'username, email, and password are required');
+  }
+
+  // Determine role to assign
+  let assignRole: 'player' | 'agent' = 'player';
+  if (requestedRole === 'agent') {
+    if (actor.role !== 'admin') throw new AppError(403, 'FORBIDDEN', 'Only admins can create agents');
+    assignRole = 'agent';
   }
 
   const existing = await repo.findOne({ where: [{ email }, { username }] });
@@ -64,26 +102,32 @@ router.post('/', authorize('admin'), async (req: AuthRequest, res: Response) => 
     firstName: firstName || null,
     lastName: lastName || null,
     phone: phone || null,
-    role: 'player', status: 'active', balance: 0,
+    role: assignRole,
+    status: 'active',
+    balance: 0,
     paymentType: paymentType === 'postpaid' ? 'postpaid' : 'prepaid',
+    createdBy: actor.id,
   });
   await repo.save(user);
   res.status(201).json({ success: true, data: user.sanitize() });
 });
 
 // Get a single user
-router.get('/:id', authorize('admin'), async (req: AuthRequest, res: Response) => {
+router.get('/:id', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
   const user = await AppDataSource.getRepository(User).findOne({ where: { id: req.params.id } });
   if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
+  assertAgentOwns(req.user!, user);
   res.json({ success: true, data: user.sanitize() });
 });
 
 // Update a user
-router.patch('/:id', authorize('admin'), async (req: AuthRequest, res: Response) => {
+router.patch('/:id', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(User);
   const user = await repo.findOne({ where: { id: req.params.id } });
   if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
-  if (user.role === 'admin') throw new AppError(403, 'FORBIDDEN', 'Cannot modify another admin');
+  if (user.role === 'admin') throw new AppError(403, 'FORBIDDEN', 'Cannot modify an admin');
+  if (user.role === 'agent' && req.user!.role !== 'admin') throw new AppError(403, 'FORBIDDEN', 'Cannot modify another agent');
+  assertAgentOwns(req.user!, user);
 
   const { firstName, lastName, phone, email, username, paymentType } = req.body;
   const update: Partial<User> = { firstName, lastName, phone, email, username };
@@ -93,12 +137,13 @@ router.patch('/:id', authorize('admin'), async (req: AuthRequest, res: Response)
   res.json({ success: true, data: updated?.sanitize() });
 });
 
-// Top up balance (prepaid users only)
-router.patch('/:id/balance', authorize('admin'), async (req: AuthRequest, res: Response) => {
+// Top up balance
+router.patch('/:id/balance', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(User);
   const user = await repo.findOne({ where: { id: req.params.id } });
   if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
-  if (user.role === 'admin') throw new AppError(403, 'FORBIDDEN', 'Cannot modify another admin');
+  if (user.role === 'admin') throw new AppError(403, 'FORBIDDEN', 'Cannot modify an admin');
+  assertAgentOwns(req.user!, user);
   if (user.paymentType !== 'prepaid') throw new AppError(400, 'NOT_PREPAID', 'Balance top-up is only for prepaid users');
 
   const amount = parseFloat(req.body.amount);
@@ -109,12 +154,13 @@ router.patch('/:id/balance', authorize('admin'), async (req: AuthRequest, res: R
   res.json({ success: true, data: updated?.sanitize() });
 });
 
-// Deduct balance (prepaid users only)
-router.patch('/:id/balance/deduct', authorize('admin'), async (req: AuthRequest, res: Response) => {
+// Deduct balance
+router.patch('/:id/balance/deduct', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(User);
   const user = await repo.findOne({ where: { id: req.params.id } });
   if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
-  if (user.role === 'admin') throw new AppError(403, 'FORBIDDEN', 'Cannot modify another admin');
+  if (user.role === 'admin') throw new AppError(403, 'FORBIDDEN', 'Cannot modify an admin');
+  assertAgentOwns(req.user!, user);
   if (user.paymentType !== 'prepaid') throw new AppError(400, 'NOT_PREPAID', 'Balance deduction is only for prepaid users');
 
   const amount = parseFloat(req.body.amount);
@@ -127,37 +173,61 @@ router.patch('/:id/balance/deduct', authorize('admin'), async (req: AuthRequest,
 });
 
 // Activate a user
-router.patch('/:id/activate', authorize('admin'), async (req: AuthRequest, res: Response) => {
+router.patch('/:id/activate', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(User);
   const user = await repo.findOne({ where: { id: req.params.id } });
   if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
-  if (user.role === 'admin') throw new AppError(403, 'FORBIDDEN', 'Cannot modify another admin');
+  if (user.role === 'admin') throw new AppError(403, 'FORBIDDEN', 'Cannot modify an admin');
+  assertAgentOwns(req.user!, user);
 
   await repo.update(req.params.id, { status: 'active' });
   res.json({ success: true, message: 'User activated' });
 });
 
 // Deactivate (suspend) a user
-router.patch('/:id/deactivate', authorize('admin'), async (req: AuthRequest, res: Response) => {
+router.patch('/:id/deactivate', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(User);
   const user = await repo.findOne({ where: { id: req.params.id } });
   if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
-  if (user.role === 'admin') throw new AppError(403, 'FORBIDDEN', 'Cannot modify another admin');
+  if (user.role === 'admin') throw new AppError(403, 'FORBIDDEN', 'Cannot modify an admin');
+  assertAgentOwns(req.user!, user);
 
   await repo.update(req.params.id, { status: 'suspended' });
   res.json({ success: true, message: 'User deactivated' });
 });
 
-// Delete a user and all related data
-router.delete('/:id', authorize('admin'), async (req: AuthRequest, res: Response) => {
+// Assign a user to an agent (admin only)
+router.patch('/:id/assign-agent', authorize('admin'), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(User);
   const user = await repo.findOne({ where: { id: req.params.id } });
   if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
-  if (user.role === 'admin') throw new AppError(403, 'FORBIDDEN', 'Cannot delete another admin');
+  if (user.role !== 'player') throw new AppError(400, 'INVALID_ROLE', 'Only players can be assigned to an agent');
+
+  const { agentId } = req.body;
+
+  if (agentId === null || agentId === undefined || agentId === '') {
+    // Unassign — remove from any agent
+    await repo.update(req.params.id, { createdBy: undefined });
+  } else {
+    const agent = await repo.findOne({ where: { id: agentId, role: 'agent' } });
+    if (!agent) throw new AppError(404, 'NOT_FOUND', 'Agent not found');
+    await repo.update(req.params.id, { createdBy: agentId });
+  }
+
+  const updated = await repo.findOne({ where: { id: req.params.id } });
+  res.json({ success: true, data: updated?.sanitize() });
+});
+
+// Delete a user and all related data
+router.delete('/:id', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
+  const repo = AppDataSource.getRepository(User);
+  const user = await repo.findOne({ where: { id: req.params.id } });
+  if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
+  if (user.role === 'admin') throw new AppError(403, 'FORBIDDEN', 'Cannot delete an admin');
+  if (user.role === 'agent' && req.user!.role !== 'admin') throw new AppError(403, 'FORBIDDEN', 'Cannot delete another agent');
+  assertAgentOwns(req.user!, user);
 
   const id = req.params.id;
-
-  // Delete in dependency order to satisfy FK constraints
   await AppDataSource.query(`DELETE FROM game_cartelas WHERE user_id = $1`, [id]);
   await AppDataSource.query(`DELETE FROM user_cartelas WHERE user_id = $1`, [id]);
   await AppDataSource.query(`DELETE FROM transactions WHERE user_id = $1`, [id]);
@@ -170,7 +240,12 @@ router.delete('/:id', authorize('admin'), async (req: AuthRequest, res: Response
 });
 
 // Get user's transactions
-router.get('/:id/transactions', authorize('admin'), async (req: AuthRequest, res: Response) => {
+router.get('/:id/transactions', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
+  const repo = AppDataSource.getRepository(User);
+  const user = await repo.findOne({ where: { id: req.params.id } });
+  if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
+  assertAgentOwns(req.user!, user);
+
   const txs = await AppDataSource.getRepository(Transaction).find({
     where: { userId: req.params.id },
     order: { createdAt: 'DESC' },
@@ -180,7 +255,12 @@ router.get('/:id/transactions', authorize('admin'), async (req: AuthRequest, res
 });
 
 // Get user's assigned cartelas
-router.get('/:id/cartelas', authorize('admin'), async (req: AuthRequest, res: Response) => {
+router.get('/:id/cartelas', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
+  const repo = AppDataSource.getRepository(User);
+  const user = await repo.findOne({ where: { id: req.params.id } });
+  if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
+  assertAgentOwns(req.user!, user);
+
   const cartelas = await AppDataSource.getRepository(UserCartela).find({
     where: { userId: req.params.id },
     order: { assignedAt: 'ASC' },

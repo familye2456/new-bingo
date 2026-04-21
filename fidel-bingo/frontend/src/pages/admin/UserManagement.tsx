@@ -3,14 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi, cartelaAdminApi } from '../../services/api';
 import { ALL_VOICE_CATEGORIES, VoiceCategory } from '../../store/gameSettingsStore';
+import { useAuthStore } from '../../store/authStore';
 
 interface UserRecord {
   id: string; username: string; email: string;
   status: string; paymentType: 'prepaid' | 'postpaid'; balance: number;
 }
 
-const emptyForm = { username: '', email: '', password: '', paymentType: 'prepaid' as 'prepaid' | 'postpaid', voice: 'boy sound' as VoiceCategory };
-type ModalType = 'create' | 'edit' | 'topup' | 'deduct' | 'cartela' | null;
+const emptyForm = { username: '', email: '', password: '', paymentType: 'prepaid' as 'prepaid' | 'postpaid', voice: 'boy sound' as VoiceCategory, role: 'player' as 'player' | 'agent' };
+type ModalType = 'create' | 'edit' | 'topup' | 'deduct' | 'cartela' | 'assign-agent' | null;
 
 interface CartelaRecord { id: string; cardNumber?: number; isActive: boolean; assignedAt: string; }
 
@@ -36,6 +37,8 @@ const ModalWrap: React.FC<{ title: string; onClose: () => void; children: React.
 export const UserManagement: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user: currentUser } = useAuthStore();
+  const isAdmin = currentUser?.role === 'admin';
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-users'] });
 
   const [modal, setModal] = useState<ModalType>(null);
@@ -43,6 +46,8 @@ export const UserManagement: React.FC = () => {
   const [topUpUser, setTopUpUser] = useState<UserRecord | null>(null);
   const [deductUser, setDeductUser] = useState<UserRecord | null>(null);
   const [cartelaUser, setCartelaUser] = useState<UserRecord | null>(null);
+  const [assignAgentUser, setAssignAgentUser] = useState<UserRecord | null>(null);
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('');
   const [rangeFrom, setRangeFrom] = useState('');
   const [rangeTo, setRangeTo] = useState('');
   const [assignCartelaError, setAssignCartelaError] = useState('');
@@ -72,7 +77,7 @@ export const UserManagement: React.FC = () => {
   }), [users, search, filterType, filterStatus]);
 
   const createMutation = useMutation({
-    mutationFn: () => adminApi.createUser(form),
+    mutationFn: () => adminApi.createUser({ ...form, role: form.role }),
     onSuccess: (res) => {
       // Seed default voice for this user so it's applied on first login
       const username = res.data?.data?.username ?? form.username;
@@ -154,8 +159,20 @@ export const UserManagement: React.FC = () => {
     },
   });
 
+  const { data: agents = [] } = useQuery<{ id: string; username: string }[]>({
+    queryKey: ['admin-agents'],
+    queryFn: () => adminApi.listAgents().then((r) => r.data.data),
+    enabled: isAdmin,
+  });
+
+  const assignAgentMutation = useMutation({
+    mutationFn: () => adminApi.assignAgent(assignAgentUser!.id, selectedAgentId || null),
+    onSuccess: () => { invalidate(); closeModal(); },
+  });
+
   const closeModal = () => {
     setModal(null); setEditUser(null); setTopUpUser(null); setDeductUser(null); setCartelaUser(null);
+    setAssignAgentUser(null); setSelectedAgentId('');
     setForm(emptyForm); setTopUpAmount(''); setDeductAmount(''); setRangeFrom(''); setRangeTo(''); setAssignCartelaError(''); setAssignCartelaSuccess('');
     setRemoveFrom(''); setRemoveTo(''); setRemoveError(''); setRemoveSuccess('');
   };
@@ -192,6 +209,15 @@ export const UserManagement: React.FC = () => {
                 <option value="postpaid">Postpaid</option>
               </select>
             </div>
+            {modal === 'create' && isAdmin && (
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Role</label>
+                <select name="role" value={form.role} onChange={handleChange} className={inputCls}>
+                  <option value="player">Player</option>
+                  <option value="agent">Agent</option>
+                </select>
+              </div>
+            )}
             {modal === 'create' && (
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">Default Caller Voice</label>
@@ -409,6 +435,42 @@ export const UserManagement: React.FC = () => {
       )}
 
 
+      {modal === 'assign-agent' && assignAgentUser && isAdmin && (
+        <ModalWrap title={`Assign Agent — ${assignAgentUser.username}`} onClose={closeModal}>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500">Select an agent to manage this user, or leave blank to unassign.</p>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Agent</label>
+              <select
+                value={selectedAgentId}
+                onChange={(e) => setSelectedAgentId(e.target.value)}
+                className={inputCls}
+              >
+                <option value="">— No agent (unassign) —</option>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>{a.username}</option>
+                ))}
+              </select>
+            </div>
+            {agents.length === 0 && (
+              <p className="text-xs text-amber-600">No agents found. Create an agent first.</p>
+            )}
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => assignAgentMutation.mutate()}
+                disabled={assignAgentMutation.isPending}
+                className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {assignAgentMutation.isPending ? 'Saving...' : 'Assign'}
+              </button>
+              <button onClick={closeModal} className="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </ModalWrap>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <p className="text-sm text-gray-500">{users.length} total users</p>
@@ -514,6 +576,12 @@ export const UserManagement: React.FC = () => {
                           className="p-1.5 rounded-lg hover:bg-yellow-50 text-gray-400 hover:text-yellow-600 transition-colors">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
                         </button>
+                        {isAdmin && (
+                          <button onClick={() => { setAssignAgentUser(u); setSelectedAgentId(''); setModal('assign-agent'); }} title="Assign to agent"
+                            className="p-1.5 rounded-lg hover:bg-purple-50 text-gray-400 hover:text-purple-600 transition-colors">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                          </button>
+                        )}
                         {u.paymentType === 'prepaid' && (
                           <button onClick={() => { setTopUpUser(u); setModal('topup'); }} title="Add balance"
                             className="p-1.5 rounded-lg hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 transition-colors">
