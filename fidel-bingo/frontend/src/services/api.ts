@@ -62,7 +62,7 @@ export const authApi = {
 export const adminApi = {
   listUsers: () => api.get('/users'),
   getUser: (id: string) => api.get(`/users/${id}`),
-  createUser: (data: { username: string; email: string; password: string; firstName?: string; lastName?: string; phone?: string; role?: string }) =>
+  createUser: (data: { username: string; email: string; password: string; firstName?: string; lastName?: string; phone?: string; role?: string; paymentType?: string }) =>
     api.post('/users', data),
   updateUser: (id: string, data: { firstName?: string; lastName?: string; email?: string; username?: string; phone?: string; paymentType?: string }) =>
     api.patch(`/users/${id}`, data),
