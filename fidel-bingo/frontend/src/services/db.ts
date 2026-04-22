@@ -86,26 +86,30 @@ export async function getAllQueued(): Promise<SyncItem[]> {
 
 // ── Cached audio playback ────────────────────────────────────────────────────
 
+const VOICE_CACHE = 'fidel-voice-sounds-v1';
+
+/** Singleton cache handle — avoids reopening on every sound play */
+let _voiceCache: Cache | null = null;
+async function getVoiceCache(): Promise<Cache | null> {
+  if (_voiceCache) return _voiceCache;
+  if (!('caches' in window)) return null;
+  try {
+    _voiceCache = await caches.open(VOICE_CACHE);
+    return _voiceCache;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Play a sound file. Tries the network first; if offline or fetch fails,
- * falls back to the service worker cache (works for both prepaid and postpaid).
+ * Play a sound file. Checks Cache Storage first to avoid network requests
+ * during gameplay, then falls back to network if not cached.
  */
 export async function playCachedSound(path: string, volume = 1): Promise<HTMLAudioElement | undefined> {
-  // Try direct Audio element first (works when online or SW has it cached)
-  try {
-    const audio = new Audio(path);
-    audio.volume = volume;
-    await audio.play();
-    return audio;
-  } catch {
-    // Might be a network error — try Cache Storage fallback
-  }
-
-  if (!('caches' in window)) return undefined;
-  try {
-    const cacheNames = await caches.keys();
-    for (const name of cacheNames) {
-      const cache = await caches.open(name);
+  // Cache-first: serve from Cache Storage to avoid network hit
+  const cache = await getVoiceCache();
+  if (cache) {
+    try {
       const response = await cache.match(path);
       if (response) {
         const blob = await response.blob();
@@ -116,16 +120,22 @@ export async function playCachedSound(path: string, volume = 1): Promise<HTMLAud
         await audio.play();
         return audio;
       }
-    }
-  } catch {
-    // Cache Storage not available or sound not cached — silently ignore
+    } catch { /* fall through to network */ }
   }
-  return undefined;
+
+  // Network fallback: fetch and play directly
+  try {
+    const audio = new Audio(path);
+    audio.volume = volume;
+    await audio.play();
+    return audio;
+  } catch {
+    return undefined;
+  }
 }
 
 // ── Voice sound pre-caching ──────────────────────────────────────────────────
 
-const VOICE_CACHE = 'fidel-voice-sounds-v1';
 const SOUND_FILES = [
   ...Array.from({ length: 75 }, (_, i) => `${i + 1}`),
 ];
