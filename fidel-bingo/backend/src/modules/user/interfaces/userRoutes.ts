@@ -63,7 +63,11 @@ router.get('/', authorize('admin', 'agent'), async (req: AuthRequest, res: Respo
 
   let users: User[];
   if (actor.role === 'admin') {
-    users = await repo.find({ where: { role: 'player' }, order: { createdAt: 'DESC' } });
+    users = await repo
+      .createQueryBuilder('u')
+      .where('u.role = :role', { role: 'player' })
+      .orderBy('u.created_at', 'DESC')
+      .getMany();
   } else {
     // agent: only players assigned to them (created_by = agent id) or unassigned (created_by IS NULL)
     users = await repo
@@ -73,7 +77,19 @@ router.get('/', authorize('admin', 'agent'), async (req: AuthRequest, res: Respo
       .orderBy('u.created_at', 'DESC')
       .getMany();
   }
-  res.json({ success: true, data: users.map((u) => u.sanitize()) });
+
+  // Attach agent username for each user that has a createdBy
+  const agentIds = [...new Set(users.map(u => u.createdBy).filter(Boolean))] as string[];
+  const agentMap: Record<string, string> = {};
+  if (agentIds.length > 0) {
+    const agents = await repo.findByIds(agentIds);
+    for (const a of agents) agentMap[a.id] = a.username;
+  }
+
+  res.json({
+    success: true,
+    data: users.map((u) => ({ ...u.sanitize(), agentUsername: u.createdBy ? (agentMap[u.createdBy] ?? null) : null })),
+  });
 });
 
 // Create a user — admins can create players & agents; agents can only create players

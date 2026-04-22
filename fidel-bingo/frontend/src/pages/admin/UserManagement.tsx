@@ -8,6 +8,7 @@ import { useAuthStore } from '../../store/authStore';
 interface UserRecord {
   id: string; username: string; email: string;
   status: string; paymentType: 'prepaid' | 'postpaid'; balance: number;
+  agentUsername?: string | null;
 }
 
 const emptyForm = { username: '', email: '', password: '', paymentType: 'prepaid' as 'prepaid' | 'postpaid', voice: 'boy sound' as VoiceCategory, role: 'player' as 'player' | 'agent', agentId: '' };
@@ -706,7 +707,7 @@ export const UserManagement: React.FC = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100">
-                  {['User', 'Type', 'Status', 'Balance', 'Actions'].map((h) => (
+                  {['User', 'Agent', 'Type', 'Status', 'Balance', 'Actions'].map((h) => (
                     <th key={h} className="text-left px-6 py-3.5 text-xs font-medium text-gray-400 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
@@ -727,6 +728,11 @@ export const UserManagement: React.FC = () => {
                           <div className="text-xs text-gray-400">{u.email}</div>
                         </div>
                       </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {u.agentUsername
+                        ? <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-purple-100 text-purple-700">{u.agentUsername}</span>
+                        : <span className="text-xs text-gray-300">—</span>}
                     </td>
                     <td className="px-6 py-4">
                       <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${u.paymentType === 'prepaid' ? 'bg-violet-100 text-violet-700' : 'bg-orange-100 text-orange-700'}`}>
@@ -830,6 +836,9 @@ export const UserManagement: React.FC = () => {
             </div>
             {u.paymentType === 'prepaid' && (
               <div className="text-xs text-gray-500 mb-3">Balance: <span className="font-semibold text-emerald-600">${Number(u.balance).toFixed(2)}</span></div>
+            )}
+            {u.agentUsername && (
+              <div className="text-xs text-gray-500 mb-3">Agent: <span className="font-medium text-purple-600">{u.agentUsername}</span></div>
             )}
             <div className="flex items-center gap-1 flex-wrap">
               <button onClick={() => navigate(`/admin/users/${u.id}`)}
