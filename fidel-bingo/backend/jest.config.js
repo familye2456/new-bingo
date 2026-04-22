@@ -10,6 +10,7 @@ module.exports = {
         emitDecoratorMetadata: true,
         esModuleInterop: true,
         skipLibCheck: true,
+        types: ['jest', 'node'],
       },
     },
   },
