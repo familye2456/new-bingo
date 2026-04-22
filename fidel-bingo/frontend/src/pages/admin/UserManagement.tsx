@@ -10,7 +10,7 @@ interface UserRecord {
   status: string; paymentType: 'prepaid' | 'postpaid'; balance: number;
 }
 
-const emptyForm = { username: '', email: '', password: '', paymentType: 'prepaid' as 'prepaid' | 'postpaid', voice: 'boy sound' as VoiceCategory, role: 'player' as 'player' | 'agent' };
+const emptyForm = { username: '', email: '', password: '', paymentType: 'prepaid' as 'prepaid' | 'postpaid', voice: 'boy sound' as VoiceCategory, role: 'player' as 'player' | 'agent', agentId: '' };
 const emptyAgentForm = { username: '', email: '', password: '', firstName: '', lastName: '', phone: '' };
 type ModalType = 'create' | 'create-agent' | 'edit' | 'topup' | 'deduct' | 'cartela' | 'assign-agent' | null;
 
@@ -84,7 +84,7 @@ export const UserManagement: React.FC = () => {
   }), [users, search, filterType, filterStatus]);
 
   const createMutation = useMutation({
-    mutationFn: () => adminApi.createUser({ ...form, role: form.role }),
+    mutationFn: () => adminApi.createUser({ ...form, role: form.role, ...(isAdmin && form.agentId ? { agentId: form.agentId } : {}) }),
     onSuccess: (res) => {
       const username = res.data?.data?.username ?? form.username;
       if (username) localStorage.setItem(`default_voice_${username}`, form.voice);
@@ -225,6 +225,17 @@ export const UserManagement: React.FC = () => {
                 <select name="role" value={form.role} onChange={handleChange} className={inputCls}>
                   <option value="player">Player</option>
                   <option value="agent">Agent</option>
+                </select>
+              </div>
+            )}
+            {modal === 'create' && isAdmin && form.role === 'player' && agents.length > 0 && (
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Assign to Agent (optional)</label>
+                <select name="agentId" value={form.agentId} onChange={handleChange} className={inputCls}>
+                  <option value="">— No agent —</option>
+                  {agents.map((a) => (
+                    <option key={a.id} value={a.id}>{a.username}</option>
+                  ))}
                 </select>
               </div>
             )}

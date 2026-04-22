@@ -59,9 +59,20 @@ router.get('/agents', authorize('admin'), async (_req: AuthRequest, res: Respons
 // List users — admins see all players, agents see only their own
 router.get('/', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(User);
+  const actor = req.user!;
 
-  // Both admin and agent see all players
-  const users = await repo.find({ where: { role: 'player' }, order: { createdAt: 'DESC' } });
+  let users: User[];
+  if (actor.role === 'admin') {
+    users = await repo.find({ where: { role: 'player' }, order: { createdAt: 'DESC' } });
+  } else {
+    // agent: only players assigned to them (created_by = agent id) or unassigned (created_by IS NULL)
+    users = await repo
+      .createQueryBuilder('u')
+      .where('u.role = :role', { role: 'player' })
+      .andWhere('(u.created_by = :id OR u.created_by IS NULL)', { id: actor.id })
+      .orderBy('u.created_at', 'DESC')
+      .getMany();
+  }
   res.json({ success: true, data: users.map((u) => u.sanitize()) });
 });
 
@@ -69,7 +80,7 @@ router.get('/', authorize('admin', 'agent'), async (req: AuthRequest, res: Respo
 router.post('/', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(User);
   const actor = req.user!;
-  const { username, email, password, firstName, lastName, phone, paymentType, role: requestedRole } = req.body;
+  const { username, email, password, firstName, lastName, phone, paymentType, role: requestedRole, agentId } = req.body;
 
   if (!username || !email || !password) {
     throw new AppError(400, 'VALIDATION_ERROR', 'username, email, and password are required');
@@ -88,6 +99,14 @@ router.post('/', authorize('admin', 'agent'), async (req: AuthRequest, res: Resp
   const actorUser = await repo.findOne({ where: { id: actor.id } });
   if (!actorUser) throw new AppError(401, 'UNAUTHORIZED', 'Actor not found');
 
+  // Admin can assign a new player directly to an agent via agentId
+  let createdBy = actor.id;
+  if (agentId && actor.role === 'admin' && assignRole === 'player') {
+    const agent = await repo.findOne({ where: { id: agentId, role: 'agent' } });
+    if (!agent) throw new AppError(404, 'NOT_FOUND', 'Agent not found');
+    createdBy = agentId;
+  }
+
   const passwordHash = await bcrypt.hash(String(password), 12);
   const user = repo.create({
     username, email, passwordHash,
@@ -98,7 +117,7 @@ router.post('/', authorize('admin', 'agent'), async (req: AuthRequest, res: Resp
     status: 'active',
     balance: 0,
     paymentType: paymentType === 'postpaid' ? 'postpaid' : 'prepaid',
-    createdBy: actor.id,
+    createdBy,
   });
   await repo.save(user);
   res.status(201).json({ success: true, data: user.sanitize() });
