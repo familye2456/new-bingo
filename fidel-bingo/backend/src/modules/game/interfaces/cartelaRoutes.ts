@@ -85,9 +85,17 @@ router.patch('/mine/:id', async (req: AuthRequest, res: Response) => {
   res.json({ success: true, data: uc });
 });
 
-// ─── Admin only below ────────────────────────────────────────────────────────
+// ─── Admin / Agent below ─────────────────────────────────────────────────────
 
-router.use(authorize('admin'));
+router.use(authorize('admin', 'agent'));
+
+/** Verify agent owns the target user (admins bypass) */
+async function assertAgentOwnsUser(actor: { id: string; role: string }, userId: string): Promise<void> {
+  if (actor.role === 'admin') return;
+  const user = await AppDataSource.getRepository(User).findOne({ where: { id: userId } });
+  if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'User not found');
+  if (user.createdBy !== actor.id) throw new AppError(403, 'FORBIDDEN', 'You can only manage cartelas for your own users');
+}
 
 // ── Admin cartelas pool (shared template library) ────────────────────────────
 
@@ -136,6 +144,7 @@ router.patch('/pool/:id', async (req: AuthRequest, res: Response) => {
 
 // List cartelas assigned to a user
 router.get('/user/:userId', async (req: AuthRequest, res: Response) => {
+  await assertAgentOwnsUser(req.user!, req.params.userId);
   const ucRepo = AppDataSource.getRepository(UserCartela);
   const cartelas = await ucRepo.find({
     where: { userId: req.params.userId },
@@ -148,6 +157,8 @@ router.get('/user/:userId', async (req: AuthRequest, res: Response) => {
 router.post('/assign', async (req: AuthRequest, res: Response) => {
   const { userId, cardNumber } = req.body as { userId: string; cardNumber: number };
   if (!userId || !cardNumber) throw new AppError(400, 'MISSING_FIELDS', 'userId and cardNumber are required');
+
+  await assertAgentOwnsUser(req.user!, userId);
 
   const cartelaRepo = AppDataSource.getRepository(Cartela);
   const ucRepo = AppDataSource.getRepository(UserCartela);
@@ -185,6 +196,8 @@ router.post('/assign-range', async (req: AuthRequest, res: Response) => {
     throw new AppError(400, 'INVALID_CARD_RANGE', 'fromCard and toCard required, fromCard <= toCard');
   if (!userId)
     throw new AppError(400, 'MISSING_USER', 'userId is required');
+
+  await assertAgentOwnsUser(req.user!, userId);
 
   const user = await AppDataSource.getRepository(User).findOne({ where: { id: userId } });
   if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'User not found');
@@ -235,6 +248,8 @@ router.post('/unassign-range', async (req: AuthRequest, res: Response) => {
     throw new AppError(400, 'INVALID_CARD_RANGE', 'fromCard and toCard required, fromCard <= toCard');
   if (!userId)
     throw new AppError(400, 'MISSING_USER', 'userId is required');
+
+  await assertAgentOwnsUser(req.user!, userId);
 
   const ucRepo = AppDataSource.getRepository(UserCartela);
 
@@ -291,6 +306,8 @@ router.post('/user/:userId/add', async (req: AuthRequest, res: Response) => {
   if (!Array.isArray(numbers) || numbers.length !== 25)
     throw new AppError(400, 'INVALID_NUMBERS', 'numbers must be an array of 25 integers');
 
+  await assertAgentOwnsUser(req.user!, req.params.userId);
+
   const user = await AppDataSource.getRepository(User).findOne({ where: { id: req.params.userId } });
   if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'User not found');
 
@@ -317,6 +334,7 @@ router.post('/user/:userId/add', async (req: AuthRequest, res: Response) => {
 
 // Clear ALL cartelas for a user (must be before /:id to avoid route conflict)
 router.delete('/user/:userId/all', async (req: AuthRequest, res: Response) => {
+  await assertAgentOwnsUser(req.user!, req.params.userId);
   const ucRepo = AppDataSource.getRepository(UserCartela);
   const cartelas = await ucRepo.find({ where: { userId: req.params.userId } });
   if (cartelas.length > 0) await ucRepo.remove(cartelas);
@@ -325,6 +343,7 @@ router.delete('/user/:userId/all', async (req: AuthRequest, res: Response) => {
 
 // Remove a specific user cartela by its user_cartela id
 router.delete('/user/:userId/:id', async (req: AuthRequest, res: Response) => {
+  await assertAgentOwnsUser(req.user!, req.params.userId);
   const ucRepo = AppDataSource.getRepository(UserCartela);
   const uc = await ucRepo.findOne({ where: { id: req.params.id, userId: req.params.userId } });
   if (!uc) throw new AppError(404, 'NOT_FOUND', 'Cartela not found for this user');
