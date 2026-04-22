@@ -13,9 +13,8 @@ router.use(authenticate);
 // ─── Helper: verify an agent owns the target user ───────────────────────────
 
 function assertAgentOwns(actor: { id: string; role: string }, target: User) {
-  if (actor.role === 'admin') return; // admins can do anything
-  // agents can only touch users they created (or legacy users with no createdBy)
-  if (target.createdBy !== null && target.createdBy !== undefined && target.createdBy !== actor.id) {
+  if (actor.role === 'admin') return;
+  if (target.createdBy !== actor.id) {
     throw new AppError(403, 'FORBIDDEN', 'You can only manage users you created');
   }
 }
@@ -69,11 +68,11 @@ router.get('/', authorize('admin', 'agent'), async (req: AuthRequest, res: Respo
       .orderBy('u.created_at', 'DESC')
       .getMany();
   } else {
-    // agent: only players assigned to them (created_by = agent id) or unassigned (created_by IS NULL)
+    // agent: only players explicitly assigned to them
     users = await repo
       .createQueryBuilder('u')
       .where('u.role = :role', { role: 'player' })
-      .andWhere('(u.created_by = :id OR u.created_by IS NULL)', { id: actor.id })
+      .andWhere('u.created_by = :id', { id: actor.id })
       .orderBy('u.created_at', 'DESC')
       .getMany();
   }
