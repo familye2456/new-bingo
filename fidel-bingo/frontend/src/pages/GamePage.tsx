@@ -64,10 +64,12 @@ export const GamePage: React.FC = () => {
     if (data) setGame({ ...data, cartelas: cartelasData ?? data.cartelas ?? [] });
   }, [data, cartelasData, setGame]);
 
-  // ── Auto-preload voice pack (Task 3.8) ───────────────────────────────────
+  const isPostpaid = user?.paymentType === 'postpaid';
+
+  // ── Auto-preload voice pack — only for prepaid users (postpaid use public folder directly) ──
   useEffect(() => {
-    downloadVoiceSounds(voice);
-  }, [voice]);
+    if (!isPostpaid) downloadVoiceSounds(voice);
+  }, [voice, isPostpaid]);
 
   useEffect(() => {
     if (!gameId) return;
@@ -97,11 +99,11 @@ export const GamePage: React.FC = () => {
     socket.on('number_called', ({ number }: { number: number }) => {
       console.log('[Socket] number_called received:', number, 'voice:', voiceRef.current);
       addCalledNumber(number);
-      playNumberSoundQueued(number, voiceRef.current, volumeRef.current);
+      playNumberSoundQueued(number, voiceRef.current, volumeRef.current, isPostpaid);
     });
     socket.on('game_finished', () => {
       // Task 3.7: play winner sound on game_finished
-      playCachedSound('/sounds/winner.wav', volumeRef.current).catch(() => {});
+      playCachedSound('/sounds/winner.wav', volumeRef.current, isPostpaid).catch(() => {});
       setAutoCall(false);
       setTimeout(() => navigate('/dashboard'), 3000);
     });
@@ -207,7 +209,7 @@ export const GamePage: React.FC = () => {
     try {
       await gameApi.claimBingo(gameId, cartelaId);
       // Task 3.7: play winner sound after successful bingo claim
-      playCachedSound('/sounds/winner.wav', volumeRef.current).catch(() => {});
+      playCachedSound('/sounds/winner.wav', volumeRef.current, isPostpaid).catch(() => {});
     } catch (err) {
       console.error('Failed to claim bingo', err);
     }

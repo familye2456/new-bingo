@@ -19,13 +19,15 @@ function playSound(name: string) {
   const category = useGameSettings.getState().voice;
   const ext = category === 'boy sound' ? '.wav' : '.mp3';
   const file = name.includes('.') ? name : `${name}${ext}`;
-  playCachedSound(`/sounds/${encodeURIComponent(category)}/${file}`).catch(() => {});
+  const bypassCache = useAuthStore.getState().user?.paymentType === 'postpaid';
+  playCachedSound(`/sounds/${encodeURIComponent(category)}/${file}`, 1, bypassCache).catch(() => {});
 }
 
 // Play a root-level sound (not category-specific), works offline via cache
 function playRootSound(filename: string): Promise<void> {
   if (!_userInteracted) return Promise.resolve();
-  return playCachedSound(`/sounds/${filename}`).then(() => {});
+  const bypassCache = useAuthStore.getState().user?.paymentType === 'postpaid';
+  return playCachedSound(`/sounds/${filename}`, 1, bypassCache).then(() => {});
 }
 
 interface Game {
