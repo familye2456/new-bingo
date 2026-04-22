@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from './store/authStore';
@@ -30,20 +30,24 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err
 
 // User layout + pages
 import { UserLayout } from './components/UserLayout';
-import { UserDashboard } from './pages/user/UserDashboard';
-import { PlayBingo } from './pages/user/PlayBingo';
-import { MyCartelas } from './pages/user/MyCartelas';
-import { BalanceHistory } from './pages/user/BalanceHistory';
-import { Settings } from './pages/user/Settings';
-import { NewGame } from './pages/user/NewGame';
+const UserDashboard   = lazy(() => import('./pages/user/UserDashboard').then(m => ({ default: m.UserDashboard })));
+const PlayBingo       = lazy(() => import('./pages/user/PlayBingo').then(m => ({ default: m.PlayBingo })));
+const MyCartelas      = lazy(() => import('./pages/user/MyCartelas').then(m => ({ default: m.MyCartelas })));
+const BalanceHistory  = lazy(() => import('./pages/user/BalanceHistory').then(m => ({ default: m.BalanceHistory })));
+const Settings        = lazy(() => import('./pages/user/Settings').then(m => ({ default: m.Settings })));
+const NewGame         = lazy(() => import('./pages/user/NewGame').then(m => ({ default: m.NewGame })));
 
 // Admin layout + pages
 import { AdminLayout } from './components/AdminLayout';
-import { AdminOverview } from './pages/admin/AdminOverview';
-import { UserManagement } from './pages/admin/UserManagement';
-import { UserDetail } from './pages/admin/UserDetail';
-import { CartelaManagement } from './pages/admin/CartelaManagement';
-import { PackageManagement } from './pages/admin/PackageManagement';
+const AdminOverview      = lazy(() => import('./pages/admin/AdminOverview').then(m => ({ default: m.AdminOverview })));
+const UserManagement     = lazy(() => import('./pages/admin/UserManagement').then(m => ({ default: m.UserManagement })));
+const UserDetail         = lazy(() => import('./pages/admin/UserDetail').then(m => ({ default: m.UserDetail })));
+const CartelaManagement  = lazy(() => import('./pages/admin/CartelaManagement').then(m => ({ default: m.CartelaManagement })));
+const PackageManagement  = lazy(() => import('./pages/admin/PackageManagement').then(m => ({ default: m.PackageManagement })));
+
+const PageFallback = () => (
+  <div className="flex items-center justify-center h-40 text-gray-400 text-sm">Loading…</div>
+);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -238,7 +242,8 @@ const AppRoutes: React.FC = () => {
 
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <Routes>
+      <Suspense fallback={<PageFallback />}>
+        <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/game/:gameId" element={<ProtectedRoute><GamePage /></ProtectedRoute>} />
 
@@ -263,7 +268,8 @@ const AppRoutes: React.FC = () => {
 
           <Route path="*" element={<Navigate to="/play" replace />} />
         </Routes>
-      </BrowserRouter>
+      </Suspense>
+    </BrowserRouter>
   );
 };
 

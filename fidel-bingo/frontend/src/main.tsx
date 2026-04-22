@@ -72,13 +72,17 @@ if (!('serviceWorker' in navigator)) {
         return;
       }
 
-      // Wait for the installing SW to reach 'activated' state
+      // Wait for the installing SW to reach 'activated' state (max 3s)
       const target = registration.installing ?? registration.waiting;
       if (target) {
+        let rendered = false;
+        const render = () => { if (!rendered) { rendered = true; renderApp(); } };
+        const timeout = setTimeout(render, 3000);
         target.addEventListener('statechange', function handler() {
           if (this.state === 'activated') {
+            clearTimeout(timeout);
             target.removeEventListener('statechange', handler);
-            renderApp();
+            render();
           }
         });
       } else {
