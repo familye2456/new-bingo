@@ -189,7 +189,7 @@ export const UserManagement: React.FC = () => {
 
   const openEdit = (u: UserRecord) => {
     setEditUser(u);
-    setForm({ username: u.username, email: u.email, password: '', paymentType: u.paymentType, voice: 'boy sound', role: 'player' });
+    setForm({ username: u.username, email: u.email, password: '', paymentType: u.paymentType, voice: 'boy sound', role: 'player', agentId: '' });
     setModal('edit');
   };
 
