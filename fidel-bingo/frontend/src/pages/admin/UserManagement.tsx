@@ -600,23 +600,23 @@ export const UserManagement: React.FC = () => {
           {isAdmin && (
             <button
               onClick={() => { setModal('create-agent'); setAgentForm(emptyAgentForm); }}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-sm text-white"
+              className="flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-sm text-white"
               style={{ background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
-              New Agent
+              <span className="hidden sm:inline">New Agent</span>
             </button>
           )}
           <button
             onClick={() => { setModal('create'); setForm(emptyForm); }}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl hover:bg-blue-700 text-sm font-medium transition-colors shadow-sm"
+            className="flex items-center gap-2 bg-blue-600 text-white px-3 sm:px-4 py-2.5 rounded-xl hover:bg-blue-700 text-sm font-medium transition-colors shadow-sm"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            New User
+            <span className="hidden sm:inline">New User</span>
           </button>
         </div>
       </div>

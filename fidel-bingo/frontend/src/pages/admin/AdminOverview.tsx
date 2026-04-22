@@ -113,27 +113,43 @@ export const AdminOverview: React.FC = () => {
           ) : todayRows.length === 0 ? (
             <div className="py-12 text-center text-gray-400 text-sm">No games today.</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-50">
-                    {['Username', 'Games Today', 'Total Bet Today', 'Total Profit Today'].map((h) => (
-                      <th key={h} className="text-left px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {todayRows.map((row) => (
-                    <tr key={row.uid} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-6 py-3.5 font-medium text-gray-800">{row.username}</td>
-                      <td className="px-6 py-3.5 text-gray-700">{row.games}</td>
-                      <td className="px-6 py-3.5 text-blue-600 font-medium">{row.totalBet.toFixed(2)}</td>
-                      <td className="px-6 py-3.5 text-emerald-600 font-medium">{row.totalProfit.toFixed(2)}</td>
+            <>
+              {/* Desktop table */}
+              <div className="overflow-x-auto hidden sm:block">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-50">
+                      {['Username', 'Games Today', 'Total Bet Today', 'Total Profit Today'].map((h) => (
+                        <th key={h} className="text-left px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide">{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {todayRows.map((row) => (
+                      <tr key={row.uid} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-6 py-3.5 font-medium text-gray-800">{row.username}</td>
+                        <td className="px-6 py-3.5 text-gray-700">{row.games}</td>
+                        <td className="px-6 py-3.5 text-blue-600 font-medium">{row.totalBet.toFixed(2)}</td>
+                        <td className="px-6 py-3.5 text-emerald-600 font-medium">{row.totalProfit.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {/* Mobile cards */}
+              <div className="sm:hidden divide-y divide-gray-50">
+                {todayRows.map((row) => (
+                  <div key={row.uid} className="px-4 py-3 flex items-center justify-between gap-3">
+                    <div className="font-medium text-gray-800 truncate">{row.username}</div>
+                    <div className="flex items-center gap-3 shrink-0 text-xs">
+                      <span className="text-gray-500">{row.games}g</span>
+                      <span className="text-blue-600 font-medium">{row.totalBet.toFixed(0)} bet</span>
+                      <span className="text-emerald-600 font-medium">{row.totalProfit.toFixed(0)} profit</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
 
