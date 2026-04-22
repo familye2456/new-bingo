@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { adminApi, gameApi } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 
-interface UserRecord { id: string; status: string; paymentType: string; balance: number; createdAt: string; }
-interface Game { id: string; status: string; betAmount: number; cartelaCount: number; prizePool: number; createdAt: string; gameNumber?: number; }
+interface UserRecord { id: string; username: string; status: string; paymentType: string; balance: number; createdAt: string; }
+interface Game { id: string; status: string; betAmount: number; cartelaCount: number; prizePool: number; houseCut: number; totalBets: number; createdAt: string; gameNumber?: number; creatorId: string; }
 
 const StatCard: React.FC<{
   label: string; value: string | number; sub?: string;
@@ -24,13 +24,6 @@ const StatCard: React.FC<{
     {sub && <div className="text-xs text-white/60 mt-1">{sub}</div>}
   </button>
 );
-
-const STATUS_STYLES: Record<string, string> = {
-  active:   'bg-emerald-100 text-emerald-700',
-  pending:  'bg-amber-100 text-amber-700',
-  finished: 'bg-blue-100 text-blue-700',
-  cancelled:'bg-gray-100 text-gray-500',
-};
 
 export const AdminOverview: React.FC = () => {
   const navigate = useNavigate();
@@ -52,13 +45,26 @@ export const AdminOverview: React.FC = () => {
   const activeGames   = games.filter((g) => g.status === 'active').length;
   const totalPrizePool = games.reduce((s, g) => s + Number(g.prizePool), 0);
 
-  const recentGames = [...games]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 8);
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
 
-  const recentUsers = [...users]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 5);
+  const userMap = Object.fromEntries(users.map((u) => [u.id, u.username]));
+
+  // Aggregate today's finished games per creator
+  const todayStats = games
+    .filter((g) => new Date(g.createdAt) >= todayStart)
+    .reduce<Record<string, { games: number; totalBet: number; totalProfit: number }>>((acc, g) => {
+      const uid = g.creatorId;
+      if (!acc[uid]) acc[uid] = { games: 0, totalBet: 0, totalProfit: 0 };
+      acc[uid].games += 1;
+      acc[uid].totalBet += Number(g.totalBets);
+      acc[uid].totalProfit += Number(g.houseCut);
+      return acc;
+    }, {});
+
+  const todayRows = Object.entries(todayStats)
+    .map(([uid, s]) => ({ uid, username: userMap[uid] ?? uid.slice(0, 8), ...s }))
+    .sort((a, b) => b.totalProfit - a.totalProfit);
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
@@ -97,41 +103,32 @@ export const AdminOverview: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6">
-        {/* Recent Games */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-            <h2 className="font-semibold text-gray-800">Recent Games</h2>
-            <span className="text-xs text-gray-400">{games.length} total</span>
+            <h2 className="font-semibold text-gray-800">Today's Summary</h2>
+            <span className="text-xs text-gray-400">{new Date().toLocaleDateString()}</span>
           </div>
-          {loadingGames ? (
+          {loadingGames || loadingUsers ? (
             <div className="py-12 text-center text-gray-400 text-sm">Loading...</div>
-          ) : recentGames.length === 0 ? (
-            <div className="py-12 text-center text-gray-400 text-sm">No games yet.</div>
+          ) : todayRows.length === 0 ? (
+            <div className="py-12 text-center text-gray-400 text-sm">No games today.</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-50">
-                    {['Game', 'Status', 'Bet', 'Cartelas', 'Prize Pool', 'Date'].map((h) => (
+                    {['Username', 'Games Today', 'Total Bet Today', 'Total Profit Today'].map((h) => (
                       <th key={h} className="text-left px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {recentGames.map((g) => (
-                    <tr key={g.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-6 py-3.5 font-mono text-xs text-gray-500">
-                        #{g.gameNumber ?? g.id.slice(0, 8)}
-                      </td>
-                      <td className="px-6 py-3.5">
-                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_STYLES[g.status] ?? 'bg-gray-100 text-gray-500'}`}>
-                          {g.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-3.5 text-gray-700">${Number(g.betAmount).toFixed(2)}</td>
-                      <td className="px-6 py-3.5 text-gray-700">{g.cartelaCount}</td>
-                      <td className="px-6 py-3.5 font-medium text-emerald-600">${Number(g.prizePool).toFixed(2)}</td>
-                      <td className="px-6 py-3.5 text-gray-400 text-xs">{new Date(g.createdAt).toLocaleDateString()}</td>
+                  {todayRows.map((row) => (
+                    <tr key={row.uid} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-3.5 font-medium text-gray-800">{row.username}</td>
+                      <td className="px-6 py-3.5 text-gray-700">{row.games}</td>
+                      <td className="px-6 py-3.5 text-blue-600 font-medium">{row.totalBet.toFixed(2)}</td>
+                      <td className="px-6 py-3.5 text-emerald-600 font-medium">{row.totalProfit.toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>
