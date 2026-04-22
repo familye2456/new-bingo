@@ -69,7 +69,7 @@ router.get('/', authorize('admin', 'agent'), async (req: AuthRequest, res: Respo
     users = await repo
       .createQueryBuilder('u')
       .where('u.role = :role', { role: 'player' })
-      .andWhere('u.created_by = :id', { id: actor.id })
+      .andWhere('(u.created_by = :id OR u.created_by IS NULL)', { id: actor.id })
       .orderBy('u.created_at', 'DESC')
       .getMany();
   }
@@ -95,6 +95,9 @@ router.post('/', authorize('admin', 'agent'), async (req: AuthRequest, res: Resp
 
   const existing = await repo.findOne({ where: [{ email }, { username }] });
   if (existing) throw new AppError(409, 'USER_EXISTS', 'Email or username already taken');
+
+  const actorUser = await repo.findOne({ where: { id: actor.id } });
+  if (!actorUser) throw new AppError(401, 'UNAUTHORIZED', 'Actor not found');
 
   const passwordHash = await bcrypt.hash(String(password), 12);
   const user = repo.create({

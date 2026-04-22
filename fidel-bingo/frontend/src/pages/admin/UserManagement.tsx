@@ -251,8 +251,13 @@ export const UserManagement: React.FC = () => {
             {modal === 'create' && (
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">Password</label>
-                <input name="password" type="password" value={form.password} onChange={handleChange} className={inputCls} placeholder="••••••••" />
+                <input name="password" type="password" autoComplete="new-password" value={form.password} onChange={handleChange} className={inputCls} placeholder="••••••••" />
               </div>
+            )}
+            {modal === 'create' && createMutation.isError && (
+              <p className="text-xs text-red-500">
+                {(createMutation.error as any)?.response?.data?.error?.message ?? 'Failed to create user'}
+              </p>
             )}
             <div className="flex gap-3 pt-2">
               <button
