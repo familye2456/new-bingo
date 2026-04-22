@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This document specifies requirements for adding an "agent" role to the fidel-bingo system. The agent role enables hierarchical user management where agents can create and manage their own users with full administrative permissions, but cannot access users created by other agents or admins. This provides a multi-tenant-like capability within the existing admin interface.
+This document specifies requirements for adding an "agent" role to the fidel-bingo system. The agent role enables hierarchical user management where agents can create and manage their own players, but cannot access users created by other agents or admins. Agents are strictly restricted from viewing, modifying, deleting, or performing any operation on users with role='admin' or role='agent'. Admin users are completely invisible and inaccessible to agents. This provides a multi-tenant-like capability within the existing admin interface.
 
 ## Glossary
 
@@ -51,14 +51,16 @@ This document specifies requirements for adding an "agent" role to the fidel-bin
 
 ### Requirement 4: User List Filtering
 
-**User Story:** As an agent, I want to see only users I created, so that I cannot interfere with other agents' users.
+**User Story:** As an agent, I want to see only the players I created, so that I cannot interfere with other agents' users or access admin accounts.
 
 #### Acceptance Criteria
 
-1. WHEN an agent requests the user list, THE System SHALL return only users where Created_By_Field equals the agent's user ID
-2. WHEN an agent requests the user list, THE System SHALL include users where Created_By_Field is null
-3. WHEN an admin requests the user list, THE System SHALL return all users regardless of Created_By_Field value
-4. THE System SHALL filter users at the database query level, not in application code
+1. WHEN an agent requests the user list, THE System SHALL return only users where Created_By_Field equals the agent's user ID and role is 'player'
+2. WHEN an agent requests the user list, THE System SHALL include users where Created_By_Field is null and role is 'player'
+3. WHEN an agent requests the user list, THE System SHALL exclude all users with role='admin' from the results
+4. WHEN an agent requests the user list, THE System SHALL exclude all users with role='agent' from the results
+5. WHEN an admin requests the user list, THE System SHALL return all users regardless of Created_By_Field value
+6. THE System SHALL filter users at the database query level, not in application code
 
 ### Requirement 5: User Creation by Agents
 
@@ -78,12 +80,12 @@ This document specifies requirements for adding an "agent" role to the fidel-bin
 
 #### Acceptance Criteria
 
-1. WHEN an agent attempts to modify a user, THE System SHALL verify the user's Created_By_Field equals the agent's user ID
-2. IF a user's Created_By_Field does not match the agent's user ID AND is not null, THEN THE System SHALL reject the modification with a 403 Forbidden error
-3. THE System SHALL allow agents to modify users where Created_By_Field is null
-4. THE System SHALL prevent agents from modifying users with role='admin'
-5. THE System SHALL prevent agents from modifying users with role='agent'
-6. THE System SHALL prevent agents from modifying users with role='operator'
+1. WHEN an agent attempts to modify a user, THE System SHALL verify the target user's role is 'player'
+2. IF the target user has role='admin', THEN THE System SHALL reject the modification with a 403 Forbidden error
+3. IF the target user has role='agent', THEN THE System SHALL reject the modification with a 403 Forbidden error
+4. IF the target user has role='operator', THEN THE System SHALL reject the modification with a 403 Forbidden error
+5. WHEN an agent attempts to modify a player, THE System SHALL verify the user's Created_By_Field equals the agent's user ID or is null
+6. IF the Created_By_Field does not match the agent's user ID AND is not null, THEN THE System SHALL reject the modification with a 403 Forbidden error
 
 ### Requirement 7: Balance Management by Agents
 
@@ -91,10 +93,12 @@ This document specifies requirements for adding an "agent" role to the fidel-bin
 
 #### Acceptance Criteria
 
-1. WHEN an agent adds balance to a user, THE System SHALL verify the user's Created_By_Field equals the agent's user ID or is null
-2. WHEN an agent deducts balance from a user, THE System SHALL verify the user's Created_By_Field equals the agent's user ID or is null
-3. IF the Created_By_Field verification fails, THEN THE System SHALL reject the balance operation with a 403 Forbidden error
-4. THE System SHALL apply the same prepaid/postpaid rules for agents as for admins
+1. WHEN an agent performs a balance operation on a user, THE System SHALL verify the target user's role is 'player'
+2. IF the target user has role='admin', THEN THE System SHALL reject the balance operation with a 403 Forbidden error
+3. IF the target user has role='agent', THEN THE System SHALL reject the balance operation with a 403 Forbidden error
+4. WHEN an agent performs a balance operation on a player, THE System SHALL verify the user's Created_By_Field equals the agent's user ID or is null
+5. IF the Created_By_Field verification fails, THEN THE System SHALL reject the balance operation with a 403 Forbidden error
+6. THE System SHALL apply the same prepaid/postpaid rules for agents as for admins
 
 ### Requirement 8: User Activation Control
 
@@ -102,9 +106,11 @@ This document specifies requirements for adding an "agent" role to the fidel-bin
 
 #### Acceptance Criteria
 
-1. WHEN an agent activates a user, THE System SHALL verify the user's Created_By_Field equals the agent's user ID or is null
-2. WHEN an agent deactivates a user, THE System SHALL verify the user's Created_By_Field equals the agent's user ID or is null
-3. IF the Created_By_Field verification fails, THEN THE System SHALL reject the status change with a 403 Forbidden error
+1. WHEN an agent attempts to activate or deactivate a user, THE System SHALL verify the target user's role is 'player'
+2. IF the target user has role='admin', THEN THE System SHALL reject the status change with a 403 Forbidden error
+3. IF the target user has role='agent', THEN THE System SHALL reject the status change with a 403 Forbidden error
+4. WHEN an agent attempts to activate or deactivate a player, THE System SHALL verify the user's Created_By_Field equals the agent's user ID or is null
+5. IF the Created_By_Field verification fails, THEN THE System SHALL reject the status change with a 403 Forbidden error
 
 ### Requirement 9: User Deletion by Agents
 
@@ -112,9 +118,12 @@ This document specifies requirements for adding an "agent" role to the fidel-bin
 
 #### Acceptance Criteria
 
-1. WHEN an agent deletes a user, THE System SHALL verify the user's Created_By_Field equals the agent's user ID or is null
-2. IF the Created_By_Field verification fails, THEN THE System SHALL reject the deletion with a 403 Forbidden error
-3. WHEN an agent deletes a user, THE System SHALL delete all related data following the same cascade rules as admin deletions
+1. WHEN an agent attempts to delete a user, THE System SHALL verify the target user's role is 'player'
+2. IF the target user has role='admin', THEN THE System SHALL reject the deletion with a 403 Forbidden error
+3. IF the target user has role='agent', THEN THE System SHALL reject the deletion with a 403 Forbidden error
+4. WHEN an agent attempts to delete a player, THE System SHALL verify the user's Created_By_Field equals the agent's user ID or is null
+5. IF the Created_By_Field verification fails, THEN THE System SHALL reject the deletion with a 403 Forbidden error
+6. WHEN an agent deletes a player, THE System SHALL delete all related data following the same cascade rules as admin deletions
 
 ### Requirement 10: Cartela Management by Agents
 
@@ -122,10 +131,11 @@ This document specifies requirements for adding an "agent" role to the fidel-bin
 
 #### Acceptance Criteria
 
-1. WHEN an agent assigns cartelas to a user, THE System SHALL verify the user's Created_By_Field equals the agent's user ID or is null
-2. WHEN an agent removes cartelas from a user, THE System SHALL verify the user's Created_By_Field equals the agent's user ID or is null
-3. WHEN an agent views a user's cartelas, THE System SHALL verify the user's Created_By_Field equals the agent's user ID or is null
-4. IF the Created_By_Field verification fails, THEN THE System SHALL reject the cartela operation with a 403 Forbidden error
+1. WHEN an agent performs a cartela operation on a user, THE System SHALL verify the target user's role is 'player'
+2. IF the target user has role='admin', THEN THE System SHALL reject the cartela operation with a 403 Forbidden error
+3. IF the target user has role='agent', THEN THE System SHALL reject the cartela operation with a 403 Forbidden error
+4. WHEN an agent performs a cartela operation on a player, THE System SHALL verify the user's Created_By_Field equals the agent's user ID or is null
+5. IF the Created_By_Field verification fails, THEN THE System SHALL reject the cartela operation with a 403 Forbidden error
 
 ### Requirement 11: Agent Creation by Admins
 
@@ -154,9 +164,12 @@ This document specifies requirements for adding an "agent" role to the fidel-bin
 
 #### Acceptance Criteria
 
-1. WHEN an agent requests a user's transactions, THE System SHALL verify the user's Created_By_Field equals the agent's user ID or is null
-2. IF the Created_By_Field verification fails, THEN THE System SHALL reject the request with a 403 Forbidden error
-3. THE System SHALL return transactions in the same format for agents as for admins
+1. WHEN an agent requests a user's transactions, THE System SHALL verify the target user's role is 'player'
+2. IF the target user has role='admin', THEN THE System SHALL reject the request with a 403 Forbidden error
+3. IF the target user has role='agent', THEN THE System SHALL reject the request with a 403 Forbidden error
+4. WHEN an agent requests transactions for a player, THE System SHALL verify the user's Created_By_Field equals the agent's user ID or is null
+5. IF the Created_By_Field verification fails, THEN THE System SHALL reject the request with a 403 Forbidden error
+6. THE System SHALL return transactions in the same format for agents as for admins
 
 ### Requirement 14: User Detail View Access
 
@@ -164,9 +177,12 @@ This document specifies requirements for adding an "agent" role to the fidel-bin
 
 #### Acceptance Criteria
 
-1. WHEN an agent requests a user's detail page, THE System SHALL verify the user's Created_By_Field equals the agent's user ID or is null
-2. IF the Created_By_Field verification fails, THEN THE System SHALL reject the request with a 403 Forbidden error
-3. THE Admin_UI SHALL display the same user detail interface for agents as for admins
+1. WHEN an agent requests a user's detail page, THE System SHALL verify the target user's role is 'player'
+2. IF the target user has role='admin', THEN THE System SHALL reject the request with a 403 Forbidden error
+3. IF the target user has role='agent', THEN THE System SHALL reject the request with a 403 Forbidden error
+4. WHEN an agent requests a player's detail page, THE System SHALL verify the user's Created_By_Field equals the agent's user ID or is null
+5. IF the Created_By_Field verification fails, THEN THE System SHALL reject the request with a 403 Forbidden error
+6. THE Admin_UI SHALL display the same user detail interface for agents as for admins
 
 ### Requirement 15: Frontend Route Protection
 

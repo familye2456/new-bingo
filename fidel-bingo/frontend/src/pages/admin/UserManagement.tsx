@@ -382,9 +382,27 @@ export const UserManagement: React.FC = () => {
                   disabled={!rangeFrom || !rangeTo || parseInt(rangeFrom) > parseInt(rangeTo) || assignCartelaMutation.isPending}
                   className="shrink-0 bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
-                  {assignCartelaMutation.isPending ? '...' : 'Assign'}
+                  {assignCartelaMutation.isPending ? 'Assigning…' : 'Assign'}
                 </button>
               </div>
+              {assignCartelaMutation.isPending && (
+                <div className="mt-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-blue-600 font-medium">Assigning cartelas…</span>
+                  </div>
+                  <div className="w-full bg-blue-100 rounded-full h-2 overflow-hidden">
+                    <div className="h-2 bg-blue-500 rounded-full animate-[progress_1.2s_ease-in-out_infinite]"
+                      style={{ width: '60%', animation: 'indeterminate 1.2s ease-in-out infinite' }} />
+                  </div>
+                  <style>{`
+                    @keyframes indeterminate {
+                      0%   { transform: translateX(-100%); width: 60%; }
+                      50%  { transform: translateX(60%);   width: 60%; }
+                      100% { transform: translateX(200%);  width: 60%; }
+                    }
+                  `}</style>
+                </div>
+              )}
               {assignCartelaError && <p className="text-xs text-red-500 mt-1.5">{assignCartelaError}</p>}
               {assignCartelaSuccess && (
                 <p className="text-xs text-emerald-600 mt-1.5 flex items-center gap-1">

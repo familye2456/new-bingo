@@ -96,9 +96,9 @@ export const AdminOverview: React.FC = () => {
         />
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6">
         {/* Recent Games */}
-        <div className="xl:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
             <h2 className="font-semibold text-gray-800">Recent Games</h2>
             <span className="text-xs text-gray-400">{games.length} total</span>
@@ -140,53 +140,7 @@ export const AdminOverview: React.FC = () => {
           )}
         </div>
 
-        {/* Recent Users + Summary */}
-        <div className="space-y-4">
-          {/* Summary card */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-            <h3 className="font-semibold text-gray-800 mb-4 text-sm">Financial Summary</h3>
-            <div className="space-y-3">
-              {[
-                { label: 'Total Prize Pool (all games)', value: `${totalPrizePool.toFixed(2)}`, color: 'text-emerald-600' },
-                { label: 'Prepaid Balance on Platform', value: `${totalBalance.toFixed(2)}`, color: 'text-blue-600' },
-                { label: 'Games Played', value: games.filter(g => g.status === 'finished').length, color: 'text-gray-700' },
-              ].map(({ label, value, color }) => (
-                <div key={label} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                  <span className="text-xs text-gray-500">{label}</span>
-                  <span className={`text-sm font-semibold ${color}`}>{value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Recent users */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <h3 className="font-semibold text-gray-800 text-sm">New Users</h3>
-              <button onClick={() => navigate('/admin/users')} className="text-xs text-blue-500 hover:text-blue-600">View all</button>
-            </div>
-            {loadingUsers ? (
-              <div className="py-8 text-center text-gray-400 text-sm">Loading...</div>
-            ) : (
-              <div className="divide-y divide-gray-50">
-                {recentUsers.map((u) => (
-                  <div key={u.id} className="flex items-center gap-3 px-5 py-3">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
-                      {(u as any).username?.[0]?.toUpperCase() ?? '?'}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium text-gray-800 truncate">{(u as any).username}</div>
-                      <div className="text-xs text-gray-400">{u.paymentType}</div>
-                    </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${u.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
-                      {u.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );

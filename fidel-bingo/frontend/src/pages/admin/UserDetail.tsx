@@ -180,6 +180,21 @@ export const UserDetail: React.FC = () => {
                 {assignMutation.isPending ? 'Assigning...' : 'Assign'}
               </button>
             </div>
+            {assignMutation.isPending && (
+              <div className="mt-2">
+                <div className="w-full bg-blue-100 rounded-full h-2 overflow-hidden">
+                  <div className="h-2 bg-blue-500 rounded-full"
+                    style={{ animation: 'indeterminate 1.2s ease-in-out infinite', width: '60%' }} />
+                </div>
+                <style>{`
+                  @keyframes indeterminate {
+                    0%   { transform: translateX(-100%); width: 60%; }
+                    50%  { transform: translateX(60%);   width: 60%; }
+                    100% { transform: translateX(200%);  width: 60%; }
+                  }
+                `}</style>
+              </div>
+            )}
             {assignError && <p className="text-xs text-red-500 mt-2">{assignError}</p>}
           </div>
 
