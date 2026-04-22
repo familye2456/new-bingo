@@ -59,20 +59,9 @@ router.get('/agents', authorize('admin'), async (_req: AuthRequest, res: Respons
 // List users — admins see all players, agents see only their own
 router.get('/', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(User);
-  const actor = req.user!;
 
-  let users: User[];
-  if (actor.role === 'admin') {
-    users = await repo.find({ where: { role: 'player' }, order: { createdAt: 'DESC' } });
-  } else {
-    // agent: only players they created
-    users = await repo
-      .createQueryBuilder('u')
-      .where('u.role = :role', { role: 'player' })
-      .andWhere('(u.created_by = :id OR u.created_by IS NULL)', { id: actor.id })
-      .orderBy('u.created_at', 'DESC')
-      .getMany();
-  }
+  // Both admin and agent see all players
+  const users = await repo.find({ where: { role: 'player' }, order: { createdAt: 'DESC' } });
   res.json({ success: true, data: users.map((u) => u.sanitize()) });
 });
 
