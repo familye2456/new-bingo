@@ -11,6 +11,7 @@ import { redisClient } from '../../../config/redis';
 import { activeGames } from '../../../shared/infrastructure/metrics';
 import { logger } from '../../../shared/infrastructure/logger';
 import { env } from '../../../config/env';
+import { MoreThanOrEqual } from 'typeorm';
 
 export interface CreateGameDTO {
   /** IDs from user_cartelas (not the shared cartelas pool) */
@@ -330,10 +331,19 @@ export class GameService {
     return game;
   }
 
-  async listGames(status?: string, userId?: string): Promise<Game[]> {
+  async listGames(status?: string, userId?: string, date?: string): Promise<Game[]> {
     const where: any = {};
     if (status) where.status = status as Game['status'];
     if (userId) where.creatorId = userId;
+
+    // When filtering by date, skip the take limit so all matching games are returned
+    if (date === 'today') {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      where.createdAt = MoreThanOrEqual(todayStart);
+      return this.gameRepo.find({ where, order: { createdAt: 'DESC' } });
+    }
+
     return this.gameRepo.find({ where, order: { createdAt: 'DESC' }, take: 50 });
   }
 

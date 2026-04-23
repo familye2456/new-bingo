@@ -108,7 +108,7 @@ export const userApi = {
 };
 
 export const gameApi = {
-  list: (status?: string) => api.get('/games', { params: { status } }),
+  list: (status?: string, date?: string) => api.get('/games', { params: { status, date } }),
   myGames: () => api.get('/games/mine'),
   get: (id: string) => api.get(`/games/${id}`),
   create: (data: { cartelaIds: string[]; betAmountPerCartela: number; winPattern?: string }) =>

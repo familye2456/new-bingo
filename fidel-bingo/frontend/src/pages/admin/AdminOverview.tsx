@@ -38,6 +38,12 @@ export const AdminOverview: React.FC = () => {
     queryFn: () => gameApi.list().then((r) => r.data.data),
   });
 
+  const { data: todayGames = [], isLoading: loadingToday } = useQuery<Game[]>({
+    queryKey: ['games-today'],
+    queryFn: () => gameApi.list(undefined, 'today').then((r) => r.data.data),
+    staleTime: 30_000,
+  });
+
   const activeUsers   = users.filter((u) => u.status === 'active').length;
   const prepaidUsers  = users.filter((u) => u.paymentType === 'prepaid');
   const postpaidCount = users.filter((u) => u.paymentType === 'postpaid').length;
@@ -50,15 +56,14 @@ export const AdminOverview: React.FC = () => {
 
   const userMap = Object.fromEntries(users.map((u) => [u.id, u.username]));
 
-  // Aggregate today's finished games per creator
-  const todayStats = games
-    .filter((g) => new Date(g.createdAt) >= todayStart)
+  // Aggregate today's games per creator — profit only from finished games
+  const todayStats = todayGames
     .reduce<Record<string, { games: number; totalBet: number; totalProfit: number }>>((acc, g) => {
       const uid = g.creatorId;
       if (!acc[uid]) acc[uid] = { games: 0, totalBet: 0, totalProfit: 0 };
       acc[uid].games += 1;
       acc[uid].totalBet += Number(g.totalBets);
-      acc[uid].totalProfit += Number(g.houseCut);
+      if (g.status === 'finished') acc[uid].totalProfit += Number(g.houseCut);
       return acc;
     }, {});
 
@@ -108,7 +113,7 @@ export const AdminOverview: React.FC = () => {
             <h2 className="font-semibold text-gray-800">Today's Summary</h2>
             <span className="text-xs text-gray-400">{new Date().toLocaleDateString()}</span>
           </div>
-          {loadingGames || loadingUsers ? (
+          {loadingGames || loadingUsers || loadingToday ? (
             <div className="py-12 text-center text-gray-400 text-sm">Loading...</div>
           ) : todayRows.length === 0 ? (
             <div className="py-12 text-center text-gray-400 text-sm">No games today.</div>

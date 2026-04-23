@@ -42,7 +42,7 @@ export const getGame = async (req: AuthRequest, res: Response) => {
 export const listGames = async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'admin';
   const userId = isAdmin ? undefined : req.user!.id;
-  const games = await gameService.listGames(req.query.status as string, userId);
+  const games = await gameService.listGames(req.query.status as string, userId, req.query.date as string);
   res.json({ success: true, data: games });
 };
 
