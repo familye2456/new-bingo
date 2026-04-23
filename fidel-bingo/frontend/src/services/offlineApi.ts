@@ -3,7 +3,7 @@
  * Offline fallback only applies to prepaid users.
  */
 import { api } from './api';
-import { dbGet, dbGetAll, dbPut, enqueue, adjustBalance } from './db';
+import { dbGet, dbGetAll, dbPut, dbDelete, enqueue, adjustBalance } from './db';
 import { useAuthStore } from '../store/authStore';
 import { _justFinishedIds } from './sync';
 
@@ -160,14 +160,20 @@ export const offlineGameApi = {
     );
     if (result.ok) {
       const list = toList(result.data);
+      // Remove stale cached games that no longer belong to this user
+      const allLocal = await dbGetAll<any>('games');
+      const serverIds = new Set(list.map((g: any) => g.id));
+      await Promise.all(
+        allLocal
+          .filter((g: any) => !String(g.id).startsWith('offline-') && !serverIds.has(g.id))
+          .map((g: any) => dbDelete('games', g.id))
+      );
       await Promise.all(list.map((g: any) => dbPut('games', g)));
       // Also include offline games with matching status
-      const allLocal = await dbGetAll<any>('games');
       const offlineGames = allLocal.filter((g: any) =>
         String(g.id).startsWith('offline-') &&
         (!_status || g.status === _status)
       );
-      const serverIds = new Set(list.map((g: any) => g.id));
       const uniqueOffline = offlineGames.filter((g: any) => !serverIds.has(g.id));
       return [...list, ...uniqueOffline];
     }
