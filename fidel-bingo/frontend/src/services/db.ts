@@ -118,8 +118,11 @@ export async function playCachedSound(path: string, volume = 1, bypassCache = fa
           const url = URL.createObjectURL(blob);
           const audio = new Audio(url);
           audio.volume = volume;
-          audio.onended = () => URL.revokeObjectURL(url);
-          await audio.play();
+          await new Promise<void>((resolve) => {
+            audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+            audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+            audio.play().catch(() => resolve());
+          });
           return audio;
         }
       } catch { /* fall through to network */ }
@@ -130,7 +133,11 @@ export async function playCachedSound(path: string, volume = 1, bypassCache = fa
   try {
     const audio = new Audio(path);
     audio.volume = volume;
-    await audio.play();
+    await new Promise<void>((resolve) => {
+      audio.onended = () => resolve();
+      audio.onerror = () => resolve();
+      audio.play().catch(() => resolve());
+    });
     return audio;
   } catch {
     return undefined;
@@ -218,26 +225,29 @@ export async function isVoiceFullyCached(voice: string): Promise<boolean> {
 export class AudioQueue {
   private queue: Array<() => Promise<void>> = [];
   playing = false;
+  private drainResolvers: Array<() => void> = [];
 
   enqueue(task: () => Promise<void>): void {
     this.queue.push(task);
-    if (!this.playing) {
-      this.drain();
-    }
+    if (!this.playing) this.drain();
+  }
+
+  /** Returns a promise that resolves when the queue is fully drained */
+  waitForDrain(): Promise<void> {
+    if (!this.playing && this.queue.length === 0) return Promise.resolve();
+    return new Promise(resolve => this.drainResolvers.push(resolve));
   }
 
   private async drain(): Promise<void> {
     if (this.queue.length === 0) {
       this.playing = false;
+      const resolvers = this.drainResolvers.splice(0);
+      resolvers.forEach(r => r());
       return;
     }
     this.playing = true;
     const task = this.queue.shift()!;
-    try {
-      await task();
-    } catch {
-      // Error in task — continue to next
-    }
+    try { await task(); } catch { /* continue on error */ }
     this.drain();
   }
 }

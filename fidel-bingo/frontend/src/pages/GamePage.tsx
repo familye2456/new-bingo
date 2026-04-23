@@ -64,9 +64,56 @@ export const GamePage: React.FC = () => {
     enabled: !!gameId,
   });
 
+  const replayedRef = useRef(false);
+  const isReplayingRef = useRef(false);
+  const [displayedNumbers, setDisplayedNumbers] = useState<number[]>([]);
+  const [isReplaying, setIsReplaying] = useState(true);
+
   useEffect(() => {
-    if (data) setGame({ ...data, cartelas: cartelasData ?? data.cartelas ?? [] });
-  }, [data, cartelasData, setGame]);
+    if (!data || replayedRef.current) return;
+    replayedRef.current = true;
+
+    const calledNums: number[] = data.calledNumbers ?? [];
+    const cartelas = cartelasData ?? data.cartelas ?? [];
+
+    setGame({ ...data, cartelas });
+    setDisplayedNumbers([]);
+
+    if (calledNums.length === 0) {
+      setIsReplaying(false);
+      return;
+    }
+
+    isReplayingRef.current = true;
+    let i = 0;
+    const interval = setInterval(() => {
+      if (i >= calledNums.length) {
+        clearInterval(interval);
+        isReplayingRef.current = false;
+        setIsReplaying(false);
+        return;
+      }
+      const num = calledNums[i];
+      setDisplayedNumbers(prev => [...prev, num]);
+      i++;
+    }, 300);
+
+    return () => clearInterval(interval);
+  }, [data, cartelasData]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // After replay done, keep displayedNumbers in sync with live called numbers
+  useEffect(() => {
+    if (!isReplaying && currentGame) {
+      setDisplayedNumbers(currentGame.calledNumbers);
+    }
+  }, [isReplaying, currentGame?.calledNumbers]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // New numbers from socket during live play
+  useEffect(() => {
+    if (!isReplaying && lastCalledNumber !== null) {
+      setDisplayedNumbers(currentGame?.calledNumbers ?? []);
+    }
+  }, [lastCalledNumber]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isPostpaid = user?.paymentType === 'postpaid';
 
@@ -137,41 +184,20 @@ export const GamePage: React.FC = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     if (!autoCall || currentGame?.status !== 'active') return;
 
-    // Recursive setTimeout: call immediately, then wait for both the interval
-    // AND the AudioQueue to drain before scheduling the next call.
+    const intervalMs = Math.max(autoCallInterval * 1000, 1500);
+
     const scheduleNext = () => {
       if (!autoCallRef.current) return;
-
-      const intervalMs = Math.max(autoCallInterval * 1000, 1500); // never faster than 1.5s
-      const startTime = Date.now();
-
-      const waitAndCall = () => {
+      timeoutRef.current = setTimeout(async () => {
         if (!autoCallRef.current) return;
-        // If queue is still playing, poll until drained
-        if (audioQueue.playing) {
-          timeoutRef.current = setTimeout(waitAndCall, 200);
-          return;
-        }
-        // Ensure minimum interval has elapsed
-        const elapsed = Date.now() - startTime;
-        const remaining = intervalMs - elapsed;
-        if (remaining > 0) {
-          timeoutRef.current = setTimeout(() => {
-            if (!autoCallRef.current) return;
-            doCallNumber();
-            scheduleNext();
-          }, remaining);
-        } else {
-          doCallNumber();
-          scheduleNext();
-        }
-      };
-
-      doCallNumber();
-      // Start waiting after the call
-      timeoutRef.current = setTimeout(waitAndCall, intervalMs);
+        await audioQueue.waitForDrain();
+        if (!autoCallRef.current) return;
+        doCallNumber();
+        scheduleNext();
+      }, intervalMs);
     };
 
+    doCallNumber();
     scheduleNext();
 
     return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
@@ -268,7 +294,7 @@ export const GamePage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Number board */}
           <div className="lg:col-span-1">
-            <NumberBoard calledNumbers={currentGame.calledNumbers} lastNumber={lastCalledNumber} />
+            <NumberBoard calledNumbers={displayedNumbers} lastNumber={isReplaying ? (displayedNumbers[displayedNumbers.length - 1] ?? null) : lastCalledNumber} />
 
             {/* Controls */}
             {isCreator && currentGame.status === 'pending' && (
@@ -331,7 +357,7 @@ export const GamePage: React.FC = () => {
                   <div key={cartela.id}>
                     <CartelaCard
                       cartela={cartela}
-                      calledNumbers={currentGame.calledNumbers}
+                      calledNumbers={displayedNumbers}
                       onMark={handleMarkNumber}
                       disabled={currentGame.status !== 'active'}
                     />
