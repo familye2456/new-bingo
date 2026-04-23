@@ -122,9 +122,7 @@ export const LoginPage: React.FC = () => {
           </button>
         </form>
 
-        <p className="text-center text-xs text-gray-400 mt-4">
-          Need help? Call <a href="tel:0934942672" className="text-blue-500 font-semibold">0934942672</a>
-        </p>
+
 
         {/* ── Cache progress overlay ── */}
         {caching && (
