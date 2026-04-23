@@ -59,9 +59,13 @@ if (!('serviceWorker' in navigator)) {
 } else {
   renderSplash();
 
+  // Absolute fallback — if SW registration never calls back, render anyway
+  const absoluteFallback = setTimeout(renderApp, 4000);
+
   registerSW({
     immediate: true,
     onRegisteredSW(_swUrl, registration) {
+      clearTimeout(absoluteFallback);
       if (!registration) { renderApp(); return; }
 
       const sw = registration.installing ?? registration.waiting ?? registration.active;
@@ -72,14 +76,14 @@ if (!('serviceWorker' in navigator)) {
         return;
       }
 
-      // Wait for the installing SW to reach 'activated' state (max 3s)
+      // Wait for the installing SW to reach 'activated' state (max 2s)
       const target = registration.installing ?? registration.waiting;
       if (target) {
         let rendered = false;
         const render = () => { if (!rendered) { rendered = true; renderApp(); } };
-        const timeout = setTimeout(render, 3000);
+        const timeout = setTimeout(render, 2000);
         target.addEventListener('statechange', function handler() {
-          if (this.state === 'activated') {
+          if (this.state === 'activated' || this.state === 'installed') {
             clearTimeout(timeout);
             target.removeEventListener('statechange', handler);
             render();
