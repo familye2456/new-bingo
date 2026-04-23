@@ -194,11 +194,13 @@ export const offlineGameApi = {
           ...allLocal.filter((g: any) => g.status === 'finished').map((g: any) => String(g.id)),
           ..._justFinishedIds,
         ]);
+
+        // Only write games the current user created into IDB — never other users' games
+        const currentUser = await dbGet<any>('user', 'me');
         const mergedList = serverList.map((g: any) => {
           const local = allLocal.find((l: any) => String(l.id) === String(g.id));
           const base = {
             ...g,
-            // Preserve locally-patched cartelaIds — server doesn't return them on /games/mine
             cartelaIds: g.cartelaIds ?? local?.cartelaIds,
           };
           return localFinishedIds.has(String(g.id)) && g.status !== 'finished'
@@ -206,7 +208,10 @@ export const offlineGameApi = {
             : base;
         });
 
-        for (const g of mergedList) await dbPut('games', g);
+        // Only cache games belonging to the current user
+        const ownGames = mergedList.filter((g: any) => g.creatorId === currentUser?.id);
+        for (const g of ownGames) await dbPut('games', g);
+
         // Merge still-pending offline games, deduplicate by id
         const offlineGames = allLocal.filter((g: any) => String(g.id).startsWith('offline-'));
         const serverIds = new Set(serverList.map((g: any) => g.id));

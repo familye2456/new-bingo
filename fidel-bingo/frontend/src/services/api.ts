@@ -38,6 +38,10 @@ api.interceptors.response.use(
         // Don't logout on network errors, 429, 500, etc.
         if (refreshErr?.response?.status === 401) {
           localStorage.removeItem('access_token');
+          // Clear stale game/cartela data so next user doesn't see previous user's data
+          import('./db').then(({ dbClear }) => {
+            Promise.all([dbClear('games'), dbClear('cartelas'), dbClear('user'), dbClear('transactions')]);
+          });
           const path = window.location.pathname;
           if (!path.includes('/login')) {
             window.location.href = '/login';
