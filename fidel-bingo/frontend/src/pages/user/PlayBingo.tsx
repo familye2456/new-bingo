@@ -128,7 +128,12 @@ export const PlayBingo: React.FC = () => {
     },
     onError: (err: any) => {
       const status = err?.response?.status;
+      const code = err?.response?.data?.error?.code;
       if (status === 429) return; // rate limited — skip this tick, keep going
+      if (code === 'NO_NUMBERS_LEFT' || code === 'INVALID_STATE') {
+        stopAuto(true); // game over or finished — stop silently
+        return;
+      }
       console.error('[callNumber]', err?.response?.data ?? err.message);
       stopAuto(true);
     },
@@ -156,9 +161,10 @@ export const PlayBingo: React.FC = () => {
     let elapsed = 0;
     autoRef.current = setInterval(() => {
       elapsed += 0.5;
-      if (elapsed < speedRef.current) return; // wait until user-selected speed elapses
+      if (elapsed < speedRef.current) return;
       elapsed = 0;
       if (sessionCalledRef.current.length >= 75) { stopAuto(); return; }
+      if (callMutation.isPending) return; // don't fire if previous call still in flight
       callMutation.mutate();
     }, 500);
   }, [game, callMutation, stopAuto]);

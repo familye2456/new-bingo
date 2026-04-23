@@ -330,8 +330,10 @@ export class GameService {
     return game;
   }
 
-  async listGames(status?: string): Promise<Game[]> {
-    const where = status ? { status: status as Game['status'] } : {};
+  async listGames(status?: string, userId?: string): Promise<Game[]> {
+    const where: any = {};
+    if (status) where.status = status as Game['status'];
+    if (userId) where.creatorId = userId;
     return this.gameRepo.find({ where, order: { createdAt: 'DESC' }, take: 50 });
   }
 
