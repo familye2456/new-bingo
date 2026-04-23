@@ -1,6 +1,5 @@
 import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import { gameApi } from '../services/api';
 import { getSocket } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
@@ -10,16 +9,12 @@ import { playCachedSound, playNumberSoundQueued, downloadVoiceSounds, audioQueue
 import { CartelaCard } from '../components/CartelaCard';
 import { NumberBoard } from '../components/NumberBoard';
 
-// ── Audio unlock (Task 3.5) ──────────────────────────────────────────────────
 let _unlocked = false;
 if (typeof window !== 'undefined') {
   const unlock = () => {
     if (_unlocked) return;
     _unlocked = true;
-    try {
-      // Satisfy iOS Web Audio API requirement
-      new AudioContext().resume();
-    } catch { /* browser without AudioContext */ }
+    try { new AudioContext().resume(); } catch { /* ignore */ }
   };
   document.addEventListener('pointerdown', unlock, { capture: true, once: true });
   document.addEventListener('touchstart', unlock, { capture: true, once: true });
@@ -52,140 +47,123 @@ export const GamePage: React.FC = () => {
   const gameStatusRef = useRef(currentGame?.status);
   useEffect(() => { gameStatusRef.current = currentGame?.status; }, [currentGame?.status]);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['game', gameId],
-    queryFn: () => gameApi.get(gameId!).then((r) => r.data.data),
-    enabled: !!gameId,
-  });
-
-  const { data: cartelasData } = useQuery({
-    queryKey: ['game-cartelas', gameId],
-    queryFn: () => gameApi.getCartelas(gameId!).then((r) => r.data.data),
-    enabled: !!gameId,
-  });
-
-  const replayedRef = useRef(false);
-  const isReplayingRef = useRef(false);
+  // ── Load game fresh on every mount — no React Query cache ──────────────────
+  const [isLoading, setIsLoading] = useState(true);
   const [displayedNumbers, setDisplayedNumbers] = useState<number[]>([]);
-  const [isReplaying, setIsReplaying] = useState(true);
-
-  useEffect(() => {
-    if (!data || replayedRef.current) return;
-    replayedRef.current = true;
-
-    const calledNums: number[] = data.calledNumbers ?? [];
-    const cartelas = cartelasData ?? data.cartelas ?? [];
-
-    setGame({ ...data, cartelas });
-    setDisplayedNumbers([]);
-
-    if (calledNums.length === 0) {
-      setIsReplaying(false);
-      return;
-    }
-
-    isReplayingRef.current = true;
-    let i = 0;
-    const interval = setInterval(() => {
-      if (i >= calledNums.length) {
-        clearInterval(interval);
-        isReplayingRef.current = false;
-        setIsReplaying(false);
-        return;
-      }
-      const num = calledNums[i];
-      setDisplayedNumbers(prev => [...prev, num]);
-      i++;
-    }, 300);
-
-    return () => clearInterval(interval);
-  }, [data, cartelasData]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // After replay done, keep displayedNumbers in sync with live called numbers
-  useEffect(() => {
-    if (!isReplaying && currentGame) {
-      setDisplayedNumbers(currentGame.calledNumbers);
-    }
-  }, [isReplaying, currentGame?.calledNumbers]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // New numbers from socket during live play
-  useEffect(() => {
-    if (!isReplaying && lastCalledNumber !== null) {
-      setDisplayedNumbers(currentGame?.calledNumbers ?? []);
-    }
-  }, [lastCalledNumber]); // eslint-disable-line react-hooks/exhaustive-deps
+  const isReplayingRef = useRef(true);
 
   const isPostpaid = user?.paymentType === 'postpaid';
 
-  // ── Auto-preload voice pack — only for prepaid users (postpaid use public folder directly) ──
+  useEffect(() => {
+    if (!gameId) return;
+    let cancelled = false;
+    isReplayingRef.current = true;
+    setDisplayedNumbers([]);
+
+    const load = async () => {
+      try {
+        const [gameRes, cartelasRes] = await Promise.all([
+          gameApi.get(gameId),
+          gameApi.getCartelas(gameId),
+        ]);
+        if (cancelled) return;
+
+        const gameData = gameRes.data.data;
+        const cartelas = cartelasRes.data.data ?? gameData.cartelas ?? [];
+        const calledNums: number[] = [...(gameData.calledNumbers ?? [])];
+
+        setGame({ ...gameData, cartelas });
+        setIsLoading(false);
+
+        if (calledNums.length === 0) {
+          isReplayingRef.current = false;
+          return;
+        }
+
+        let i = 0;
+        const interval = setInterval(() => {
+          if (cancelled) { clearInterval(interval); return; }
+          if (i >= calledNums.length) {
+            clearInterval(interval);
+            isReplayingRef.current = false;
+            return;
+          }
+          setDisplayedNumbers(prev => [...prev, calledNums[i]]);
+          i++;
+        }, 300);
+
+      } catch {
+        if (!cancelled) { isReplayingRef.current = false; setIsLoading(false); }
+      }
+    };
+
+    load();
+    return () => { cancelled = true; isReplayingRef.current = false; };
+  }, [gameId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Auto-preload voice pack ─────────────────────────────────────────────────
   useEffect(() => {
     if (!isPostpaid) downloadVoiceSounds(voice);
   }, [voice, isPostpaid]);
 
+  // ── Socket ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!gameId) return;
     const socket = getSocket();
-    console.log('[Socket] state:', socket.connected, socket.id);
 
-    const joinGame = () => {
-      console.log('[Socket] joining game:', gameId);
-      socket.emit('join_game', gameId);
-    };
-
-    socket.on('connect', () => {
-      console.log('[Socket] connected:', socket.id);
-      joinGame(); // re-join after reconnect/fresh connect
-    });
+    const joinGame = () => socket.emit('join_game', gameId);
+    socket.on('connect', () => joinGame());
     socket.on('connect_error', (e) => console.error('[Socket] connect_error:', e.message));
-    socket.on('error', (e) => console.error('[Socket] error:', e));
-
-    // If already connected, join immediately
     if (socket.connected) joinGame();
+
     socket.on('game_state', (game: any) => {
       if (game.status === 'active' && gameStatusRef.current !== 'active') {
         playRootSound('start.wav');
       }
-      setGame(game);
+      // During replay, only update game metadata — not calledNumbers
+      if (isReplayingRef.current) {
+        setGame({ ...game, calledNumbers: [] });
+      } else {
+        setGame(game);
+      }
     });
+
     socket.on('number_called', ({ number }: { number: number }) => {
-      console.log('[Socket] number_called received:', number, 'voice:', voiceRef.current);
+      if (isReplayingRef.current) return; // ignore during replay
       addCalledNumber(number);
+      setDisplayedNumbers(prev => [...prev, number]);
       playNumberSoundQueued(number, voiceRef.current, volumeRef.current, isPostpaid);
     });
+
     socket.on('game_finished', () => {
-      // Play winner sound through queue so it doesn't overlap with number sounds
       playRootSound('winner.wav', true);
       setAutoCall(false);
       setTimeout(() => navigate('/dashboard'), 3000);
     });
+
     return () => {
       socket.emit('leave_game', gameId);
       socket.off('connect');
       socket.off('connect_error');
-      socket.off('error');
       socket.off('game_state');
       socket.off('number_called');
       socket.off('game_finished');
     };
-  }, [gameId, setGame, addCalledNumber, navigate]);
+  }, [gameId, setGame, addCalledNumber, navigate, isPostpaid]);
 
-  // ── Auto-call logic (Task 3.9) ───────────────────────────────────────────
+  // ── Auto-call ───────────────────────────────────────────────────────────────
   const doCallNumber = useCallback(() => {
     if (!gameId) return;
-    const socket = getSocket();
-    socket.emit('call_number', gameId);
+    getSocket().emit('call_number', gameId);
   }, [gameId]);
 
-  useEffect(() => {
-    autoCallRef.current = autoCall;
-  }, [autoCall]);
+  useEffect(() => { autoCallRef.current = autoCall; }, [autoCall]);
 
   useEffect(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     if (!autoCall || currentGame?.status !== 'active') return;
 
     const intervalMs = Math.max(autoCallInterval * 1000, 1500);
-
     const scheduleNext = () => {
       if (!autoCallRef.current) return;
       timeoutRef.current = setTimeout(async () => {
@@ -199,18 +177,16 @@ export const GamePage: React.FC = () => {
 
     doCallNumber();
     scheduleNext();
-
     return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
   }, [autoCall, autoCallInterval, currentGame?.status, doCallNumber]);
 
-  // Stop auto-call when game ends
   useEffect(() => {
     if (currentGame?.status === 'finished' || currentGame?.status === 'cancelled') {
       setAutoCall(false);
     }
   }, [currentGame?.status]);
-  // ────────────────────────────────────────────────────────────────────────
 
+  // ── Handlers ────────────────────────────────────────────────────────────────
   const handleCallNumber = useCallback(() => {
     if (!gameId) return;
     getSocket().emit('call_number', gameId);
@@ -229,20 +205,15 @@ export const GamePage: React.FC = () => {
           updateCartela(cartelaId, newMask);
         }
       }
-    } catch (err) {
-      console.error('Failed to mark number', err);
-    }
+    } catch (err) { console.error('Failed to mark number', err); }
   }, [currentGame, updateCartela]);
 
   const handleClaimBingo = useCallback(async (cartelaId: string) => {
     if (!gameId) return;
     try {
       await gameApi.claimBingo(gameId, cartelaId);
-      // Play winner sound through queue after successful bingo claim
       playRootSound('winner.wav', true);
-    } catch (err) {
-      console.error('Failed to claim bingo', err);
-    }
+    } catch (err) { console.error('Failed to claim bingo', err); }
   }, [gameId]);
 
   const handleStartGame = useCallback(() => {
@@ -250,14 +221,8 @@ export const GamePage: React.FC = () => {
     getSocket().emit('start_game', gameId);
   }, [gameId]);
 
-  if (isLoading) return <div className="flex items-center justify-center h-screen">Loading game...</div>;
-  if (!currentGame) return <div className="flex items-center justify-center h-screen">Game not found</div>;
-
-  const isCreator = currentGame.creatorId === user?.id;
-  const myCartelas = (currentGame.cartelas ?? []).filter((c) => (c as unknown as { userId: string }).userId === user?.id);
-
-  // Play winner sound as soon as any of the player's cartelas becomes a winner
   const prevWinnerIds = useRef<Set<string>>(new Set());
+  const myCartelas = (currentGame?.cartelas ?? []).filter((c) => (c as unknown as { userId: string }).userId === user?.id);
   useEffect(() => {
     for (const cartela of myCartelas) {
       if (cartela.isWinner && !prevWinnerIds.current.has(cartela.id)) {
@@ -267,12 +232,15 @@ export const GamePage: React.FC = () => {
     }
   }, [myCartelas]);
 
+  if (isLoading) return <div className="flex items-center justify-center h-screen">Loading game...</div>;
+  if (!currentGame) return <div className="flex items-center justify-center h-screen">Game not found</div>;
+
+  const isCreator = currentGame.creatorId === user?.id;
+
   return (
     <div className="min-h-screen bg-gray-100 p-4">
       <div id="game-announcer" className="sr-only" role="status" aria-live="polite" />
-
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
         <div className="bg-white rounded-xl shadow p-4 mb-4 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-xl font-bold">Game #{currentGame.gameNumber ?? currentGame.id.slice(0, 8)}</h1>
@@ -284,7 +252,6 @@ export const GamePage: React.FC = () => {
               {currentGame.status.charAt(0).toUpperCase() + currentGame.status.slice(1)}
             </span>
           </div>
-
           <div className="text-right">
             <div className="text-sm text-gray-500">Prize Pool</div>
             <div className="text-2xl font-bold text-green-600">${Number(currentGame.prizePool).toFixed(2)}</div>
@@ -292,34 +259,25 @@ export const GamePage: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Number board */}
           <div className="lg:col-span-1">
-            <NumberBoard calledNumbers={displayedNumbers} lastNumber={isReplaying ? (displayedNumbers[displayedNumbers.length - 1] ?? null) : lastCalledNumber} />
+            <NumberBoard
+              calledNumbers={displayedNumbers}
+              lastNumber={displayedNumbers[displayedNumbers.length - 1] ?? null}
+            />
 
-            {/* Controls */}
             {isCreator && currentGame.status === 'pending' && (
-              <button
-                data-testid="start-game-btn"
-                onClick={handleStartGame}
-                className="mt-4 w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-              >
+              <button data-testid="start-game-btn" onClick={handleStartGame}
+                className="mt-4 w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
                 Start Game
               </button>
             )}
 
             {isCreator && currentGame.status === 'active' && (
               <div className="mt-4 space-y-2">
-                {/* Manual call */}
-                <button
-                  data-testid="call-number-btn"
-                  onClick={handleCallNumber}
-                  disabled={autoCall}
-                  className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
+                <button data-testid="call-number-btn" onClick={handleCallNumber} disabled={autoCall}
+                  className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                   Call Number
                 </button>
-
-                {/* Auto-call toggle */}
                 <div className="bg-white rounded-xl border p-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-700">Auto Call</span>
@@ -329,13 +287,8 @@ export const GamePage: React.FC = () => {
                         playRootSound(next ? 'aac_resumed.mp3' : 'aac_ended.mp3');
                         return next;
                       })}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        autoCall ? 'bg-green-500' : 'bg-gray-300'
-                      }`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                        autoCall ? 'translate-x-6' : 'translate-x-1'
-                      }`} />
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoCall ? 'bg-green-500' : 'bg-gray-300'}`}>
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${autoCall ? 'translate-x-6' : 'translate-x-1'}`} />
                     </button>
                   </div>
                   <div className="text-xs text-gray-400 text-center">
@@ -346,7 +299,6 @@ export const GamePage: React.FC = () => {
             )}
           </div>
 
-          {/* Cartelas */}
           <div className="lg:col-span-2">
             <h2 className="font-semibold mb-3">Your Cartelas</h2>
             {myCartelas.length === 0 ? (
@@ -355,17 +307,11 @@ export const GamePage: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {myCartelas.map((cartela) => (
                   <div key={cartela.id}>
-                    <CartelaCard
-                      cartela={cartela}
-                      calledNumbers={displayedNumbers}
-                      onMark={handleMarkNumber}
-                      disabled={currentGame.status !== 'active'}
-                    />
+                    <CartelaCard cartela={cartela} calledNumbers={displayedNumbers}
+                      onMark={handleMarkNumber} disabled={currentGame.status !== 'active'} />
                     {cartela.isWinner && (
-                      <button
-                        onClick={() => handleClaimBingo(cartela.id)}
-                        className="mt-2 w-full bg-yellow-500 text-white py-2 rounded-lg font-bold hover:bg-yellow-600"
-                      >
+                      <button onClick={() => handleClaimBingo(cartela.id)}
+                        className="mt-2 w-full bg-yellow-500 text-white py-2 rounded-lg font-bold hover:bg-yellow-600">
                         Claim BINGO!
                       </button>
                     )}
