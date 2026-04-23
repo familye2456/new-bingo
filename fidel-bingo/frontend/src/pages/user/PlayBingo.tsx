@@ -109,10 +109,6 @@ export const PlayBingo: React.FC = () => {
     if (!game || game.status !== 'active') return;
     if (resetDoneRef.current === game.id) return;
     resetDoneRef.current = game.id;
-    setSessionCalledNumbers([]);
-    offlineGameApi.reset(game.id).then(() => {
-      queryClient.invalidateQueries({ queryKey: ['games'] });
-    }).catch(() => {});
     // Pre-cache cartelas for this game so offline check works
     offlineGameApi.getCartelas(game.id).catch(() => {});
   }, [game?.id]);
