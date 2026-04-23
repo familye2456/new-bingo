@@ -32,7 +32,7 @@ export async function refreshCache() {
     const requests: Promise<any>[] = [
       api.get('/users/me'),
       api.get('/cartelas/mine'),  // always fetch — never skip based on cache
-      api.get('/games?status=active'),
+      api.get('/games/mine'),
       api.get('/users/me/transactions'),
     ];
 

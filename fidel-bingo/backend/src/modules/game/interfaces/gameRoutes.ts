@@ -30,6 +30,8 @@ router.get('/mine', async (req: AuthRequest, res: Response) => {
   const gameIds = [...new Set(gameCartelas.map((gc) => gc.gameId))];
   const games = await gameRepo
     .createQueryBuilder('g')
+    .leftJoin('g.creator', 'creator')
+    .addSelect('creator.username')
     .where('g.id IN (:...gameIds)', { gameIds })
     .orderBy('g.createdAt', 'DESC')
     .getMany();
@@ -39,8 +41,10 @@ router.get('/mine', async (req: AuthRequest, res: Response) => {
 
   const data = games.map((g) => ({
     ...g,
+    creator: undefined,
     myBet: betMap.get(g.id) ?? 0,
     isWinner: g.winnerIds?.includes(req.user!.id) ?? false,
+    createdByUsername: g.creator?.username ?? null,
   }));
 
   res.json({ success: true, data });

@@ -180,7 +180,7 @@ export const PlayBingo: React.FC = () => {
     setCheckLoading(true);
     setCheckResult(null);
     try {
-      const result = await offlineGameApi.checkCartela(game.id, num);
+      const result = await offlineGameApi.checkCartela(game.id, num, sessionCalledNumbers);
       setCheckResult(result);
       if (result.registered) {
         if (result.isWinner) {

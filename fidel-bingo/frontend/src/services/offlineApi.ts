@@ -168,7 +168,10 @@ export const offlineGameApi = {
           .filter((g: any) => !String(g.id).startsWith('offline-') && !serverIds.has(g.id))
           .map((g: any) => dbDelete('games', g.id))
       );
-      await Promise.all(list.map((g: any) => dbPut('games', g)));
+      // Only cache games belonging to the current user to avoid cross-user data leaks
+      const currentUser = await dbGet<any>('user', 'me');
+      const ownGames = currentUser ? list.filter((g: any) => g.creatorId === currentUser.id) : [];
+      await Promise.all(ownGames.map((g: any) => dbPut('games', g)));
       // Also include offline games with matching status
       const offlineGames = allLocal.filter((g: any) =>
         String(g.id).startsWith('offline-') &&
@@ -434,11 +437,22 @@ export const offlineGameApi = {
     return { data: { data: [] } };
   },
 
-  checkCartela: async (gameId: string, cardNumber: number) => {
+  checkCartela: async (gameId: string, cardNumber: number, sessionCalledNumbers?: number[]) => {
     // If it's an offline game, always use local check — server doesn't know about it yet
     if (!String(gameId).startsWith('offline-')) {
       const result = await tryApi(() => api.get(`/games/${gameId}/check/${cardNumber}`));
-      if (result.ok) return result.data.data.data;
+      if (result.ok) {
+        const data = result.data.data.data;
+        // Override the patternMask with session-based called numbers so the cartela
+        // preview always matches what the board shows (empty after refresh = no marks)
+        if (data && Array.isArray(data.numbers) && sessionCalledNumbers !== undefined) {
+          const mask: boolean[] = data.numbers.map((n: number, i: number) =>
+            i === 12 ? true : sessionCalledNumbers.includes(n)
+          );
+          return { ...data, patternMask: mask };
+        }
+        return data;
+      }
     }
 
     // ── Offline fallback ──────────────────────────────────────────────────────
@@ -459,7 +473,7 @@ export const offlineGameApi = {
     const inGame = cartelaIdList.includes(cartela.id);
     if (!inGame) return { registered: false, cardNumber, isWinner: false, winPattern: null };
 
-    const called: number[] = game.calledNumbers ?? [];
+    const called: number[] = sessionCalledNumbers ?? game.calledNumbers ?? [];
     const mask: boolean[] = (cartela.numbers as number[]).map((n, i) =>
       i === 12 ? true : called.includes(n)
     );
