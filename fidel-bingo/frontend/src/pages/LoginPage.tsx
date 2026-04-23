@@ -56,14 +56,13 @@ export const LoginPage: React.FC = () => {
   }, [loading, caching, navigate]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black-600 to-purple-700 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-purple-700 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md relative overflow-hidden">
 
         <div className="flex flex-col items-center mb-6">
-           {/* <img src="/icons/logo.png" alt="Fidel Bingo" className="w-20 h-20 object-contain mb-3" /> */}
-          
-          <h1 className="text-2xl font-bold text-blue-600">Classic Bingo</h1>
-
+          <img src="/icons/logo.png" alt="Fidel Bingo" className="w-20 h-20 object-contain mb-3" />
+          <h1 className="text-2xl font-bold text-blue-600">Fidel Bingo</h1>
+          <p className="text-gray-500 text-sm mt-1">Sign in to play</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
