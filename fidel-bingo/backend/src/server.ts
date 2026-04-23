@@ -33,7 +33,7 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
-      connectSrc: ["'self'", 'wss:', env.FRONTEND_URL],
+      connectSrc: ["'self'", 'wss:', 'https:', ...(env.FRONTEND_URL ? [env.FRONTEND_URL] : [])],
       frameSrc: ["'none'"],
       objectSrc: ["'none'"],
     },
