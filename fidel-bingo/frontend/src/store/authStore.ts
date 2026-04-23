@@ -175,6 +175,9 @@ export const useAuthStore = create<AuthState>((set) => ({
                 if (f.store === 'cartelas') {
                   await _dbClear('cartelas');
                   for (const item of items) await dbPut(f.store, { ...item, userId: user.id });
+                } else if (f.store === 'games') {
+                  await _dbClear('games');
+                  for (const item of items) await dbPut(f.store, item);
                 } else {
                   for (const item of items) await dbPut(f.store, item);
                 }
@@ -213,8 +216,9 @@ export const useAuthStore = create<AuthState>((set) => ({
           })();
         }
       } else {
-        // Non-prepaid: clear any previous user's cartelas, then open immediately
-        await (await import('../services/db')).dbClear('cartelas');
+        // Non-prepaid: clear any previous user's cartelas and games, then open immediately
+        const { dbClear: _dbClear } = await import('../services/db');
+        await Promise.all([_dbClear('cartelas'), _dbClear('games')]);
         set({ user, loading: false, initialized: true });
       }
     } catch (err) {

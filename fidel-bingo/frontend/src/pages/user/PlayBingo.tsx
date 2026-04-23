@@ -246,6 +246,22 @@ export const PlayBingo: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {/* ── Winner banner ── */}
+      {winnerInfo && (
+        <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2"
+          style={{ background: 'rgba(34,197,94,0.15)', borderBottom: '1px solid rgba(34,197,94,0.3)' }}>
+          <span className="text-green-400 font-bold text-sm">
+            🎉 Card #{winnerInfo.cardNumber} — BINGO! ({winnerInfo.pattern}) · {Number(winnerInfo.amount).toFixed(2)} BIRR
+          </span>
+          <button
+            onClick={() => setWinnerInfo(null)}
+            className="text-green-400 hover:text-white text-lg leading-none px-1"
+            aria-label="Close winner banner">
+            ×
+          </button>
+        </div>
+      )}
       <div className="flex-1 flex items-center justify-center p-2 sm:p-3 min-h-0">
         {game ? (
           <NumberBoard calledNumbers={calledNumbers} lastNumber={lastNumber} />
