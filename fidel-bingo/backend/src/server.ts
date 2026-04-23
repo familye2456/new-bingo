@@ -41,7 +41,7 @@ app.use(helmet({
   hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
 }));
 
-const allowedOrigins = [env.FRONTEND_URL, 'https://f-bingo.vercel.app', 'http://localhost:5173'].filter(Boolean);
+const allowedOrigins = [env.FRONTEND_URL, 'https://f-bingo.vercel.app', 'http://localhost:5173' ,'https://bingo-keno.netlify.app'].filter(Boolean);
 const corsOptions = {
   origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
     if (!origin) return cb(null, true);
@@ -70,10 +70,17 @@ app.use('/api/auth/login', rateLimit({
   skipSuccessfulRequests: true,
   message: { success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many login attempts' } },
 }));
+// Generous limiter for call-number endpoint (auto-call fires rapidly)
+app.use('/api/games/:id/call', rateLimit({
+  windowMs: 60_000, max: env.NODE_ENV === 'development' ? 10000 : 300,
+  keyGenerator: (req) => `call:${(req as any).user?.id ?? req.ip}`,
+  message: { success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many call requests' } },
+}));
+// Tight limiter for game creation only
 app.use('/api/games', rateLimit({
   windowMs: 60_000, max: env.NODE_ENV === 'development' ? 10000 : 20,
   keyGenerator: (req) => `postpaid:${(req as any).user?.id ?? req.ip}`,
-  skip: (req) => req.method !== 'POST',
+  skip: (req) => req.method !== 'POST' || req.path.includes('/call'),
   message: { success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many game creation requests' } },
 }));
 

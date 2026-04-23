@@ -26,9 +26,13 @@ if (typeof window !== 'undefined') {
   document.addEventListener('keydown', unlock, { capture: true, once: true });
 }
 
-function playRootSound(filename: string) {
+function playRootSound(filename: string, queued = false) {
   if (!_unlocked) return;
-  playCachedSound(`/sounds/${filename}`).catch(() => {});
+  if (queued) {
+    audioQueue.enqueue(() => playCachedSound(`/sounds/${filename}`).then(() => {}));
+  } else {
+    playCachedSound(`/sounds/${filename}`).catch(() => {});
+  }
 }
 
 export const GamePage: React.FC = () => {
@@ -102,8 +106,8 @@ export const GamePage: React.FC = () => {
       playNumberSoundQueued(number, voiceRef.current, volumeRef.current, isPostpaid);
     });
     socket.on('game_finished', () => {
-      // Task 3.7: play winner sound on game_finished
-      playCachedSound('/sounds/winner.wav', volumeRef.current, isPostpaid).catch(() => {});
+      // Play winner sound through queue so it doesn't overlap with number sounds
+      playRootSound('winner.wav', true);
       setAutoCall(false);
       setTimeout(() => navigate('/dashboard'), 3000);
     });
@@ -138,14 +142,14 @@ export const GamePage: React.FC = () => {
     const scheduleNext = () => {
       if (!autoCallRef.current) return;
 
-      const intervalMs = autoCallInterval * 1000;
+      const intervalMs = Math.max(autoCallInterval * 1000, 1500); // never faster than 1.5s
       const startTime = Date.now();
 
       const waitAndCall = () => {
         if (!autoCallRef.current) return;
         // If queue is still playing, poll until drained
         if (audioQueue.playing) {
-          timeoutRef.current = setTimeout(waitAndCall, 100);
+          timeoutRef.current = setTimeout(waitAndCall, 200);
           return;
         }
         // Ensure minimum interval has elapsed
@@ -208,8 +212,8 @@ export const GamePage: React.FC = () => {
     if (!gameId) return;
     try {
       await gameApi.claimBingo(gameId, cartelaId);
-      // Task 3.7: play winner sound after successful bingo claim
-      playCachedSound('/sounds/winner.wav', volumeRef.current, isPostpaid).catch(() => {});
+      // Play winner sound through queue after successful bingo claim
+      playRootSound('winner.wav', true);
     } catch (err) {
       console.error('Failed to claim bingo', err);
     }
@@ -225,6 +229,17 @@ export const GamePage: React.FC = () => {
 
   const isCreator = currentGame.creatorId === user?.id;
   const myCartelas = (currentGame.cartelas ?? []).filter((c) => (c as unknown as { userId: string }).userId === user?.id);
+
+  // Play winner sound as soon as any of the player's cartelas becomes a winner
+  const prevWinnerIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const cartela of myCartelas) {
+      if (cartela.isWinner && !prevWinnerIds.current.has(cartela.id)) {
+        prevWinnerIds.current.add(cartela.id);
+        playRootSound('winner.wav', true);
+      }
+    }
+  }, [myCartelas]);
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">

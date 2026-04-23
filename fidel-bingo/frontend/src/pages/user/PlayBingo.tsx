@@ -130,7 +130,12 @@ export const PlayBingo: React.FC = () => {
       if (num != null) setSessionCalledNumbers((prev) => prev.includes(num) ? prev : [...prev, num]);
       queryClient.invalidateQueries({ queryKey: ['games'] });
     },
-    onError: (err: any) => { console.error('[callNumber]', err?.response?.data ?? err.message); stopAuto(true); },
+    onError: (err: any) => {
+      const status = err?.response?.status;
+      if (status === 429) return; // rate limited — skip this tick, keep going
+      console.error('[callNumber]', err?.response?.data ?? err.message);
+      stopAuto(true);
+    },
   });
 
   const finishMutation = useMutation({
@@ -184,10 +189,9 @@ export const PlayBingo: React.FC = () => {
             pattern: result.winPattern ?? '',
           });
         } else {
-          playRootSound('aac_locked.mp3');
+          playRootSound('notregisterd.mp3');
         }
       } else {
-        // Task 3.10: try .mp3 first, fall back to .m4a for older Android WebViews
         playCachedSound('/sounds/notregisterd.mp3').catch(() => {
           playCachedSound('/sounds/notregisterd.m4a').catch(() => {});
         });
