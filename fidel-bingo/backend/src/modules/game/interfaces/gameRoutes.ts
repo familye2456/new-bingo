@@ -100,10 +100,10 @@ router.post('/cartelas/:cartelaId/mark', markNumber);
 // Get cartelas linked to a game (for the current user)
 router.get('/:gameId/cartelas', async (req: AuthRequest, res: Response) => {
   const gcRepo = AppDataSource.getRepository(GameCartela);
-  const entries = await gcRepo.find({
-    where: { gameId: req.params.gameId },
-    relations: ['userCartela'],
-  });
+  const gameId = req.params.gameId;
+  const entries = req.user!.role === 'admin'
+    ? await gcRepo.find({ where: { gameId }, relations: ['userCartela'] })
+    : await gcRepo.find({ where: { gameId, userId: req.user!.id }, relations: ['userCartela'] });
   res.json({ success: true, data: entries.map((e) => ({ ...e.userCartela, betAmount: e.betAmount })) });
 });
 

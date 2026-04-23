@@ -497,9 +497,6 @@ function getWinIndices(mask: boolean[], pattern: string | null): number[] {
     const frame=[0,1,2,3,4,5,9,10,14,15,19,20,21,22,23,24];
     return frame.every(i=>mask[i]) ? frame : [];
   }
-  if (pattern === 'middleCorners') {
-    return mask[11] && mask[7] && mask[13] && mask[17] ? [7,11,13,17] : [];
-  }
   if (pattern === 'roundFree') {
     const ring = [6,7,8,11,13,16,17,18];
     return ring.every(i => mask[i]) ? ring : [];
