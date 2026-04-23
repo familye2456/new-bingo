@@ -34,6 +34,7 @@ const UserDashboard   = lazy(() => import('./pages/user/UserDashboard').then(m =
 const PlayBingo       = lazy(() => import('./pages/user/PlayBingo').then(m => ({ default: m.PlayBingo })));
 const MyCartelas      = lazy(() => import('./pages/user/MyCartelas').then(m => ({ default: m.MyCartelas })));
 const BalanceHistory  = lazy(() => import('./pages/user/BalanceHistory').then(m => ({ default: m.BalanceHistory })));
+const OwnerDashboard  = lazy(() => import('./pages/user/OwnerDashboard').then(m => ({ default: m.OwnerDashboard })));
 const Settings        = lazy(() => import('./pages/user/Settings').then(m => ({ default: m.Settings })));
 const NewGame         = lazy(() => import('./pages/user/NewGame').then(m => ({ default: m.NewGame })));
 
@@ -254,6 +255,7 @@ const AppRoutes: React.FC = () => {
             <Route path="/new-game" element={<NewGame />} />
             <Route path="/cartelas" element={<MyCartelas />} />
             <Route path="/balance" element={<BalanceHistory />} />
+            <Route path="/owner" element={<OwnerDashboard />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
 

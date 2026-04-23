@@ -46,12 +46,10 @@ const BarChart: React.FC<{ data: { date: string; houseCut: number; totalBet: num
   if (!data.length) return <div className="flex items-center justify-center h-40 text-xs" style={{ color: '#374151' }}>No data yet</div>;
 
   const maxHC = Math.max(...data.map((d) => d.houseCut), 1);
-  const maxBet = Math.max(...data.map((d) => d.totalBet), 1);
   const H = 160, PB = 28, PT = 12, PL = 8, PR = 8;
   const chartH = H - PB - PT;
   const barGroupW = 100 / data.length;
-  const barW = Math.min(barGroupW * 0.35, 3.5);
-  const gap = barW * 0.6;
+  const barW = Math.min(barGroupW * 0.55, 5);
 
   return (
     <div className="relative w-full" style={{ height: H }}>
@@ -64,26 +62,19 @@ const BarChart: React.FC<{ data: { date: string; houseCut: number; totalBet: num
         {data.map((d, i) => {
           const cx = PL + (i + 0.5) * ((100 - PL - PR) / data.length);
           const hcH = Math.max(1, (d.houseCut / maxHC) * chartH);
-          const betH = Math.max(1, (d.totalBet / maxBet) * chartH);
           const isHov = hov === i;
           return (
             <g key={d.date}>
-              {/* Bet bar (behind) */}
+              {/* Profit bar */}
               <rect
-                x={cx - gap / 2 - barW} y={PT + chartH - betH}
-                width={barW} height={betH} rx={0.8}
-                fill={isHov ? 'rgba(52,211,153,0.9)' : 'rgba(52,211,153,0.3)'}
-              />
-              {/* House cut bar (front) */}
-              <rect
-                x={cx + gap / 2} y={PT + chartH - hcH}
+                x={cx - barW / 2} y={PT + chartH - hcH}
                 width={barW} height={hcH} rx={0.8}
                 fill={isHov ? '#f87171' : 'rgba(248,113,113,0.7)'}
               />
               {/* Hover hit area */}
               <rect
-                x={cx - barW - gap / 2 - 1} y={PT}
-                width={barW * 2 + gap + 2} height={chartH}
+                x={cx - barW / 2 - 1} y={PT}
+                width={barW + 2} height={chartH}
                 fill="transparent"
                 onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}
                 style={{ cursor: 'pointer' }}
@@ -105,14 +96,10 @@ const BarChart: React.FC<{ data: { date: string; houseCut: number; totalBet: num
       {hov !== null && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 pointer-events-none z-20
           rounded-xl px-4 py-2.5 shadow-2xl text-xs"
-          style={{ background: '#0d1424', border: '1px solid rgba(255,255,255,0.1)', minWidth: 160 }}>
+          style={{ background: '#0d1424', border: '1px solid rgba(255,255,255,0.1)', minWidth: 140 }}>
           <div className="font-semibold text-white mb-1.5">{data[hov].date}</div>
           <div className="flex items-center justify-between gap-4">
-            <span style={{ color: '#34d399' }}>Bet</span>
-            <span className="font-bold text-white">{fmtBirr(data[hov].totalBet)}</span>
-          </div>
-          <div className="flex items-center justify-between gap-4 mt-0.5">
-            <span style={{ color: '#f87171' }}>House</span>
+            <span style={{ color: '#f87171' }}>Profit</span>
             <span className="font-bold text-white">{fmtBirr(data[hov].houseCut)}</span>
           </div>
           <div className="flex items-center justify-between gap-4 mt-0.5">
@@ -125,12 +112,8 @@ const BarChart: React.FC<{ data: { date: string; houseCut: number; totalBet: num
       {/* Legend */}
       <div className="absolute bottom-0 right-0 flex items-center gap-3 pb-0.5">
         <div className="flex items-center gap-1">
-          <div className="w-2.5 h-2.5 rounded-sm" style={{ background: 'rgba(52,211,153,0.6)' }} />
-          <span className="text-xs" style={{ color: '#4b5563' }}>Bet</span>
-        </div>
-        <div className="flex items-center gap-1">
           <div className="w-2.5 h-2.5 rounded-sm" style={{ background: 'rgba(248,113,113,0.7)' }} />
-          <span className="text-xs" style={{ color: '#4b5563' }}>House</span>
+          <span className="text-xs" style={{ color: '#4b5563' }}>Profit</span>
         </div>
       </div>
     </div>
@@ -290,11 +273,10 @@ export const UserDashboard: React.FC = () => {
             <div className="flex items-start justify-between flex-wrap gap-3 mb-5">
               <div>
                 <div className="text-sm font-bold text-white">Revenue Overview</div>
-                <div className="text-xs mt-0.5" style={{ color: '#374151' }}>Last 14 days · Bet vs House Profit</div>
+                <div className="text-xs mt-0.5" style={{ color: '#374151' }}>Last 14 days · House Profit</div>
               </div>
               <div className="flex items-center gap-5">
                 {[
-                  { label: '30d Bet',   value: fmtBirr(d30.totalBet),  color: '#34d399' },
                   { label: '30d House', value: fmtBirr(d30.houseCut),  color: '#f87171' },
                   { label: '30d Games', value: fmt(d30.count),          color: '#60a5fa' },
                 ].map(({ label, value, color }) => (
@@ -368,29 +350,48 @@ export const UserDashboard: React.FC = () => {
                       </tfoot>
                     </table>
                   </div>
-                  {/* Mobile */}
-                  <div className="sm:hidden divide-y" style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
-                    {daily30.map((row) => (
-                      <div key={row.date} className="px-4 py-4" style={{ background: '#131b2e' }}>
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-xs font-semibold" style={{ color: '#6b7280' }}>{row.date}</span>
-                          <span className="text-xs font-bold px-2 py-0.5 rounded-full"
-                            style={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8' }}>{row.games} games</span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          {[
-                            { label: 'Bet',   value: fmt(row.totalBet),   color: '#34d399', bg: 'rgba(52,211,153,0.07)' },
-                            { label: 'Won',   value: fmt(row.totalPrize), color: '#fbbf24', bg: 'rgba(251,191,36,0.07)' },
-                            { label: 'House', value: fmt(row.houseCut),   color: '#f87171', bg: 'rgba(248,113,113,0.07)' },
-                          ].map(({ label, value, color, bg }) => (
-                            <div key={label} className="rounded-xl p-2.5 text-center" style={{ background: bg }}>
-                              <div className="text-xs mb-1" style={{ color: '#374151' }}>{label}</div>
-                              <div className="text-xs font-bold" style={{ color }}>{value}</div>
-                            </div>
+                  {/* Mobile — same table as desktop */}
+                  <div className="sm:hidden overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr style={{ background: '#0d1424', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                          {[['Date','text-left'],['Games','text-center'],['Players Bet','text-right'],['Players Won','text-right'],['House Profit','text-right']].map(([h, a]) => (
+                            <th key={h} className={`px-5 py-3.5 text-xs font-bold uppercase tracking-widest ${a}`} style={{ color: '#1f2937' }}>{h}</th>
                           ))}
-                        </div>
-                      </div>
-                    ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {daily30.map((row, i) => (
+                          <tr key={row.date} className="group transition-colors"
+                            style={{ background: i % 2 === 0 ? '#131b2e' : '#0f1628', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                            <td className="px-5 py-3 text-xs font-medium whitespace-nowrap" style={{ color: '#6b7280' }}>{row.date}</td>
+                            <td className="px-5 py-3 text-center">
+                              <span className="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold"
+                                style={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.25)' }}>
+                                {row.games}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3 text-right text-xs font-bold" style={{ color: '#34d399' }}>{fmtBirr(row.totalBet)}</td>
+                            <td className="px-5 py-3 text-right text-xs font-bold" style={{ color: '#fbbf24' }}>{fmtBirr(row.totalPrize)}</td>
+                            <td className="px-5 py-3 text-right">
+                              <span className="text-xs font-bold px-2.5 py-1 rounded-full"
+                                style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171', border: '1px solid rgba(248,113,113,0.15)' }}>
+                                {fmtBirr(row.houseCut)}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ background: '#0d1424', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                          <td className="px-5 py-3.5 text-xs font-black" style={{ color: '#4b5563' }}>TOTAL</td>
+                          <td className="px-5 py-3.5 text-center text-xs font-black" style={{ color: '#818cf8' }}>{totals.games}</td>
+                          <td className="px-5 py-3.5 text-right text-xs font-black" style={{ color: '#34d399' }}>{fmtBirr(totals.bet)}</td>
+                          <td className="px-5 py-3.5 text-right text-xs font-black" style={{ color: '#fbbf24' }}>{fmtBirr(totals.prize)}</td>
+                          <td className="px-5 py-3.5 text-right text-xs font-black" style={{ color: '#f87171' }}>{fmtBirr(totals.house)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
                   </div>
                 </div>
           }

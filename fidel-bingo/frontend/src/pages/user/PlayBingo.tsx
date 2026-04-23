@@ -546,8 +546,15 @@ const CartelaPreviewModal: React.FC<{
         style={{ background: '#0f1e35', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 40px rgba(0,0,0,0.7)' }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Title */}
-        <div className="text-yellow-400 font-extrabold text-lg tracking-widest">Card #{cardNumber}</div>
+        {/* Title row */}
+        <div className="flex items-center justify-between w-full">
+          <div className="text-yellow-400 font-extrabold text-lg tracking-widest">Card #{cardNumber}</div>
+          <button onClick={onClose}
+            className="w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+            style={{ background: 'rgba(255,255,255,0.08)' }}>
+            ✕
+          </button>
+        </div>
 
         {/* Grid wrapper — position relative so SVG overlay sits on top */}
         <div className="relative" style={{ width: GRID, height: GRID + 38, paddingTop: 38 }}>
@@ -617,10 +624,7 @@ const CartelaPreviewModal: React.FC<{
           {winPattern ? `🎉 BINGO! (${winPattern})` : 'No win yet'}
         </div>
 
-        <button onClick={onClose}
-          className="text-xs text-gray-500 hover:text-gray-300 mt-1">
-          tap anywhere to close
-        </button>
+
       </div>
     </div>
   );
