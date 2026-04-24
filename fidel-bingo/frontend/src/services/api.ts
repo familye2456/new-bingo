@@ -123,4 +123,5 @@ export const gameApi = {
     api.post(`/games/${gameId}/bingo`, { cartelaId }),
   markNumber: (cartelaId: string, number: number) =>
     api.post(`/games/cartelas/${cartelaId}/mark`, { number }),
+  resetGame: (gameId: string) => api.post(`/games/${gameId}/reset`),
 };

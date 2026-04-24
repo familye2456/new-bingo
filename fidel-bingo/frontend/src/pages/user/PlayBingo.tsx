@@ -109,6 +109,8 @@ export const PlayBingo: React.FC = () => {
     if (!game || game.status !== 'active') return;
     if (resetDoneRef.current === game.id) return;
     resetDoneRef.current = game.id;
+    // Reset calledNumbers on server/IDB so the sequence restarts from scratch
+    offlineGameApi.reset(game.id).catch(() => {});
     // Pre-cache cartelas for this game so offline check works
     offlineGameApi.getCartelas(game.id).catch(() => {});
   }, [game?.id]);
@@ -191,7 +193,7 @@ export const PlayBingo: React.FC = () => {
             pattern: result.winPattern ?? '',
           });
         } else {
-          playRootSound('notregisterd.mp3');
+          playRootSound('aac_locked.mp3');
         }
       } else {
         playCachedSound('/sounds/notregisterd.mp3').catch(() => {

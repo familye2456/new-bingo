@@ -170,13 +170,22 @@ export const NewGame: React.FC = () => {
       return next;
     });
 
+  const [quickAddError, setQuickAddError] = useState<string | null>(null);
+
   const handleQuickAdd = (val: string) => {
     const num = parseInt(val, 10);
     const found = cartelas.find((c) => c.cardNumber === num);
-    if (found) {
-      toggle(found.id);
-      setQuickAddValue('');
+    if (!found) {
+      setQuickAddError(`Card #${num} not found`);
+      return;
     }
+    if (selectedIds.has(found.id)) {
+      setQuickAddError(`Card #${num} already added`);
+      return;
+    }
+    setSelectedIds((prev) => new Set([...prev, found.id]));
+    setQuickAddValue('');
+    setQuickAddError(null);
   };
   const houseCutValid = typeof houseCut === 'number' && houseCut >= 10 && houseCut <= 45;
   const canStart = selectedIds.size >= MIN_CARTELAS && houseCutValid && voiceCached;
@@ -287,23 +296,31 @@ export const NewGame: React.FC = () => {
             {rememberActive ? '✓' : '○'} Active only
           </button>
           {showQuickAdd ? (
-            <input
-              ref={quickAddRef}
-              autoFocus
-              type="number"
-              value={quickAddValue}
-              onChange={(e) => {
-                setQuickAddValue(e.target.value);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') { handleQuickAdd(quickAddValue); }
-                if (e.key === 'Escape') { setShowQuickAdd(false); setQuickAddValue(''); }
-              }}
-              onBlur={() => { setShowQuickAdd(false); setQuickAddValue(''); }}
-              placeholder="Card #"
-              className="w-20 text-xs px-2.5 py-1 rounded-lg font-bold focus:outline-none"
-              style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)' }}
-            />
+            <div className="flex flex-col items-end gap-1">
+              <input
+                ref={quickAddRef}
+                autoFocus
+                type="number"
+                value={quickAddValue}
+                onChange={(e) => {
+                  setQuickAddValue(e.target.value);
+                  setQuickAddError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { handleQuickAdd(quickAddValue); }
+                  if (e.key === 'Escape') { setShowQuickAdd(false); setQuickAddValue(''); setQuickAddError(null); }
+                }}
+                onBlur={() => { setShowQuickAdd(false); setQuickAddValue(''); setQuickAddError(null); }}
+                placeholder="Card #"
+                className="w-20 text-xs px-2.5 py-1 rounded-lg font-bold focus:outline-none"
+                style={quickAddError
+                  ? { background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.4)' }
+                  : { background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)' }}
+              />
+              {quickAddError && (
+                <span className="text-[10px] text-red-400 whitespace-nowrap">{quickAddError}</span>
+              )}
+            </div>
           ) : (
             <button
               onClick={() => setShowQuickAdd(true)}
