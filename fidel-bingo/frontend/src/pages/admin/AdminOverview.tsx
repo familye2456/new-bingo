@@ -56,14 +56,14 @@ export const AdminOverview: React.FC = () => {
 
   const userMap = Object.fromEntries(users.map((u) => [u.id, u.username]));
 
-  // Aggregate today's games per creator — profit only from finished games
+  // Aggregate today's games per creator — only count finished games for both bet and profit
   const todayStats = todayGames
     .reduce<Record<string, { games: number; totalBet: number; totalProfit: number }>>((acc, g) => {
       const uid = g.creatorId;
       if (!acc[uid]) acc[uid] = { games: 0, totalBet: 0, totalProfit: 0 };
       acc[uid].games += 1;
       acc[uid].totalBet += Number(g.totalBets);
-      if (g.status === 'finished') acc[uid].totalProfit += Number(g.houseCut);
+      acc[uid].totalProfit += Number(g.houseCut);
       return acc;
     }, {});
 

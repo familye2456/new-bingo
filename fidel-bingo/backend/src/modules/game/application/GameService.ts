@@ -344,6 +344,15 @@ export class GameService {
       return this.gameRepo.find({ where, order: { createdAt: 'DESC' } });
     }
 
+    // When filtering by a specific user (admin report), return last 90 days without limit
+    if (userId) {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 90);
+      cutoff.setHours(0, 0, 0, 0);
+      where.createdAt = MoreThanOrEqual(cutoff);
+      return this.gameRepo.find({ where, order: { createdAt: 'DESC' } });
+    }
+
     return this.gameRepo.find({ where, order: { createdAt: 'DESC' }, take: 50 });
   }
 

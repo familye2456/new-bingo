@@ -142,7 +142,7 @@ export const UserDetail: React.FC = () => {
             </span>
             {user.paymentType === 'prepaid' && (
               <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                ${Number(user.balance).toFixed(2)}
+                {Number(user.balance).toFixed(2)} Birr
               </span>
             )}
           </div>

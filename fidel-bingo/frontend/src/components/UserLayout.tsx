@@ -38,10 +38,18 @@ const NAV = [
 ];
 
 export const UserLayout: React.FC = () => {
-  const { user, logout, swReady, dismissSwReady } = useAuthStore();
+  const { user, logout, swReady, dismissSwReady, refreshBalance } = useAuthStore();
   const [open, setOpen] = useState(false);
   const online = useOnlineStatus();
   const initials = (user?.username ?? 'U').slice(0, 2).toUpperCase();
+
+  // Keep balance fresh — refresh every 30s while online
+  useEffect(() => {
+    if (!online) return;
+    refreshBalance();
+    const interval = setInterval(refreshBalance, 30_000);
+    return () => clearInterval(interval);
+  }, [online, refreshBalance]);
 
   // Auto-dismiss the SW ready toast after 6 seconds
   useEffect(() => {

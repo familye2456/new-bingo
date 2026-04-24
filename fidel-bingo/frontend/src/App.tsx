@@ -45,6 +45,7 @@ const UserManagement     = lazy(() => import('./pages/admin/UserManagement').the
 const UserDetail         = lazy(() => import('./pages/admin/UserDetail').then(m => ({ default: m.UserDetail })));
 const CartelaManagement  = lazy(() => import('./pages/admin/CartelaManagement').then(m => ({ default: m.CartelaManagement })));
 const PackageManagement  = lazy(() => import('./pages/admin/PackageManagement').then(m => ({ default: m.PackageManagement })));
+const AdminBalancePage   = lazy(() => import('./pages/admin/AdminBalancePage').then(m => ({ default: m.AdminBalancePage })));
 
 const PageFallback = () => (
   <div className="flex items-center justify-center h-40 text-gray-400 text-sm">Loading…</div>
@@ -266,6 +267,7 @@ const AppRoutes: React.FC = () => {
             <Route path="users/:id" element={<UserDetail />} />
             <Route path="cartelas" element={<CartelaManagement />} />
             <Route path="packages" element={<PackageManagement />} />
+            <Route path="balance" element={<AdminBalancePage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/play" replace />} />
