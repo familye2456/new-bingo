@@ -208,6 +208,7 @@ export const PlayBingo: React.FC = () => {
   };
   const calledNumbers = sessionCalledNumbers;
   const lastNumber = calledNumbers.length > 0 ? calledNumbers[calledNumbers.length - 1] : null;
+  const prevNumber = calledNumbers.length > 1 ? calledNumbers[calledNumbers.length - 2] : null;
   const isCreator = game?.creatorId === user?.id;
 
   const prevCalledRef = useRef<number[]>([]);
@@ -221,32 +222,53 @@ export const PlayBingo: React.FC = () => {
     <div className="fixed inset-0 flex flex-col" style={{ background: '#0a1220' }}>
 
       {/* ── Top bar ── */}
-      <div className="flex items-center gap-2 pl-14 pr-3 py-3 shrink-0"
-        style={{ background: 'rgba(0,0,0,0.5)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+      <div className="flex items-center pl-12 pr-3 py-2 shrink-0"
+        style={{ background: 'rgba(0,0,0,0.5)', borderBottom: '1px solid rgba(255,255,255,0.1)', gap: 'clamp(6px,2vw,16px)' }}>
 
         {/* Game title */}
-        <h1 className="text-yellow-400 font-extrabold text-lg sm:text-xl tracking-widest shrink-0">
-          {game ? `GAME #${game.gameNumber ?? game.id.slice(0, 6).toUpperCase()}` : 'BINGO'}
+        <h1 className="text-yellow-400 font-extrabold tracking-widest shrink-0"
+          style={{ fontSize: 'clamp(13px,3.5vw,20px)' }}>
+          {game ? `#${game.gameNumber ?? game.id.slice(0, 6).toUpperCase()}` : 'BINGO'}
         </h1>
 
-        {/* Info chips — scroll on small screens */}
+        {/* Cartela count */}
         {game && (
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none flex-1 mx-2">
-            <InfoChip label={`${calledNumbers.length}/75`} highlight />
-            <InfoChip label={`WIN ${Number(game.prizePool).toFixed(1)} ₿`} />
-            <InfoChip label={`${game.cartelaCount} CARTELA`} />
+          <span className="text-xs font-bold px-2 py-1 rounded-lg shrink-0"
+            style={{ background: 'rgba(255,255,255,0.07)', color: '#94a3b8', border: '1px solid rgba(255,255,255,0.1)', fontSize: 'clamp(10px,2.5vw,13px)' }}>
+            {game.cartelaCount} 🎴
+          </span>
+        )}
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Called count */}
+        {game && (
+          <span className="font-bold shrink-0"
+            style={{ fontSize: 'clamp(11px,2.8vw,14px)', color: '#60a5fa' }}>
+            {calledNumbers.length}<span style={{ color: '#374151' }}>/75</span>
+          </span>
+        )}
+
+        {/* Prize pool */}
+        {game && (
+          <div className="flex items-center gap-1 rounded-xl shrink-0"
+            style={{ background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.3)', padding: 'clamp(4px,1vw,8px) clamp(6px,1.5vw,12px)' }}>
+            <span className="text-yellow-400 font-extrabold tabular-nums"
+              style={{ fontSize: 'clamp(11px,2.8vw,15px)', textShadow: '0 0 8px rgba(251,191,36,0.5)' }}>
+              {Number(game.prizePool).toFixed(2)}
+            </span>
+            <span className="text-yellow-400/60 font-bold" style={{ fontSize: 'clamp(9px,2vw,11px)' }}>BIRR</span>
           </div>
         )}
 
-        {/* Right actions */}
-        <div className="flex items-center gap-1.5 ml-auto shrink-0">
-          {activeGames.filter((g) => g.id !== game?.id).slice(0, 2).map((g) => (
-            <button key={g.id} onClick={() => { setSelectedGameId(g.id); resetDoneRef.current = null; }}
-              className="text-xs bg-white/10 hover:bg-white/20 text-gray-300 px-2.5 py-1 rounded-lg hidden sm:block">
-              #{g.gameNumber ?? g.id.slice(0, 6)}
-            </button>
-          ))}
-        </div>
+        {/* Other games — desktop only */}
+        {game && activeGames.filter((g) => g.id !== game?.id).slice(0, 2).map((g) => (
+          <button key={g.id} onClick={() => { setSelectedGameId(g.id); resetDoneRef.current = null; }}
+            className="text-xs bg-white/10 hover:bg-white/20 text-gray-300 px-2.5 py-1 rounded-lg hidden sm:block shrink-0">
+            #{g.gameNumber ?? g.id.slice(0, 6)}
+          </button>
+        ))}
       </div>
 
       {/* ── Winner banner ── */}
@@ -264,10 +286,97 @@ export const PlayBingo: React.FC = () => {
           </button>
         </div>
       )}
-      <div className="flex-1 flex items-center justify-center p-2 sm:p-3 min-h-0">
-        {game ? (
-          <NumberBoard calledNumbers={calledNumbers} lastNumber={lastNumber} />
-        ) : null}
+      <div className="flex-1 flex flex-col min-h-0">
+        {/* ── Called number balls ── */}
+        {game && (
+          <div className="shrink-0 flex items-center justify-center gap-3 pt-2 pb-1 px-3">
+            {/* Previous number — smaller */}
+            {prevNumber != null ? (
+              <div className="flex flex-col items-center gap-0.5 opacity-60">
+                <span className="text-[9px] font-bold uppercase tracking-widest"
+                  style={{ color: getBingoColor(prevNumber) }}>
+                  {getBingoLetter(prevNumber)}
+                </span>
+                <div className="flex items-center justify-center font-black rounded-full"
+                  style={{
+                    width: 'clamp(44px,8vw,60px)',
+                    height: 'clamp(44px,8vw,60px)',
+                    fontSize: 'clamp(16px,3vw,22px)',
+                    background: `radial-gradient(circle at 35% 35%, ${getBingoColor(prevNumber)}33, ${getBingoColor(prevNumber)}11)`,
+                    border: `2px solid ${getBingoColor(prevNumber)}55`,
+                    color: getBingoColor(prevNumber),
+                  }}>
+                  {prevNumber}
+                </div>
+                <span className="text-[9px] text-gray-600 font-medium">prev</span>
+              </div>
+            ) : (
+              <div style={{ width: 'clamp(44px,8vw,60px)' }} />
+            )}
+
+            {/* Current number — large and glowing */}
+            <div className="flex flex-col items-center gap-1">
+              {lastNumber != null ? (
+                <>
+                  <span className="text-xs font-black uppercase tracking-widest"
+                    style={{ color: getBingoColor(lastNumber) }}>
+                    {getBingoLetter(lastNumber)}
+                  </span>
+                  <div className="flex items-center justify-center font-black rounded-full relative"
+                    style={{
+                      width: 'clamp(64px,12vw,88px)',
+                      height: 'clamp(64px,12vw,88px)',
+                      fontSize: 'clamp(24px,5vw,36px)',
+                      background: `radial-gradient(circle at 35% 35%, ${getBingoColor(lastNumber)}55, ${getBingoColor(lastNumber)}22)`,
+                      border: `3px solid ${getBingoColor(lastNumber)}`,
+                      color: '#fff',
+                      boxShadow: `0 0 24px ${getBingoColor(lastNumber)}66, 0 0 8px ${getBingoColor(lastNumber)}44`,
+                      animation: 'ballPop 0.35s cubic-bezier(0.34,1.56,0.64,1)',
+                    }}>
+                    {lastNumber}
+                  </div>
+                  <span className="text-[10px] font-bold text-yellow-400/70 uppercase tracking-widest">current</span>
+                </>
+              ) : (
+                <div className="flex items-center justify-center font-black rounded-full"
+                  style={{
+                    width: 'clamp(64px,12vw,88px)',
+                    height: 'clamp(64px,12vw,88px)',
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '3px solid rgba(255,255,255,0.1)',
+                    color: 'rgba(255,255,255,0.15)',
+                    fontSize: 'clamp(18px,3vw,24px)',
+                  }}>
+                  ?
+                </div>
+              )}
+            </div>
+
+            {/* Count badge */}
+            <div className="flex flex-col items-center gap-0.5">
+              <span className="text-[9px] text-gray-600 uppercase tracking-wider">called</span>
+              <div className="flex items-center justify-center font-black rounded-full"
+                style={{
+                  width: 'clamp(44px,8vw,60px)',
+                  height: 'clamp(44px,8vw,60px)',
+                  fontSize: 'clamp(14px,2.5vw,18px)',
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '2px solid rgba(255,255,255,0.12)',
+                  color: '#e2e8f0',
+                }}>
+                {calledNumbers.length}
+              </div>
+              <span className="text-[9px] text-gray-600 font-medium">/ 75</span>
+            </div>
+          </div>
+        )}
+
+        {/* ── Number board ── */}
+        <div className="flex-1 min-h-0 flex items-center px-2 sm:px-3 pb-1">
+          {game ? (
+            <NumberBoard calledNumbers={calledNumbers} lastNumber={lastNumber} />
+          ) : null}
+        </div>
       </div>
 
       {/* ── Controls ── */}
@@ -365,27 +474,34 @@ export const PlayBingo: React.FC = () => {
         </div>
       )}
 
-      {/* ── Prize Pool Banner ── */}
-      {game && (
-        <div className="shrink-0 flex items-center justify-center gap-4 py-2 px-4"
-          style={{ background: 'rgba(0,0,0,0.4)', borderTop: '1px solid rgba(251,191,36,0.15)' }}>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-500 uppercase tracking-widest">Prize Pool</span>
-            <span className="text-yellow-400 font-extrabold text-lg tabular-nums"
-              style={{ textShadow: '0 0 12px rgba(251,191,36,0.6)', animation: 'pulse 2s infinite' }}>
-              {Number(game.prizePool).toFixed(2)} <span className="text-sm font-bold">BIRR</span>
-            </span>
-          </div>
-          <div className="w-px h-5 bg-white/10" />
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-500 uppercase tracking-widest">Cartelas</span>
-            <span className="text-white font-bold text-base">{game.cartelaCount}</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
+
+// ── Bingo ball helpers ────────────────────────────────────────────────────────
+function getBingoLetter(n: number): string {
+  if (n <= 15) return 'B';
+  if (n <= 30) return 'I';
+  if (n <= 45) return 'N';
+  if (n <= 60) return 'G';
+  return 'O';
+}
+
+function getBingoColor(n: number): string {
+  if (n <= 15) return '#60a5fa'; // B — blue
+  if (n <= 30) return '#f87171'; // I — red
+  if (n <= 45) return '#4ade80'; // N — green
+  if (n <= 60) return '#fbbf24'; // G — yellow
+  return '#c084fc';              // O — purple
+}
+
+// Inject ball pop animation once
+if (typeof document !== 'undefined' && !document.getElementById('ball-pop-style')) {
+  const s = document.createElement('style');
+  s.id = 'ball-pop-style';
+  s.textContent = `@keyframes ballPop { 0%{transform:scale(0.5);opacity:0} 100%{transform:scale(1);opacity:1} }`;
+  document.head.appendChild(s);
+}
 
 // ── InfoChip ──────────────────────────────────────────────────────────────────
 const InfoChip: React.FC<{ label: string; highlight?: boolean }> = ({ label }) => (
@@ -420,16 +536,17 @@ const CtrlBtn: React.FC<{
 const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null }> = ({
   calledNumbers, lastNumber,
 }) => (
-  <div className="w-full h-full flex flex-col justify-center gap-1" role="region" aria-label="Bingo number board"
-    style={{ maxWidth: '100%' }}>
+  <div className="w-full flex flex-col" role="region" aria-label="Bingo number board"
+    style={{ gap: 'clamp(2px, 1vw, 6px)' }}>
     {ROWS_DEF.map(({ letter, start }) => (
-      <div key={letter} className="flex items-center gap-1 min-h-0">
+      <div key={letter} className="flex items-stretch"
+        style={{ gap: 'clamp(2px, 1vw, 6px)', height: 'clamp(26px, 4.5vw, 58px)' }}>
+
         {/* Letter */}
         <div className="flex items-center justify-center font-extrabold text-gray-900 rounded-lg shrink-0"
           style={{
-            width: 'clamp(28px, 4vw, 48px)',
-            height: 'clamp(28px, 4vw, 48px)',
-            fontSize: 'clamp(12px, 2vw, 20px)',
+            width: 'clamp(26px, 4.5vw, 58px)',
+            fontSize: 'clamp(10px, 1.8vw, 24px)',
             background: 'linear-gradient(180deg,#fbbf24,#f59e0b)',
             boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
           }}>
@@ -437,7 +554,8 @@ const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null
         </div>
 
         {/* 15 cells */}
-        <div className="flex-1 grid gap-0.5 sm:gap-1" style={{ gridTemplateColumns: 'repeat(15,1fr)' }}>
+        <div className="flex-1 grid h-full"
+          style={{ gridTemplateColumns: 'repeat(15,1fr)', gap: 'clamp(2px, 0.8vw, 5px)' }}>
           {Array.from({ length: 15 }, (_, i) => {
             const num = start + i;
             const called = calledNumbers.includes(num);
@@ -445,18 +563,18 @@ const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null
             return (
               <div key={num}
                 aria-label={`${num}${called ? ' called' : ''}`}
-                className="flex items-center justify-center font-bold rounded-md transition-all duration-300 aspect-square"
+                className="flex items-center justify-center font-bold rounded-sm w-full h-full transition-all duration-300"
                 style={{
-                  fontSize: 'clamp(8px, 1.4vw, 14px)',
+                  fontSize: 'clamp(5px, 1vw, 13px)',
                   background: isLast
                     ? 'linear-gradient(180deg,#fbbf24,#f59e0b)'
                     : called
                     ? 'linear-gradient(180deg,#ca8a04,#a16207)'
                     : 'linear-gradient(180deg,#1e3a5f,#152d4a)',
                   color: isLast ? '#111' : called ? '#111' : '#94a3b8',
-                  boxShadow: isLast ? '0 0 12px rgba(251,191,36,0.7)' : called ? '0 0 6px rgba(202,138,4,0.4)' : 'none',
+                  boxShadow: isLast ? '0 0 10px rgba(251,191,36,0.7)' : called ? '0 0 5px rgba(202,138,4,0.4)' : 'none',
                   border: isLast ? '2px solid #fbbf24' : called ? '1px solid rgba(202,138,4,0.6)' : '1px solid rgba(255,255,255,0.05)',
-                  transform: isLast ? 'scale(1.1)' : 'scale(1)',
+                  transform: isLast ? 'scale(1.08)' : 'scale(1)',
                 }}>
                 {num}
               </div>

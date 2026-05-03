@@ -323,6 +323,8 @@ export const AdminBalancePage: React.FC = () => {
   const { data: allUsers = [], isLoading: loadingUsers } = useQuery<UserRecord[]>({
     queryKey: ['admin-users'],
     queryFn: () => adminApi.listUsers().then(r => r.data.data),
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
   const { data: todayGames = [], isLoading: loadingToday } = useQuery<Game[]>({
     queryKey: ['games-today'],

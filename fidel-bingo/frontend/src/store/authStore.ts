@@ -250,9 +250,11 @@ export const useAuthStore = create<AuthState>((set) => ({
       const res = await api.get('/users/me');
       const fresh = res.data?.data as User;
       if (fresh?.id) {
-        await dbPut('user', fresh, 'me');
+        // Normalize balance to number — TypeORM returns decimal as string
+        const normalized = { ...fresh, balance: Number(fresh.balance) };
+        await dbPut('user', normalized, 'me');
         set((state) => ({
-          user: state.user ? { ...state.user, balance: fresh.balance } : fresh,
+          user: state.user ? { ...state.user, balance: Number(fresh.balance) } : normalized,
         }));
       }
     } catch {}
@@ -271,8 +273,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       const res = await api.get('/users/me');
       const fresh = res.data?.data as User;
       if (fresh?.id) {
-        await dbPut('user', fresh, 'me');
-        set({ user: fresh, initialized: true });
+        const normalized = { ...fresh, balance: Number(fresh.balance) };
+        await dbPut('user', normalized, 'me');
+        set({ user: normalized, initialized: true });
         return;
       }
     } catch (err: any) {
