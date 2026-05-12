@@ -22,14 +22,25 @@ export const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [caching, setCaching] = useState(false);
 
+  // Show blocked message if redirected from a suspended account
+  useEffect(() => {
+    if (window.location.search.includes('blocked=1')) {
+      setError('Your account has been suspended. Contact support.');
+    }
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     try {
       await login(identifier, password);
-      // login() sets cacheSteps if prepaid — wait for them to finish before navigating
-    } catch {
-      setError('Invalid email/username or password');
+    } catch (err: any) {
+      const code = err?.response?.data?.error?.code;
+      if (code === 'ACCOUNT_BLOCKED') {
+        setError('Your account has been suspended. Contact support.');
+      } else {
+        setError('Invalid email/username or password');
+      }
     }
   };
 

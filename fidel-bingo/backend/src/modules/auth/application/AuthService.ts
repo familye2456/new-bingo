@@ -44,6 +44,10 @@ export class AuthService {
     });
     if (!user) throw new AppError(401, 'INVALID_CREDENTIALS', 'Invalid credentials');
 
+    if (user.status === 'suspended' || user.status === 'banned') {
+      throw new AppError(403, 'ACCOUNT_BLOCKED', 'Your account has been suspended. Contact support.');
+    }
+
     if (user.lockedUntil && user.lockedUntil > new Date()) {
       throw new AppError(423, 'ACCOUNT_LOCKED', 'Account temporarily locked');
     }

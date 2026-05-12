@@ -52,6 +52,8 @@ export class GameService {
     ]);
 
     if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'User not found');
+    if (user.status === 'suspended' || user.status === 'banned')
+      throw new AppError(403, 'ACCOUNT_BLOCKED', 'Your account is suspended');
     if (ownedUCs.length !== dto.cartelaIds.length)
       throw new AppError(403, 'FORBIDDEN', 'One or more cartelas do not belong to you');
 

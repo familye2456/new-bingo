@@ -50,6 +50,15 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
     }
+    // Account suspended/banned — force logout immediately
+    if (error.response?.status === 403 && error.response?.data?.error?.code === 'ACCOUNT_BLOCKED') {
+      localStorage.removeItem('access_token');
+      import('./db').then(({ dbClear }) => {
+        Promise.all([dbClear('games'), dbClear('cartelas'), dbClear('user'), dbClear('transactions')]);
+      });
+      window.location.href = '/login?blocked=1';
+      return Promise.reject(error);
+    }
     return Promise.reject(error);
   }
 );
