@@ -363,7 +363,7 @@ export const NewGame: React.FC = () => {
                 <button
                   key={c.id}
                   onClick={() => toggle(c.id)}
-                  className="rounded-xl font-bold text-sm py-3 transition-all duration-150"
+                  className="rounded-xl font-bold text-lg py-3 transition-all duration-150"
                   style={sel ? {
                     background: 'linear-gradient(180deg,#3b82f6,#2563eb)',
                     color: '#fff',
