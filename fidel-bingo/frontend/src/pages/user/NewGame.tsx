@@ -356,14 +356,14 @@ export const NewGame: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(52px, 1fr))' }}>
+          <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))' }}>
             {visibleCartelas.map((c) => {
               const sel = selectedIds.has(c.id);
               return (
                 <button
                   key={c.id}
                   onClick={() => toggle(c.id)}
-                  className="rounded-xl font-bold text-lg py-3 transition-all duration-150"
+                  className="rounded-xl font-bold text-xl py-4 transition-all duration-150"
                   style={sel ? {
                     background: 'linear-gradient(180deg,#3b82f6,#2563eb)',
                     color: '#fff',

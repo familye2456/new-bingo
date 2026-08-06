@@ -290,7 +290,7 @@ export const GamePage: React.FC = () => {
             {myCartelas.length === 0 ? (
               <div className="text-gray-500 text-center py-8">No cartelas yet</div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-6">
                 {myCartelas.map((cartela) => (
                   <div key={cartela.id}>
                     <CartelaCard cartela={cartela} calledNumbers={displayedNumbers}

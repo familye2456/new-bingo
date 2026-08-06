@@ -19,21 +19,21 @@ export const CartelaCard: React.FC<Props> = ({ cartela, calledNumbers, onMark, d
 
   return (
     <div
-      className={`border-2 rounded-lg p-2 ${cartela.isWinner ? 'border-yellow-400 bg-yellow-50' : 'border-gray-300 bg-white'}`}
+      className={`border-2 rounded-lg p-2 lg:p-4 ${cartela.isWinner ? 'border-yellow-400 bg-yellow-50' : 'border-gray-300 bg-white'}`}
       role="grid"
       aria-label="Bingo cartela"
     >
       {/* Header */}
-      <div className="grid grid-cols-5 gap-1 mb-1">
+      <div className="grid grid-cols-5 gap-1 lg:gap-2 mb-1 lg:mb-2">
         {HEADERS.map((h) => (
-          <div key={h} className="text-center font-bold text-blue-600 text-sm py-1">
+          <div key={h} className="text-center font-bold text-blue-600 text-sm lg:text-xl py-1 lg:py-2">
             {h}
           </div>
         ))}
       </div>
 
       {/* Grid */}
-      <div className="grid grid-cols-5 gap-1">
+      <div className="grid grid-cols-5 gap-1 lg:gap-2">
         {cartela.numbers.map((num, idx) => {
           const isFree = idx === 12;
           const isMarked = cartela.patternMask[idx];
@@ -47,7 +47,7 @@ export const CartelaCard: React.FC<Props> = ({ cartela, calledNumbers, onMark, d
               aria-label={isFree ? 'Free space' : `Number ${num}${isMarked ? ' marked' : ''}`}
               aria-pressed={isMarked}
               className={`
-                w-full aspect-square flex items-center justify-center text-sm font-semibold rounded
+                w-full aspect-square flex items-center justify-center text-base lg:text-[clamp(1rem,2.2vw,1.75rem)] font-bold rounded lg:rounded-lg
                 transition-colors duration-150
                 ${isFree ? 'bg-blue-500 text-white cursor-default' : ''}
                 ${isMarked && !isFree ? 'bg-green-500 text-white' : ''}

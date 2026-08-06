@@ -563,17 +563,17 @@ const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null
             return (
               <div key={num}
                 aria-label={`${num}${called ? ' called' : ''}`}
-                className="flex items-center justify-center font-bold rounded-sm w-full h-full transition-all duration-300"
+                className="flex items-center justify-center font-extrabold rounded-sm w-full h-full transition-all duration-300"
                 style={{
-                  fontSize: 'clamp(5px, 1vw, 13px)',
+                  fontSize: 'clamp(8px, 1.4vw, 18px)',
                   background: isLast
                     ? 'linear-gradient(180deg,#fbbf24,#f59e0b)'
                     : called
-                    ? 'linear-gradient(180deg,#ca8a04,#a16207)'
-                    : 'linear-gradient(180deg,#1e3a5f,#152d4a)',
-                  color: isLast ? '#111' : called ? '#111' : '#94a3b8',
-                  boxShadow: isLast ? '0 0 10px rgba(251,191,36,0.7)' : called ? '0 0 5px rgba(202,138,4,0.4)' : 'none',
-                  border: isLast ? '2px solid #fbbf24' : called ? '1px solid rgba(202,138,4,0.6)' : '1px solid rgba(255,255,255,0.05)',
+                    ? 'linear-gradient(180deg,#22c55e,#16a34a)'
+                    : 'linear-gradient(180deg,#334155,#1e293b)',
+                  color: isLast ? '#111' : called ? '#fff' : '#e2e8f0',
+                  boxShadow: isLast ? '0 0 10px rgba(251,191,36,0.7)' : called ? '0 0 6px rgba(34,197,94,0.5)' : 'none',
+                  border: isLast ? '2px solid #fbbf24' : called ? '1px solid rgba(34,197,94,0.7)' : '1px solid rgba(255,255,255,0.12)',
                   transform: isLast ? 'scale(1.08)' : 'scale(1)',
                 }}>
                 {num}
@@ -649,7 +649,7 @@ const CartelaPreviewModal: React.FC<{
   onClose: () => void;
 }> = ({ cardNumber, numbers, patternMask, winPattern, lastCalledNumber, onClose }) => {
   // Responsive cell size: smaller on mobile
-  const CELL = typeof window !== 'undefined' && window.innerWidth < 400 ? 42 : 52;
+  const CELL = typeof window !== 'undefined' && window.innerWidth < 400 ? 46 : 57;
   const GAP = 5;
   const GRID = 5 * CELL + 4 * GAP;
 
@@ -727,7 +727,7 @@ const CartelaPreviewModal: React.FC<{
             return (
               <div key={idx}
                 className="absolute flex items-center justify-center font-bold rounded-xl transition-all"
-                style={{ left, top, width: CELL, height: CELL, background: bg, color, border, boxShadow: shadow, fontSize: 13 }}>
+                style={{ left, top, width: CELL, height: CELL, background: bg, color, border, boxShadow: shadow, fontSize: 15 }}>
                 {isFree ? 'FREE' : num}
               </div>
             );

@@ -28,10 +28,10 @@ export const NumberBoard: React.FC<Props> = ({ calledNumbers, lastNumber }) => {
           <div
             className="flex items-center justify-center font-extrabold text-gray-900 rounded-lg shrink-0"
             style={{
-              width: 'clamp(26px, 5vw, 44px)',
-              height: 'clamp(26px, 5vw, 44px)',
+              width: 'clamp(28px, 5.5vw, 52px)',
+              height: 'clamp(28px, 5.5vw, 52px)',
               background: 'linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%)',
-              fontSize: 'clamp(12px, 2.5vw, 22px)',
+              fontSize: 'clamp(13px, 2.8vw, 26px)',
               boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
             }}
           >
@@ -50,7 +50,7 @@ export const NumberBoard: React.FC<Props> = ({ calledNumbers, lastNumber }) => {
                 aria-label={`${num}${called ? ' called' : ''}`}
                 className="flex items-center justify-center font-bold rounded-md transition-all duration-300 flex-1 aspect-square"
                 style={{
-                  fontSize: 'clamp(7px, 1.5vw, 15px)',
+                  fontSize: 'clamp(8px, 1.8vw, 18px)',
                   background: isLast
                     ? 'linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%)'
                     : called
