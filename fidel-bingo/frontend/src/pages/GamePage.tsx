@@ -52,8 +52,6 @@ export const GamePage: React.FC = () => {
   const [displayedNumbers, setDisplayedNumbers] = useState<number[]>([]);
   const isReplayingRef = useRef(true);
 
-  const isPostpaid = user?.paymentType === 'postpaid';
-
   useEffect(() => {
     if (!gameId) return;
     let cancelled = false;
@@ -89,8 +87,8 @@ export const GamePage: React.FC = () => {
 
   // ── Auto-preload voice pack ─────────────────────────────────────────────────
   useEffect(() => {
-    if (!isPostpaid) downloadVoiceSounds(voice);
-  }, [voice, isPostpaid]);
+    downloadVoiceSounds(voice);
+  }, [voice]);
 
   // ── Socket ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -118,7 +116,7 @@ export const GamePage: React.FC = () => {
       if (isReplayingRef.current) return; // ignore during replay
       addCalledNumber(number);
       setDisplayedNumbers(prev => [...prev, number]);
-      playNumberSoundQueued(number, voiceRef.current, volumeRef.current, isPostpaid);
+      playNumberSoundQueued(number, voiceRef.current, volumeRef.current);
     });
 
     socket.on('game_finished', () => {
@@ -135,7 +133,7 @@ export const GamePage: React.FC = () => {
       socket.off('number_called');
       socket.off('game_finished');
     };
-  }, [gameId, setGame, addCalledNumber, navigate, isPostpaid]);
+  }, [gameId, setGame, addCalledNumber, navigate]);
 
   // ── Auto-call ───────────────────────────────────────────────────────────────
   const doCallNumber = useCallback(() => {
