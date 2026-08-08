@@ -3,6 +3,7 @@
  */
 import { api } from './api';
 import { dbGet, dbPut, dbGetAll, dbDelete, dbClear, dequeue, getAllQueued } from './db';
+import { useAuthStore } from '../store/authStore';
 
 async function isPrepaid(): Promise<boolean> {
   const user = await dbGet<{ paymentType?: string }>('user', 'me');
@@ -47,6 +48,13 @@ export async function refreshCache() {
       if (localUser) meData.balance = localUser.balance;
     }
     await dbPut('user', meData, 'me');
+
+    // Sync the refreshed balance into the Zustand store so the UI reflects server state
+    if (meData?.id) {
+      useAuthStore.getState().adjustUserBalance(
+        Number(meData.balance) - (Number(useAuthStore.getState().user?.balance) || 0)
+      );
+    }
 
     const toList = (d: any) => Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : Array.isArray(d?.data?.data) ? d.data.data : [];
 
