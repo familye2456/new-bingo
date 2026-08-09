@@ -287,9 +287,9 @@ export const PlayBingo: React.FC = () => {
         </div>
       )}
       <div className="flex-1 flex flex-col min-h-0">
-        {/* ── Called number balls ── */}
+        {/* ── Called number balls — mobile/tablet only ── */}
         {game && (
-          <div className="shrink-0 flex items-center justify-center gap-3 pt-2 pb-1 px-3">
+          <div className="lg:hidden shrink-0 flex items-center justify-center gap-3 pt-2 pb-1 px-3">
             {/* Previous number — smaller */}
             {prevNumber != null ? (
               <div className="flex flex-col items-center gap-0.5 opacity-60">
@@ -371,50 +371,55 @@ export const PlayBingo: React.FC = () => {
           </div>
         )}
 
-        {/* ── Number board ── */}
-        <div className="flex-1 min-h-0 flex items-center px-2 sm:px-3 pb-1">
-          {game ? (
-            <NumberBoard calledNumbers={calledNumbers} lastNumber={lastNumber} />
-          ) : null}
+        {/* ── Desktop layout: no sidebar — full board ── */}
+        <div className="flex-1 min-h-0 flex">
+          {/* Number board — fills full available area */}
+          <div className="flex-1 min-h-0 flex flex-col px-2 sm:px-3 lg:px-4 pb-1">
+            {game ? (
+              <NumberBoard calledNumbers={calledNumbers} lastNumber={lastNumber} />
+            ) : null}
+          </div>
         </div>
       </div>
 
       {/* ── Controls ── */}
       {game && (
-        <div className="shrink-0 px-3 py-3"
+        <div className="shrink-0 px-3 py-2 lg:py-2"
           style={{ background: 'rgba(0,0,0,0.35)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
 
-          {/* Buttons */}
-          <div className="flex items-center justify-center gap-2 mb-3 flex-wrap">
-            <CtrlBtn
-              label={autoOn ? '⏸ Auto' : '▶ Auto'}
-              active={autoOn}
-              onClick={toggleAuto}
-              disabled={!isCreator || game.status !== 'active' || calledNumbers.length >= 75}
-            />
-            <CtrlBtn
-              label="Next ›"
-              onClick={() => callMutation.mutate()}
-              disabled={!isCreator || game.status !== 'active' || callMutation.isPending || calledNumbers.length >= 75}
-            />
-            <CtrlBtn
-              label={finishMutation.isPending ? '...' : 'Finish'}
-              onClick={() => { stopAuto(true); finishMutation.mutate(); }}
-              disabled={!isCreator || game.status !== 'active' || finishMutation.isPending}
-              danger
-            />
-            <CtrlBtn
-              label="🔀"
-              purple
-              onClick={() => {
-                playCachedSound('/sounds/shuffle-audio-TfqyAnvz.mp3').catch(() => {});
-                setTimeout(() => window.location.reload(), 5000);
-              }}
-            />
-          </div>
+          {/* Desktop: single row — Mobile: stacked */}
+          <div className="flex flex-col lg:flex-row items-center justify-center gap-2 lg:gap-3">
 
-          {/* Speed + Check */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 flex-wrap">
+            {/* Buttons */}
+            <div className="flex items-center gap-2">
+              <CtrlBtn
+                label={autoOn ? '⏸ Auto' : '▶ Auto'}
+                active={autoOn}
+                onClick={toggleAuto}
+                disabled={!isCreator || game.status !== 'active' || calledNumbers.length >= 75}
+              />
+              <CtrlBtn
+                label="Next ›"
+                onClick={() => callMutation.mutate()}
+                disabled={!isCreator || game.status !== 'active' || callMutation.isPending || calledNumbers.length >= 75}
+              />
+              <CtrlBtn
+                label={finishMutation.isPending ? '...' : 'Finish'}
+                onClick={() => { stopAuto(true); finishMutation.mutate(); }}
+                disabled={!isCreator || game.status !== 'active' || finishMutation.isPending}
+                danger
+              />
+              <CtrlBtn
+                label="🔀"
+                purple
+                onClick={() => {
+                  playCachedSound('/sounds/shuffle-audio-TfqyAnvz.mp3').catch(() => {});
+                  setTimeout(() => window.location.reload(), 5000);
+                }}
+              />
+            </div>
+
+            {/* Speed */}
             <div className="flex items-center gap-2 rounded-xl px-3 py-1.5"
               style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
               <span className="text-[10px] text-gray-500 uppercase tracking-wider">Speed</span>
@@ -424,51 +429,82 @@ export const PlayBingo: React.FC = () => {
               <span className="text-yellow-400 font-bold text-sm w-6 text-center">{speed}s</span>
             </div>
 
-            <div className="flex flex-col items-center gap-1.5">
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="text" placeholder="Card #" value={checkId}
-                  onChange={(e) => { setCheckId(e.target.value); setCheckResult(null); }}
-                  onKeyDown={(e) => e.key === 'Enter' && handleCheck()}
-                  className="rounded-xl px-3 py-1.5 text-sm w-28 sm:w-24 focus:outline-none focus:border-yellow-400/50"
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
-                />
-                <button
-                  onClick={handleCheck}
-                  disabled={checkLoading || !checkId}
-                  className="font-bold px-4 py-1.5 rounded-xl text-sm disabled:opacity-40"
-                  style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
-                  {checkLoading ? '...' : 'Check'}
-                </button>
-              </div>
-              {checkResult && (
-                <>
-                  <div className="text-xs font-semibold px-3 py-1 rounded-lg"
-                    style={
-                      !checkResult.registered
-                        ? { background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }
-                        : checkResult.isWinner
-                        ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }
-                        : { background: 'rgba(255,255,255,0.06)', color: '#9ca3af', border: '1px solid rgba(255,255,255,0.1)' }
-                    }>
-                    {!checkResult.registered
-                      ? `Card #${checkId} not registered`
-                      : checkResult.isWinner
-                      ? `🎉 BINGO! (${checkResult.winPattern})`
-                      : `Card #${checkId} — no win yet`}
-                  </div>
-                  {checkResult.registered && checkResult.numbers && (
-                    <CartelaPreviewModal
-                      cardNumber={Number(checkId)}
-                      numbers={checkResult.numbers}
-                      patternMask={checkResult.patternMask ?? []}
-                      winPattern={checkResult.isWinner ? (checkResult.winPattern ?? null) : null}
-                      lastCalledNumber={lastNumber}
-                      onClose={() => setCheckResult(null)}
-                    />
+            {/* Card check + last 3 called numbers */}
+            <div className="flex items-center gap-3">
+              <div className="flex flex-col items-center gap-1.5">
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text" placeholder="Card #" value={checkId}
+                    onChange={(e) => { setCheckId(e.target.value); setCheckResult(null); }}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCheck()}
+                    className="rounded-xl px-3 py-1.5 text-sm w-28 sm:w-24 focus:outline-none focus:border-yellow-400/50"
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
+                  />
+                  <button
+                    onClick={handleCheck}
+                    disabled={checkLoading || !checkId}
+                    className="font-bold px-4 py-1.5 rounded-xl text-sm disabled:opacity-40"
+                    style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
+                    {checkLoading ? '...' : 'Check'}
+                  </button>
+
+                  {/* Last 3 called numbers — desktop only, right of Check button */}
+                  {calledNumbers.length > 0 && (
+                    <div className="hidden lg:flex items-center gap-1.5 ml-1">
+                      {[...calledNumbers].slice(-3).map((num, idx, arr) => {
+                        const isLatest = idx === arr.length - 1;
+                        const dist = arr.length - 1 - idx;
+                        return (
+                          <div key={num}
+                            className="flex items-center justify-center font-black rounded-full"
+                            style={{
+                              width: isLatest ? 42 : 30,
+                              height: isLatest ? 42 : 30,
+                              fontSize: isLatest ? 16 : 12,
+                              opacity: dist === 0 ? 1 : dist === 1 ? 0.55 : 0.3,
+                              background: `radial-gradient(circle at 35% 35%, ${getBingoColor(num)}55, ${getBingoColor(num)}22)`,
+                              border: `${isLatest ? 2 : 1}px solid ${getBingoColor(num)}`,
+                              color: '#fff',
+                              boxShadow: isLatest ? `0 0 10px ${getBingoColor(num)}66` : 'none',
+                              animation: isLatest ? 'ballPop 0.35s cubic-bezier(0.34,1.56,0.64,1)' : undefined,
+                              flexShrink: 0,
+                            }}>
+                            {num}
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
-                </>
-              )}
+                </div>
+                {checkResult && (
+                  <>
+                    <div className="text-xs font-semibold px-3 py-1 rounded-lg"
+                      style={
+                        !checkResult.registered
+                          ? { background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }
+                          : checkResult.isWinner
+                          ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }
+                          : { background: 'rgba(255,255,255,0.06)', color: '#9ca3af', border: '1px solid rgba(255,255,255,0.1)' }
+                      }>
+                      {!checkResult.registered
+                        ? `Card #${checkId} not registered`
+                        : checkResult.isWinner
+                        ? `🎉 BINGO! (${checkResult.winPattern})`
+                        : `Card #${checkId} — no win yet`}
+                    </div>
+                    {checkResult.registered && checkResult.numbers && (
+                      <CartelaPreviewModal
+                        cardNumber={Number(checkId)}
+                        numbers={checkResult.numbers}
+                        patternMask={checkResult.patternMask ?? []}
+                        winPattern={checkResult.isWinner ? (checkResult.winPattern ?? null) : null}
+                        lastCalledNumber={lastNumber}
+                        onClose={() => setCheckResult(null)}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -536,17 +572,17 @@ const CtrlBtn: React.FC<{
 const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null }> = ({
   calledNumbers, lastNumber,
 }) => (
-  <div className="w-full flex flex-col" role="region" aria-label="Bingo number board"
-    style={{ gap: 'clamp(2px, 1vw, 6px)' }}>
+  <div className="w-full h-full flex flex-col" role="region" aria-label="Bingo number board"
+    style={{ gap: 'clamp(2px, 0.6vh, 6px)' }}>
     {ROWS_DEF.map(({ letter, start }) => (
-      <div key={letter} className="flex items-stretch"
-        style={{ gap: 'clamp(2px, 1vw, 6px)', height: 'clamp(26px, 4.5vw, 58px)' }}>
+      <div key={letter} className="flex items-stretch flex-1 min-h-0"
+        style={{ gap: 'clamp(2px, 0.6vw, 6px)' }}>
 
         {/* Letter */}
         <div className="flex items-center justify-center font-extrabold text-gray-900 rounded-lg shrink-0"
           style={{
-            width: 'clamp(26px, 4.5vw, 58px)',
-            fontSize: 'clamp(10px, 1.8vw, 24px)',
+            width: 'clamp(32px, 5vw, 80px)',
+            fontSize: 'clamp(12px, 2vw, 32px)',
             background: 'linear-gradient(180deg,#fbbf24,#f59e0b)',
             boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
           }}>
@@ -555,7 +591,7 @@ const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null
 
         {/* 15 cells */}
         <div className="flex-1 grid h-full"
-          style={{ gridTemplateColumns: 'repeat(15,1fr)', gap: 'clamp(2px, 0.8vw, 5px)' }}>
+          style={{ gridTemplateColumns: 'repeat(15,1fr)', gap: 'clamp(2px, 0.5vw, 5px)' }}>
           {Array.from({ length: 15 }, (_, i) => {
             const num = start + i;
             const called = calledNumbers.includes(num);
@@ -563,9 +599,9 @@ const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null
             return (
               <div key={num}
                 aria-label={`${num}${called ? ' called' : ''}`}
-                className="flex items-center justify-center font-extrabold rounded-sm w-full h-full transition-all duration-300"
+                className="flex items-center justify-center font-extrabold rounded-md w-full h-full transition-all duration-300"
                 style={{
-                  fontSize: 'clamp(8px, 1.4vw, 18px)',
+                  fontSize: 'clamp(10px, 1.8vw, 26px)',
                   background: isLast
                     ? 'linear-gradient(180deg,#fbbf24,#f59e0b)'
                     : called
@@ -574,7 +610,7 @@ const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null
                   color: isLast ? '#111' : called ? '#fff' : '#e2e8f0',
                   boxShadow: isLast ? '0 0 10px rgba(251,191,36,0.7)' : called ? '0 0 6px rgba(34,197,94,0.5)' : 'none',
                   border: isLast ? '2px solid #fbbf24' : called ? '1px solid rgba(34,197,94,0.7)' : '1px solid rgba(255,255,255,0.12)',
-                  transform: isLast ? 'scale(1.08)' : 'scale(1)',
+                  transform: isLast ? 'scale(1.05)' : 'scale(1)',
                 }}>
                 {num}
               </div>
