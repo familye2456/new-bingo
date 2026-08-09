@@ -229,10 +229,9 @@ async function _doFlush() {
             for (const qi of allQueued) {
               const qp = qi.payload as any;
               if (qp?.gameId === p.tempId) {
-                await db.put('syncQueue', {
-                  ...qi,
-                  payload: { ...qp, gameId: realGame.id },
-                }, qi.id);
+                // syncQueue uses keyPath 'id' (in-line keys) — must not pass key separately
+                const updated = { ...qi, payload: { ...qp, gameId: realGame.id } };
+                await db.put('syncQueue', updated);
               }
             }
           }
@@ -245,9 +244,11 @@ async function _doFlush() {
 
         case 'finishGame': {
           const p = current.payload as any;
-          // If still has offline ID, createGame hasn't synced yet — skip for now
+          // If still has offline ID, createGame hasn't synced yet — dequeue and skip
+          // (these are orphaned finish events for games that never made it to the server)
           if (String(p.gameId).startsWith('offline-')) {
-            console.log(`[sync] skipping finishGame with offline gameId=${p.gameId}`);
+            console.log(`[sync] dequeuing orphaned finishGame with offline gameId=${p.gameId}`);
+            await dequeue(current.id!);
             break;
           }
           try {
@@ -267,7 +268,10 @@ async function _doFlush() {
 
         case 'claimBingo': {
           const p = current.payload as any;
-          if (String(p.gameId).startsWith('offline-')) break;
+          if (String(p.gameId).startsWith('offline-')) {
+            await dequeue(current.id!);
+            break;
+          }
           await api.post(`/games/${p.gameId}/bingo`, { cartelaId: p.cartelaId });
           await dequeue(current.id!);
           break;
