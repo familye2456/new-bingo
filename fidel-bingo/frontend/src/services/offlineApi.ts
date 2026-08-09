@@ -4,7 +4,7 @@
  */
 import { api } from './api';
 import { dbGet, dbGetAll, dbPut, dbDelete, enqueue, adjustBalance } from './db';
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore, isNegativeBalanceLocked } from '../store/authStore';
 import { _justFinishedIds } from './sync';
 
 /** Update both IndexedDB and Zustand store atomically */
@@ -251,8 +251,9 @@ export const offlineGameApi = {
   create: async (data: { cartelaIds: string[]; betAmountPerCartela: number; winPattern?: string; housePercentage?: number }) => {
     const HOUSE_PCT = data.housePercentage ?? 10;
 
-    // Hard block — if account is already flagged as negative balance, don't even try
-    if (useAuthStore.getState().negativeBalance) {
+    // Hard block — check both Zustand store AND persisted localStorage flag
+    // (localStorage survives page reloads; Zustand resets to false on reload without it)
+    if (useAuthStore.getState().negativeBalance || isNegativeBalanceLocked()) {
       throw Object.assign(new Error('Account locked: negative balance'), { code: 'NEGATIVE_BALANCE' });
     }
 
@@ -276,12 +277,12 @@ export const offlineGameApi = {
 
     // Block prepaid users from creating games offline when balance is negative or insufficient
     if (!user || user.paymentType !== 'postpaid') {
-      // If the store already flagged this account as negative — hard block
-      if (useAuthStore.getState().negativeBalance) {
+      // Check both store flag AND persisted lock (survives page reload)
+      if (useAuthStore.getState().negativeBalance || isNegativeBalanceLocked()) {
         throw Object.assign(new Error('Account locked: negative balance'), { code: 'NEGATIVE_BALANCE' });
       }
       const currentBalance = Number(user?.balance ?? 0);
-      // Block if already negative OR if this game would push it below zero
+      // Block if already at/below zero OR if this game would push it below zero
       if (currentBalance <= 0 || currentBalance < houseCut) {
         throw Object.assign(new Error('Insufficient balance'), { code: 'INSUFFICIENT_BALANCE' });
       }

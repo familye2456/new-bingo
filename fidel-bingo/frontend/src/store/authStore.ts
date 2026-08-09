@@ -4,6 +4,12 @@ import { dbPut, dbGet, dbClear } from '../services/db';
 import { api } from '../services/api';
 
 const NEG_BAL_KEY = 'neg_balance_last_positive';
+const NEG_BAL_LOCKED_KEY = 'neg_balance_locked'; // persists across page reloads
+
+/** Read the persisted lock flag — survives Zustand store resets on page reload */
+export function isNegativeBalanceLocked(): boolean {
+  return localStorage.getItem(NEG_BAL_LOCKED_KEY) === '1';
+}
 
 /**
  * Shared helper — given a freshly fetched balance, update negativeBalance state.
@@ -22,13 +28,19 @@ export function applyNegativeBalanceCheck(
   if (balance < 0) {
     const stored = parseFloat(localStorage.getItem(NEG_BAL_KEY) ?? '');
     const lastPositive = isNaN(stored) ? 0 : stored;
+    // Persist lock to localStorage so it survives page reload
+    localStorage.setItem(NEG_BAL_LOCKED_KEY, '1');
     setState({ negativeBalance: true, lastPositiveBalance: lastPositive });
     // Fire backend alert in background — don't block caller
     api.post('/users/me/alert-negative-balance').catch(() => {});
     return true;
   } else {
     localStorage.setItem(NEG_BAL_KEY, String(balance));
-    if (getState().negativeBalance) setState({ negativeBalance: false });
+    // Only clear the lock if balance is genuinely positive AND we were locked
+    if (getState().negativeBalance || isNegativeBalanceLocked()) {
+      localStorage.removeItem(NEG_BAL_LOCKED_KEY);
+      setState({ negativeBalance: false });
+    }
     return false;
   }
 }
@@ -144,8 +156,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   loading: false,
   initialized: false,
-  negativeBalance: false,
-  lastPositiveBalance: null,
+  negativeBalance: isNegativeBalanceLocked(), // restore from localStorage on page reload
+  lastPositiveBalance: (() => {
+    const v = parseFloat(localStorage.getItem(NEG_BAL_KEY) ?? '');
+    return isNaN(v) ? null : v;
+  })(),
   cacheSteps: [],
   swReady: false,
 
@@ -272,6 +287,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     try { await authApi.logout(); } catch {}
     localStorage.removeItem('access_token');
+    localStorage.removeItem(NEG_BAL_LOCKED_KEY);
     await Promise.all([
       dbClear('user'),
       dbClear('cartelas'),
@@ -296,8 +312,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set((state) => ({
           user: state.user ? { ...state.user, balance } : normalized,
         }));
-        // Check for negative balance on every poll
-        applyNegativeBalanceCheck(balance, fresh.paymentType, fresh.role, get, (p) => set(p as any));
+        // Detect negative — but never clear the lock here (sync hasn't run yet)
+        // Only set the lock if balance is negative; clearing happens in checkNegativeBalanceAfterSync
+        if (balance < 0 && fresh.paymentType !== 'postpaid' && fresh.role !== 'admin' && fresh.role !== 'agent') {
+          applyNegativeBalanceCheck(balance, fresh.paymentType, fresh.role, get, (p) => set(p as any));
+        }
       }
     } catch {}
   },
