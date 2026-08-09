@@ -71,7 +71,7 @@ export const NewGame: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { voice } = useGameSettings();
-  const { user, refreshBalance } = useAuthStore();
+  const { user, refreshBalance, negativeBalance } = useAuthStore();
   const voiceRef = useRef(voice);
   useEffect(() => { voiceRef.current = voice; }, [voice]);
 
@@ -188,7 +188,10 @@ export const NewGame: React.FC = () => {
     setQuickAddError(null);
   };
   const houseCutValid = typeof houseCut === 'number' && houseCut >= 10 && houseCut <= 45;
-  const canStart = selectedIds.size >= MIN_CARTELAS && houseCutValid && voiceCached;
+  const totalCost = houseCutValid ? bet * selectedIds.size * (houseCut as number) / 100 : 0;
+  const currentBalance = Number(user?.balance ?? 0);
+  const hasEnoughBalance = user?.paymentType === 'postpaid' || (currentBalance > 0 && currentBalance >= totalCost);
+  const canStart = selectedIds.size >= MIN_CARTELAS && houseCutValid && voiceCached && !negativeBalance && hasEnoughBalance;
   const totalPrize = bet * selectedIds.size;
 
   return (
@@ -261,12 +264,34 @@ export const NewGame: React.FC = () => {
               color: '#4b5563',
               border: '1px solid rgba(255,255,255,0.08)',
             }}>
-            {createMutation.isPending ? '...' : canStart ? `▶ Start · ${selectedIds.size}` : !houseCutValid ? `Set house %` : !voiceCached ? '⬇ Download sounds first' : `▶ Start (${selectedIds.size}/${MIN_CARTELAS})`}
+            {createMutation.isPending ? '...' : canStart ? `▶ Start · ${selectedIds.size}` : negativeBalance ? '🔒 Account Locked' : !hasEnoughBalance ? `⚠ Insufficient Balance` : !houseCutValid ? `Set house %` : !voiceCached ? '⬇ Download sounds first' : `▶ Start (${selectedIds.size}/${MIN_CARTELAS})`}
           </button>
         </div>
         {createMutation.isError && (
-          <div className="text-red-400 text-xs mt-2">
-            {(createMutation.error as any)?.response?.data?.error?.message ?? 'Failed to start game. Try again.'}
+          <div className="mt-2 px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2"
+            style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}>
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+            {(() => {
+              const err = createMutation.error as any;
+              const code = err?.code;
+              if (code === 'NEGATIVE_BALANCE') return 'Account locked: your balance is negative. Contact your admin.';
+              if (code === 'INSUFFICIENT_BALANCE') return 'Insufficient balance to start this game.';
+              return err?.response?.data?.error?.message ?? err?.message ?? 'Failed to start game. Try again.';
+            })()}
+          </div>
+        )}
+        {!createMutation.isError && negativeBalance && (
+          <div className="mt-2 px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2"
+            style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}>
+            🔒 Your balance is negative. Contact your admin to top up.
+          </div>
+        )}
+        {!createMutation.isError && !negativeBalance && !hasEnoughBalance && selectedIds.size >= MIN_CARTELAS && houseCutValid && (
+          <div className="mt-2 px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2"
+            style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)', color: '#fbbf24' }}>
+            ⚠ Balance ({currentBalance.toFixed(2)} Birr) is less than house cut ({totalCost.toFixed(2)} Birr). Top up to play.
           </div>
         )}
       </div>
