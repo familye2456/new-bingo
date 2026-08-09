@@ -88,6 +88,9 @@ export const adminApi = {
   getUserCartelas: (id: string) => api.get(`/users/${id}/cartelas`),
   listAgents: () => api.get('/users/agents'),
   assignAgent: (userId: string, agentId: string | null) => api.patch(`/users/${userId}/assign-agent`, { agentId }),
+  listNegativeBalanceAlerts: () => api.get('/users/negative-balance-alerts'),
+  resolveNegativeBalance: (userId: string, restoreAmount: number) =>
+    api.patch(`/users/${userId}/balance`, { amount: restoreAmount }),
 };
 
 export const cartelaAdminApi = {

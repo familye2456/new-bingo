@@ -265,10 +265,19 @@ export const offlineGameApi = {
 
     // Server unreachable — fall back to IDB for all users
     const user = await dbGet<any>('user', 'me');
-    const tempId = `offline-${Date.now()}`;
-    const now = new Date().toISOString();
     const totalBet = data.betAmountPerCartela * data.cartelaIds.length;
     const houseCut = totalBet * (HOUSE_PCT / 100);
+
+    // Prepaid users cannot go below zero balance while offline
+    if (!user || user.paymentType !== 'postpaid') {
+      const currentBalance = Number(user?.balance ?? 0);
+      if (currentBalance < houseCut) {
+        throw Object.assign(new Error('Insufficient balance'), { code: 'INSUFFICIENT_BALANCE' });
+      }
+    }
+
+    const tempId = `offline-${Date.now()}`;
+    const now = new Date().toISOString();
     const prizePool = totalBet - houseCut;
 
     const game = {

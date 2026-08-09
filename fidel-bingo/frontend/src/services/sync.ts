@@ -148,11 +148,41 @@ async function _doFlush() {
             });
             realGame = res.data.data;
           } catch (postErr: any) {
-            // If network error, un-mark so we retry next time
+            // Network error — un-mark so we retry next time
             if (!postErr?.response?.status && p.tempId) {
               const ids = getSyncedIds(); ids.delete(p.tempId);
               localStorage.setItem(SYNCED_KEY, JSON.stringify([...ids]));
             }
+
+            // HTTP error (e.g. INSUFFICIENT_BALANCE, FORBIDDEN) — server rejected it permanently.
+            // Clean up all orphaned IDB data so nothing is left dangling.
+            if (postErr?.response?.status && p.tempId) {
+              await dbDelete('games', p.tempId);
+              await dbDelete('gameCartelas', p.tempId);
+
+              // Remove offline transactions tied to this game
+              const allTx = await dbGetAll<any>('transactions');
+              for (const tx of allTx) {
+                if (tx.id?.includes(p.tempId)) await dbDelete('transactions', tx.id);
+              }
+
+              // Remove any dependent finishGame / claimBingo queue items
+              const allQueued = await getAllQueued();
+              for (const qi of allQueued) {
+                const qp = qi.payload as any;
+                if (qp?.gameId === p.tempId) await dequeue(qi.id!);
+              }
+
+              // Restore the house-cut that was deducted locally — server never charged it
+              const houseCut = (p.betAmountPerCartela ?? 0) * (p.cartelaIds?.length ?? 0)
+                * ((p.housePercentage ?? 10) / 100);
+              if (houseCut > 0) {
+                const { adjustBalance } = await import('./db');
+                await adjustBalance(houseCut);
+                useAuthStore.getState().adjustUserBalance(houseCut);
+              }
+            }
+
             throw postErr;
           }
 
@@ -243,6 +273,92 @@ async function _doFlush() {
   }
 }
 
+// ── Negative balance check ────────────────────────────────────────────────────
+
+const NEG_BAL_KEY = 'neg_balance_last_positive';
+
+/**
+ * After coming online and syncing:
+ * - Fetch real server balance
+ * - If positive → continue with refreshCache normally, clear any previous block
+ * - If negative → skip refreshCache, block the UI, save last positive balance,
+ *   alert the backend, and start polling until admin resolves it
+ *
+ * Returns true if balance is OK to proceed with cache refresh.
+ */
+export async function checkNegativeBalanceAfterSync(): Promise<boolean> {
+  try {
+    const user = await dbGet<any>('user', 'me');
+    if (!user || user.paymentType === 'postpaid' || user.role === 'admin' || user.role === 'agent') return true;
+
+    const res = await api.get('/users/me');
+    const fresh = res.data?.data;
+    if (!fresh) return true;
+
+    const balance = Number(fresh.balance ?? 0);
+
+    if (balance >= 0) {
+      // Balance OK — persist it as the last known positive value, clear any block
+      localStorage.setItem(NEG_BAL_KEY, String(balance));
+      await dbPut('user', { ...user, balance }, 'me');
+      useAuthStore.getState().adjustUserBalance(balance - (Number(user.balance) || 0));
+      useAuthStore.getState().setNegativeBalance(false);
+      return true;
+    }
+
+    // ── Balance is negative ──────────────────────────────────────────────────
+
+    // Persist server balance into IDB so UI shows the real negative number
+    await dbPut('user', { ...user, balance }, 'me');
+    useAuthStore.getState().adjustUserBalance(balance - (Number(user.balance) || 0));
+
+    // Save last positive balance so admin knows what to restore to
+    const stored = parseFloat(localStorage.getItem(NEG_BAL_KEY) ?? '');
+    const lastPositive = isNaN(stored) ? 0 : stored;
+    useAuthStore.getState().setLastPositiveBalance(lastPositive);
+    useAuthStore.getState().setNegativeBalance(true);
+
+    // Notify backend — records alert for admin
+    try { await api.post('/users/me/alert-negative-balance'); } catch {}
+
+    return false; // signal: skip refreshCache
+  } catch {
+    return true; // if we can't reach server, don't block
+  }
+}
+
+/**
+ * Poll the server every 15s while the account is blocked.
+ * When the balance comes back positive (admin topped up), unblock and do a full refresh.
+ */
+let _recoveryInterval: ReturnType<typeof setInterval> | null = null;
+
+function startRecoveryPolling() {
+  if (_recoveryInterval) return; // already polling
+  _recoveryInterval = setInterval(async () => {
+    if (!navigator.onLine) return;
+    try {
+      const res = await api.get('/users/me');
+      const fresh = res.data?.data;
+      if (!fresh) return;
+      const balance = Number(fresh.balance ?? 0);
+      if (balance >= 0) {
+        // Admin resolved it — unblock and do a full sync
+        clearInterval(_recoveryInterval!);
+        _recoveryInterval = null;
+        localStorage.setItem(NEG_BAL_KEY, String(balance));
+        const user = await dbGet<any>('user', 'me');
+        if (user) await dbPut('user', { ...user, balance }, 'me');
+        useAuthStore.getState().adjustUserBalance(balance - (Number(useAuthStore.getState().user?.balance) || 0));
+        useAuthStore.getState().setNegativeBalance(false);
+        // Full cache refresh now that the account is healthy
+        await refreshCache();
+        window.dispatchEvent(new CustomEvent('balance-restored'));
+      }
+    } catch {}
+  }, 15_000);
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /** Flush queue only — no cache refresh. Used before individual fetches. */
@@ -259,7 +375,13 @@ export async function flushQueue() {
   _flushing = true;
   try {
     await _doFlush();
-    await refreshCache();
+    const balanceOk = await checkNegativeBalanceAfterSync();
+    if (balanceOk) {
+      await refreshCache();
+    } else {
+      // Account blocked — start polling for recovery
+      startRecoveryPolling();
+    }
   } finally {
     _flushing = false;
   }

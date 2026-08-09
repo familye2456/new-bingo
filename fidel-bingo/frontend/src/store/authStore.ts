@@ -27,6 +27,8 @@ interface AuthState {
   user: User | null;
   loading: boolean;
   initialized: boolean;
+  negativeBalance: boolean;
+  lastPositiveBalance: number | null;
   cacheSteps: CacheStep[];
   swReady: boolean;
   login: (identifier: string, password: string) => Promise<void>;
@@ -35,6 +37,8 @@ interface AuthState {
   refreshBalance: () => Promise<void>;
   adjustUserBalance: (delta: number) => void;
   dismissSwReady: () => void;
+  setNegativeBalance: (val: boolean) => void;
+  setLastPositiveBalance: (val: number) => void;
 }
 
 const STEPS: CacheStep[] = [
@@ -110,6 +114,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   loading: false,
   initialized: false,
+  negativeBalance: false,
+  lastPositiveBalance: null,
   cacheSteps: [],
   swReady: false,
 
@@ -228,6 +234,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   dismissSwReady: () => set({ swReady: false }),
+
+  setNegativeBalance: (val: boolean) => set({ negativeBalance: val }),
+
+  setLastPositiveBalance: (val: number) => set({ lastPositiveBalance: val }),
 
   logout: async () => {
     try { await authApi.logout(); } catch {}

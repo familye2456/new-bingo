@@ -177,6 +177,17 @@ router.patch('/:id/balance', authorize('admin', 'agent'), async (req: AuthReques
 
   await repo.increment({ id: req.params.id }, 'balance', amount);
   const updated = await repo.findOne({ where: { id: req.params.id } });
+
+  // If balance is now non-negative, dismiss any pending negative-balance alert
+  if (updated && Number(updated.balance) >= 0) {
+    await AppDataSource.getRepository(Transaction).delete({
+      userId: req.params.id,
+      transactionType: 'refund',
+      description: 'NEGATIVE_BALANCE_ALERT',
+      status: 'pending',
+    });
+  }
+
   res.json({ success: true, data: updated?.sanitize() });
 });
 
@@ -292,6 +303,76 @@ router.get('/:id/cartelas', authorize('admin', 'agent'), async (req: AuthRequest
     order: { assignedAt: 'ASC' },
   });
   res.json({ success: true, data: cartelas });
+});
+
+// ─── Negative balance alert — called by frontend when sync reveals negative balance ───
+router.post('/me/alert-negative-balance', async (req: AuthRequest, res: Response) => {
+  const repo = AppDataSource.getRepository(User);
+  const user = await repo.findOne({ where: { id: req.user!.id } });
+  if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
+
+  const balance = Number(user.balance);
+  const txRepo = AppDataSource.getRepository(Transaction);
+
+  if (balance >= 0) {
+    // Balance is fine — remove any stale pending alert
+    await txRepo.delete({
+      userId: user.id,
+      transactionType: 'refund',
+      description: 'NEGATIVE_BALANCE_ALERT',
+      status: 'pending',
+    });
+    return res.json({ success: true, alerted: false });
+  }
+
+  // Record the alert so admins can see it — only one active alert per user
+  const alreadyAlerted = await txRepo.findOne({
+    where: {
+      userId: user.id,
+      transactionType: 'refund',
+      description: 'NEGATIVE_BALANCE_ALERT',
+      status: 'pending',
+    },
+  });
+
+  if (!alreadyAlerted) {
+    await txRepo.save(txRepo.create({
+      userId: user.id,
+      transactionType: 'refund',
+      amount: Math.abs(balance),
+      status: 'pending',
+      description: 'NEGATIVE_BALANCE_ALERT',
+      processedAt: new Date(),
+    }));
+  }
+
+  return res.json({ success: true, alerted: true, balance });
+});
+
+// ─── Admin: list all negative-balance alerts (pending refund with NEGATIVE_BALANCE_ALERT) ───
+router.get('/negative-balance-alerts', authorize('admin', 'agent'), async (_req: AuthRequest, res: Response) => {
+  const txRepo = AppDataSource.getRepository(Transaction);
+  const alerts = await txRepo.find({
+    where: { transactionType: 'refund', description: 'NEGATIVE_BALANCE_ALERT', status: 'pending' },
+    order: { processedAt: 'DESC' },
+  });
+
+  // Enrich with user info
+  const userRepo = AppDataSource.getRepository(User);
+  const enriched = await Promise.all(
+    alerts.map(async (a) => {
+      const u = a.userId ? await userRepo.findOne({ where: { id: a.userId } }) : null;
+      return {
+        alertId: a.id,
+        userId: a.userId,
+        username: u?.username,
+        balance: u ? Number(u.balance) : null,
+        alertedAt: a.processedAt,
+      };
+    })
+  );
+
+  res.json({ success: true, data: enriched });
 });
 
 export default router;

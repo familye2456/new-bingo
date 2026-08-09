@@ -1,10 +1,11 @@
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi, gameApi } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 
 interface UserRecord { id: string; username: string; status: string; paymentType: string; balance: number; createdAt: string; }
 interface Game { id: string; status: string; betAmount: number; cartelaCount: number; prizePool: number; houseCut: number; totalBets: number; createdAt: string; gameNumber?: number; creatorId: string; }
+interface NegAlert { alertId: string; userId: string; username: string; balance: number | null; alertedAt: string; }
 
 const StatCard: React.FC<{
   label: string; value: string | number; sub?: string;
@@ -27,6 +28,8 @@ const StatCard: React.FC<{
 
 export const AdminOverview: React.FC = () => {
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [resolvingId, setResolvingId] = React.useState<string | null>(null);
 
   const { data: users = [], isLoading: loadingUsers } = useQuery<UserRecord[]>({
     queryKey: ['admin-users'],
@@ -42,6 +45,26 @@ export const AdminOverview: React.FC = () => {
     queryKey: ['games-today'],
     queryFn: () => gameApi.list(undefined, 'today').then((r) => r.data.data),
     staleTime: 30_000,
+  });
+
+  const { data: negAlerts = [], isLoading: loadingAlerts } = useQuery<NegAlert[]>({
+    queryKey: ['neg-balance-alerts'],
+    queryFn: () => adminApi.listNegativeBalanceAlerts().then((r) => r.data.data),
+    refetchInterval: 30_000, // auto-refresh every 30s
+  });
+
+  const resolveMutation = useMutation({
+    mutationFn: async ({ userId, balance }: { userId: string; balance: number }) => {
+      // Top up enough to bring balance back to last positive (or at least 0)
+      const restoreAmount = Math.abs(balance);
+      if (restoreAmount > 0) await adminApi.resolveNegativeBalance(userId, restoreAmount);
+      await adminApi.activateUser(userId);
+    },
+    onSuccess: () => {
+      setResolvingId(null);
+      qc.invalidateQueries({ queryKey: ['neg-balance-alerts'] });
+      qc.invalidateQueries({ queryKey: ['admin-users'] });
+    },
   });
 
   const activeUsers   = users.filter((u) => u.status === 'active').length;
@@ -160,6 +183,72 @@ export const AdminOverview: React.FC = () => {
 
 
       </div>
+
+      {/* Negative balance alerts */}
+      {(loadingAlerts || negAlerts.length > 0) && (
+        <div className="bg-white rounded-2xl shadow-sm border border-red-100 overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-red-50"
+            style={{ background: 'rgba(239,68,68,0.03)' }}>
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+              <h2 className="font-semibold text-gray-800">Negative Balance Alerts</h2>
+              {negAlerts.length > 0 && (
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+                  {negAlerts.length}
+                </span>
+              )}
+            </div>
+            <span className="text-xs text-gray-400">Auto-refreshes every 30s</span>
+          </div>
+
+          {loadingAlerts ? (
+            <div className="py-10 text-center text-gray-400 text-sm">Loading…</div>
+          ) : negAlerts.length === 0 ? (
+            <div className="py-10 text-center text-gray-400 text-sm">No alerts right now.</div>
+          ) : (
+            <div className="divide-y divide-red-50/60">
+              {negAlerts.map((alert) => (
+                <div key={alert.alertId} className="flex items-center justify-between px-6 py-4 gap-4 flex-wrap">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center text-red-600 font-bold text-sm shrink-0">
+                      {(alert.username ?? '?')[0].toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <button
+                        onClick={() => navigate(`/admin/users/${alert.userId}`)}
+                        className="font-semibold text-gray-800 text-sm hover:text-blue-600 transition-colors truncate block">
+                        {alert.username ?? alert.userId.slice(0, 8)}
+                      </button>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs font-bold text-red-500">
+                          {alert.balance !== null ? `${Number(alert.balance).toFixed(2)} Birr` : 'Unknown'}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          · {new Date(alert.alertedAt).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setResolvingId(alert.userId);
+                      resolveMutation.mutate({ userId: alert.userId, balance: alert.balance ?? 0 });
+                    }}
+                    disabled={resolveMutation.isPending && resolvingId === alert.userId}
+                    className="shrink-0 px-4 py-2 rounded-xl text-sm font-medium text-white transition-colors disabled:opacity-50"
+                    style={{ background: '#10b981' }}>
+                    {resolveMutation.isPending && resolvingId === alert.userId ? 'Resolving…' : 'Resolve & Activate'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
     </div>
   );
 };

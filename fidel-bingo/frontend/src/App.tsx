@@ -77,7 +77,18 @@ const Splash: React.FC = () => (
 );
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean }> = ({ children, adminOnly }) => {
-  const { user, initialized, cacheSteps } = useAuthStore();
+  const { user, initialized, cacheSteps, negativeBalance, lastPositiveBalance } = useAuthStore();
+  const [showRestoredBanner, setShowRestoredBanner] = React.useState(false);
+
+  // Listen for recovery event from sync.ts
+  React.useEffect(() => {
+    const handler = () => {
+      setShowRestoredBanner(true);
+      setTimeout(() => setShowRestoredBanner(false), 6000);
+    };
+    window.addEventListener('balance-restored', handler);
+    return () => window.removeEventListener('balance-restored', handler);
+  }, []);
 
   // Still bootstrapping — show splash instead of blank white screen
   if (!initialized && !user) return <Splash />;
@@ -198,7 +209,79 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean 
   if (!user) return <Navigate to="/login" replace />;
   if (adminOnly && user.role !== 'admin' && user.role !== 'agent') return <Navigate to="/dashboard" replace />;
   if (!adminOnly && (user.role === 'admin' || user.role === 'agent')) return <Navigate to="/admin" replace />;
-  return <>{children}</>;
+
+  // Block prepaid players with negative balance — must top up before continuing
+  if (negativeBalance && !adminOnly && user.role === 'player' && user.paymentType === 'prepaid') {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6" style={{ background: '#0a1220' }}>
+        <div className="w-full max-w-xs text-center">
+          {/* Icon */}
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6"
+            style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)' }}>
+            <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+          </div>
+
+          <p className="text-white font-bold text-xl mb-1">Account Locked</p>
+          <p className="text-gray-500 text-sm mb-6">Your balance went negative. All features are disabled until your admin tops up your account.</p>
+
+          {/* Balance info */}
+          <div className="rounded-2xl px-5 py-4 mb-4 space-y-3"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500">Current balance</span>
+              <span className="text-red-400 font-bold text-base">{Number(user.balance ?? 0).toFixed(2)} Birr</span>
+            </div>
+            {lastPositiveBalance !== null && (
+              <div className="flex items-center justify-between border-t border-white/5 pt-3">
+                <span className="text-xs text-gray-500">Last positive balance</span>
+                <span className="text-emerald-400 font-semibold text-sm">{lastPositiveBalance.toFixed(2)} Birr</span>
+              </div>
+            )}
+          </div>
+
+          {/* Contact admin */}
+          <div className="rounded-2xl px-5 py-4 mb-6 text-left"
+            style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)' }}>
+            <p className="text-yellow-400 text-xs font-semibold mb-3 uppercase tracking-wide">Contact Admin</p>
+            <a href="tel:+251911234567"
+              className="flex items-center gap-3 text-white text-sm font-medium hover:text-yellow-400 transition-colors">
+              <svg className="w-4 h-4 text-yellow-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.948V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+              </svg>
+              +251 911 234 567
+            </a>
+          </div>
+
+          <p className="text-xs text-gray-600">Checking for updates every 15 seconds…</p>
+          <div className="flex items-center justify-center gap-1.5 mt-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+            <div className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+            <div className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {/* Restored banner — shown briefly after admin resolves the negative balance */}
+      {showRestoredBanner && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-lg flex items-center gap-3 text-sm font-medium text-white"
+          style={{ background: 'rgba(16,185,129,0.95)', backdropFilter: 'blur(12px)' }}>
+          <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Balance restored — insufficient funds were cleared. You can play again.
+        </div>
+      )}
+      {children}
+    </>
+  );
 };
 
 // Inner component — lives inside QueryClientProvider so useQueryClient works
