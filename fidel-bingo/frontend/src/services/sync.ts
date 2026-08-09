@@ -3,7 +3,7 @@
  */
 import { api } from './api';
 import { dbGet, dbPut, dbGetAll, dbDelete, dbClear, dequeue, getAllQueued } from './db';
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore, applyNegativeBalanceCheck } from '../store/authStore';
 
 async function isPrepaid(): Promise<boolean> {
   const user = await dbGet<{ paymentType?: string }>('user', 'me');
@@ -275,8 +275,6 @@ async function _doFlush() {
 
 // ── Negative balance check ────────────────────────────────────────────────────
 
-const NEG_BAL_KEY = 'neg_balance_last_positive';
-
 /**
  * After coming online and syncing:
  * - Fetch real server balance
@@ -297,31 +295,19 @@ export async function checkNegativeBalanceAfterSync(): Promise<boolean> {
 
     const balance = Number(fresh.balance ?? 0);
 
-    if (balance >= 0) {
-      // Balance OK — persist it as the last known positive value, clear any block
-      localStorage.setItem(NEG_BAL_KEY, String(balance));
-      await dbPut('user', { ...user, balance }, 'me');
-      useAuthStore.getState().adjustUserBalance(balance - (Number(user.balance) || 0));
-      useAuthStore.getState().setNegativeBalance(false);
-      return true;
-    }
-
-    // ── Balance is negative ──────────────────────────────────────────────────
-
-    // Persist server balance into IDB so UI shows the real negative number
+    // Persist the real server balance into IDB and store
     await dbPut('user', { ...user, balance }, 'me');
-    useAuthStore.getState().adjustUserBalance(balance - (Number(user.balance) || 0));
+    useAuthStore.getState().adjustUserBalance(balance - (Number(useAuthStore.getState().user?.balance) || 0));
 
-    // Save last positive balance so admin knows what to restore to
-    const stored = parseFloat(localStorage.getItem(NEG_BAL_KEY) ?? '');
-    const lastPositive = isNaN(stored) ? 0 : stored;
-    useAuthStore.getState().setLastPositiveBalance(lastPositive);
-    useAuthStore.getState().setNegativeBalance(true);
+    const isNegative = applyNegativeBalanceCheck(
+      balance,
+      user.paymentType,
+      user.role,
+      useAuthStore.getState,
+      (p) => useAuthStore.setState(p as any),
+    );
 
-    // Notify backend — records alert for admin
-    try { await api.post('/users/me/alert-negative-balance'); } catch {}
-
-    return false; // signal: skip refreshCache
+    return !isNegative;
   } catch {
     return true; // if we can't reach server, don't block
   }
@@ -346,11 +332,10 @@ function startRecoveryPolling() {
         // Admin resolved it — unblock and do a full sync
         clearInterval(_recoveryInterval!);
         _recoveryInterval = null;
-        localStorage.setItem(NEG_BAL_KEY, String(balance));
         const user = await dbGet<any>('user', 'me');
         if (user) await dbPut('user', { ...user, balance }, 'me');
         useAuthStore.getState().adjustUserBalance(balance - (Number(useAuthStore.getState().user?.balance) || 0));
-        useAuthStore.getState().setNegativeBalance(false);
+        applyNegativeBalanceCheck(balance, fresh.paymentType, fresh.role, useAuthStore.getState, (p) => useAuthStore.setState(p as any));
         // Full cache refresh now that the account is healthy
         await refreshCache();
         window.dispatchEvent(new CustomEvent('balance-restored'));

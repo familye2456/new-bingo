@@ -3,6 +3,36 @@ import { authApi } from '../services/api';
 import { dbPut, dbGet, dbClear } from '../services/db';
 import { api } from '../services/api';
 
+const NEG_BAL_KEY = 'neg_balance_last_positive';
+
+/**
+ * Shared helper — given a freshly fetched balance, update negativeBalance state.
+ * Called from refreshBalance, fetchMe, and sync.ts checkNegativeBalanceAfterSync.
+ * Returns true if balance is negative.
+ */
+export function applyNegativeBalanceCheck(
+  balance: number,
+  paymentType: string | undefined,
+  role: string,
+  getState: () => AuthState,
+  setState: (partial: Partial<AuthState>) => void,
+) {
+  if (paymentType === 'postpaid' || role === 'admin' || role === 'agent') return false;
+
+  if (balance < 0) {
+    const stored = parseFloat(localStorage.getItem(NEG_BAL_KEY) ?? '');
+    const lastPositive = isNaN(stored) ? 0 : stored;
+    setState({ negativeBalance: true, lastPositiveBalance: lastPositive });
+    // Fire backend alert in background — don't block caller
+    api.post('/users/me/alert-negative-balance').catch(() => {});
+    return true;
+  } else {
+    localStorage.setItem(NEG_BAL_KEY, String(balance));
+    if (getState().negativeBalance) setState({ negativeBalance: false });
+    return false;
+  }
+}
+
 interface User {
   id: string;
   username: string;
@@ -110,7 +140,7 @@ async function waitForSWReady(
   }
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   loading: false,
   initialized: false,
@@ -260,12 +290,14 @@ export const useAuthStore = create<AuthState>((set) => ({
       const res = await api.get('/users/me');
       const fresh = res.data?.data as User;
       if (fresh?.id) {
-        // Normalize balance to number — TypeORM returns decimal as string
-        const normalized = { ...fresh, balance: Number(fresh.balance) };
+        const balance = Number(fresh.balance);
+        const normalized = { ...fresh, balance };
         await dbPut('user', normalized, 'me');
         set((state) => ({
-          user: state.user ? { ...state.user, balance: Number(fresh.balance) } : normalized,
+          user: state.user ? { ...state.user, balance } : normalized,
         }));
+        // Check for negative balance on every poll
+        applyNegativeBalanceCheck(balance, fresh.paymentType, fresh.role, get, (p) => set(p as any));
       }
     } catch {}
   },
@@ -283,9 +315,12 @@ export const useAuthStore = create<AuthState>((set) => ({
       const res = await api.get('/users/me');
       const fresh = res.data?.data as User;
       if (fresh?.id) {
-        const normalized = { ...fresh, balance: Number(fresh.balance) };
+        const balance = Number(fresh.balance);
+        const normalized = { ...fresh, balance };
         await dbPut('user', normalized, 'me');
         set({ user: normalized, initialized: true });
+        // Check immediately on app load — catches negative balance on page refresh
+        applyNegativeBalanceCheck(balance, fresh.paymentType, fresh.role, get, (p) => set(p as any));
         return;
       }
     } catch (err: any) {
