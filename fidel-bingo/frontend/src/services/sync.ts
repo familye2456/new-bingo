@@ -391,18 +391,26 @@ function startRecoveryPolling() {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+/** Returns true while a flush is in progress — used by UI to show sync indicator */
+export function isSyncing() { return _flushing; }
+
 /** Flush queue only — no cache refresh. Used before individual fetches. */
 export async function flushQueueOnly() {
-  if (_flushing) return; // already running
+  if (_flushing) return;
   _flushing = true;
+  window.dispatchEvent(new CustomEvent('sync-start'));
   try { await _doFlush(); }
-  finally { _flushing = false; }
+  finally {
+    _flushing = false;
+    window.dispatchEvent(new CustomEvent('sync-end'));
+  }
 }
 
 /** Flush queue then refresh full cache. Used on online event. */
 export async function flushQueue() {
   if (_flushing) return;
   _flushing = true;
+  window.dispatchEvent(new CustomEvent('sync-start'));
   try {
     // Capture balance BEFORE flush — flush may refund rejected games and make IDB positive again,
     // but we still need to know if the user was genuinely in negative territory
@@ -451,6 +459,7 @@ export async function flushQueue() {
     }
   } finally {
     _flushing = false;
+    window.dispatchEvent(new CustomEvent('sync-end'));
   }
 }
 
