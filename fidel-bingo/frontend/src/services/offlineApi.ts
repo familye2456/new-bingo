@@ -250,6 +250,12 @@ export const offlineGameApi = {
    */
   create: async (data: { cartelaIds: string[]; betAmountPerCartela: number; winPattern?: string; housePercentage?: number }) => {
     const HOUSE_PCT = data.housePercentage ?? 10;
+
+    // Hard block — if account is already flagged as negative balance, don't even try
+    if (useAuthStore.getState().negativeBalance) {
+      throw Object.assign(new Error('Account locked: negative balance'), { code: 'NEGATIVE_BALANCE' });
+    }
+
     const result = await tryApi(() => api.post('/games', data));
     if (result.ok) {
       const game = result.data.data.data;
@@ -268,10 +274,15 @@ export const offlineGameApi = {
     const totalBet = data.betAmountPerCartela * data.cartelaIds.length;
     const houseCut = totalBet * (HOUSE_PCT / 100);
 
-    // Prepaid users cannot go below zero balance while offline
+    // Block prepaid users from creating games offline when balance is negative or insufficient
     if (!user || user.paymentType !== 'postpaid') {
+      // If the store already flagged this account as negative — hard block
+      if (useAuthStore.getState().negativeBalance) {
+        throw Object.assign(new Error('Account locked: negative balance'), { code: 'NEGATIVE_BALANCE' });
+      }
       const currentBalance = Number(user?.balance ?? 0);
-      if (currentBalance < houseCut) {
+      // Block if already negative OR if this game would push it below zero
+      if (currentBalance <= 0 || currentBalance < houseCut) {
         throw Object.assign(new Error('Insufficient balance'), { code: 'INSUFFICIENT_BALANCE' });
       }
     }
