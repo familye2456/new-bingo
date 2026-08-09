@@ -134,12 +134,14 @@ async function _doFlush() {
     const current = freshItem ?? item;
 
     try {
+      console.log(`[sync] processing item id=${current.id} type=${current.type} payload=${JSON.stringify(current.payload)?.slice(0,120)}`);
       switch (current.type) {
         case 'createGame': {
           const p = current.payload as any;
 
           // Skip if already synced (persisted across reloads)
           if (p.tempId && isSynced(p.tempId)) {
+            console.log(`[sync] skipping already-synced createGame tempId=${p.tempId}`);
             await dequeue(current.id!);
             break;
           }
@@ -244,7 +246,10 @@ async function _doFlush() {
         case 'finishGame': {
           const p = current.payload as any;
           // If still has offline ID, createGame hasn't synced yet — skip for now
-          if (String(p.gameId).startsWith('offline-')) break;
+          if (String(p.gameId).startsWith('offline-')) {
+            console.log(`[sync] skipping finishGame with offline gameId=${p.gameId}`);
+            break;
+          }
           try {
             await api.post(`/games/${p.gameId}/finish`);
           } catch (finishErr: any) {
@@ -279,6 +284,7 @@ async function _doFlush() {
           await dequeue(current.id!);
       }
     } catch (err: any) {
+      console.log(`[sync] error on item id=${current.id} type=${current.type} status=${err?.response?.status} msg=${err?.message}`);
       if (err?.response?.status) await dequeue(current.id!); // server error — discard
       else break; // network error — stop, retry later
     }
