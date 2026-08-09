@@ -335,24 +335,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const fresh = res.data?.data as User;
       if (fresh?.id) {
         const balance = Number(fresh.balance);
-        const normalized = { ...fresh, balance };
+        // Use whichever is lower: server balance or local IDB balance
+        // (local may be lower due to offline deductions not yet synced)
+        const idbUser = await dbGet<any>('user', 'me');
+        const idbBalance = idbUser ? Number(idbUser.balance ?? 0) : balance;
+        const effectiveBalance = Math.min(balance, idbBalance);
+        const normalized = { ...fresh, balance: effectiveBalance };
         await dbPut('user', normalized, 'me');
         set({ user: normalized, initialized: true });
-        // Check immediately on app load — catches negative balance on page refresh
-        applyNegativeBalanceCheck(balance, fresh.paymentType, fresh.role, get, (p) => set(p as any));
+        // Check immediately on app load
+        applyNegativeBalanceCheck(effectiveBalance, fresh.paymentType, fresh.role, get, (p) => set(p as any));
         return;
       }
     } catch (err: any) {
-      // HTTP error (401 etc) — not authenticated, don't fall back to cache
       if (err?.response?.status) {
         set({ user: null, initialized: true });
         return;
       }
-      // Network error — fall back to cached user
     }
-
-    // Offline fallback
+    // Offline fallback — also check local balance
     const cached = await dbGet<User>('user', 'me');
-    set({ user: cached ?? null, initialized: true });
+    if (cached) {
+      const balance = Number(cached.balance ?? 0);
+      set({ user: cached, initialized: true });
+      applyNegativeBalanceCheck(balance, cached.paymentType, cached.role, get, (p) => set(p as any));
+    } else {
+      set({ user: null, initialized: true });
+    }
   },
 }));

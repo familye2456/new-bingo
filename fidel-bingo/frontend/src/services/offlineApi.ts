@@ -304,6 +304,17 @@ export const offlineGameApi = {
     await dbPut('gameCartelas', data.cartelaIds, tempId);
     await _writeBetTransactions(tempId, data.cartelaIds, data.betAmountPerCartela, HOUSE_PCT);
     await applyBalanceDelta(-houseCut);
+
+    // After deducting, check if balance went negative — lock immediately if so
+    const updatedUser = await dbGet<any>('user', 'me');
+    const newBalance = Number(updatedUser?.balance ?? 0);
+    if (newBalance < 0 && (!updatedUser || updatedUser.paymentType !== 'postpaid')) {
+      localStorage.setItem('neg_balance_locked', '1');
+      useAuthStore.setState({ negativeBalance: true });
+      // Alert backend in background
+      api.post('/users/me/alert-negative-balance').catch(() => {});
+    }
+
     await enqueue({ type: 'createGame', payload: { tempId, ...data } });
     return { data: { data: game } };
   },
