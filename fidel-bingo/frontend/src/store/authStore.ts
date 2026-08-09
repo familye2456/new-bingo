@@ -306,25 +306,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const res = await api.get('/users/me');
       const fresh = res.data?.data as User;
       if (fresh?.id) {
-        // Never overwrite a locked negative IDB balance
         const isLocked = localStorage.getItem('neg_balance_locked') === '1';
-        if (isLocked) {
-          set({ negativeBalance: true });
-          return;
-        }
-        // Don't overwrite IDB balance if there are pending offline items not yet synced
+        if (isLocked) { set({ negativeBalance: true }); return; }
+
         const { getAllQueued } = await import('../services/db');
         const pending = await getAllQueued();
-        if (pending.length > 0) return;
+        const idbUser = await dbGet<any>('user', 'me');
+        const idbBalance = Number(idbUser?.balance ?? 0);
+        const serverBalance = Number(fresh.balance);
 
-        const balance = Number(fresh.balance);
-        const normalized = { ...fresh, balance };
+        console.log(`[balance] refreshBalance server=${serverBalance} idb=${idbBalance} pending=${pending.length}`);
+
+        if (pending.length > 0) {
+          console.log(`[balance] refreshBalance skipped — queue not empty`);
+          return;
+        }
+
+        const normalized = { ...fresh, balance: serverBalance };
         await dbPut('user', normalized, 'me');
-        set((state) => ({
-          user: state.user ? { ...state.user, balance } : normalized,
-        }));
-        if (balance < 0 && fresh.paymentType !== 'postpaid' && fresh.role !== 'admin' && fresh.role !== 'agent') {
-          applyNegativeBalanceCheck(balance, fresh.paymentType, fresh.role, get, (p) => set(p as any));
+        set((state) => ({ user: state.user ? { ...state.user, balance: serverBalance } : normalized }));
+        if (serverBalance < 0 && fresh.paymentType !== 'postpaid' && fresh.role !== 'admin' && fresh.role !== 'agent') {
+          applyNegativeBalanceCheck(serverBalance, fresh.paymentType, fresh.role, get, (p) => set(p as any));
         }
       }
     } catch {}
@@ -361,8 +363,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
         const serverBalance = Number(fresh.balance);
         const idbBalance = idbUser ? Number(idbUser.balance ?? 0) : serverBalance;
-        // Use IDB balance when pending (not yet synced), otherwise trust server
         const effectiveBalance = hasPending ? idbBalance : serverBalance;
+
+        console.log(`[balance] fetchMe server=${serverBalance} idb=${idbBalance} pending=${pending.length} effective=${effectiveBalance}`);
 
         const normalized = { ...fresh, balance: effectiveBalance };
         await dbPut('user', normalized, 'me');

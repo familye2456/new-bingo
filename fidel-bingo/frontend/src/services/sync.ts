@@ -49,9 +49,9 @@ export async function refreshCache() {
       const localUser = await dbGet<any>('user', 'me');
       const isLocked = localStorage.getItem('neg_balance_locked') === '1';
       if (isLocked || (pendingQueue.length > 0 && localUser)) {
-        // Keep local balance — don't let server's stale positive value overwrite it
         if (localUser) meData.balance = localUser.balance;
       }
+      console.log(`[balance] refreshCache server=${meData?.balance} locked=${isLocked} pending=${pendingQueue.length}`);
     }
     await dbPut('user', meData, 'me');
 
