@@ -306,14 +306,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const res = await api.get('/users/me');
       const fresh = res.data?.data as User;
       if (fresh?.id) {
+        // Never overwrite a locked negative IDB balance with the server's positive value
+        const isLocked = localStorage.getItem('neg_balance_locked') === '1';
+        if (isLocked) {
+          set({ negativeBalance: true });
+          return;
+        }
         const balance = Number(fresh.balance);
         const normalized = { ...fresh, balance };
         await dbPut('user', normalized, 'me');
         set((state) => ({
           user: state.user ? { ...state.user, balance } : normalized,
         }));
-        // Detect negative — but never clear the lock here (sync hasn't run yet)
-        // Only set the lock if balance is negative; clearing happens in checkNegativeBalanceAfterSync
         if (balance < 0 && fresh.paymentType !== 'postpaid' && fresh.role !== 'admin' && fresh.role !== 'agent') {
           applyNegativeBalanceCheck(balance, fresh.paymentType, fresh.role, get, (p) => set(p as any));
         }
@@ -329,21 +333,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   fetchMe: async () => {
-    // Try server first — only use cache as fallback if offline/unreachable
     try {
       const res = await api.get('/users/me');
       const fresh = res.data?.data as User;
       if (fresh?.id) {
+        // Never overwrite locked negative IDB balance with server's positive value
+        const isLocked = localStorage.getItem('neg_balance_locked') === '1';
+        if (isLocked) {
+          const idbUser = await dbGet<any>('user', 'me');
+          const displayUser = idbUser ?? { ...fresh, balance: Number(fresh.balance) };
+          set({ user: displayUser, initialized: true, negativeBalance: true });
+          return;
+        }
         const balance = Number(fresh.balance);
-        // Use whichever is lower: server balance or local IDB balance
-        // (local may be lower due to offline deductions not yet synced)
         const idbUser = await dbGet<any>('user', 'me');
         const idbBalance = idbUser ? Number(idbUser.balance ?? 0) : balance;
         const effectiveBalance = Math.min(balance, idbBalance);
         const normalized = { ...fresh, balance: effectiveBalance };
         await dbPut('user', normalized, 'me');
         set({ user: normalized, initialized: true });
-        // Check immediately on app load
         applyNegativeBalanceCheck(effectiveBalance, fresh.paymentType, fresh.role, get, (p) => set(p as any));
         return;
       }
@@ -353,7 +361,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return;
       }
     }
-    // Offline fallback — also check local balance
     const cached = await dbGet<User>('user', 'me');
     if (cached) {
       const balance = Number(cached.balance ?? 0);

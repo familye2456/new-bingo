@@ -41,11 +41,17 @@ export async function refreshCache() {
 
     const meData = meRes.data?.data ?? meRes.data;
 
-    // Only update balance from server if sync queue is empty
+    // Never overwrite a locally-negative balance with the server's positive value
+    // while the account is locked — the lock exists precisely because local balance
+    // went below zero offline, and the server doesn't know yet.
     const pendingQueue = await getAllQueued();
-    if (pendingQueue.length > 0 && meData) {
+    if (meData) {
       const localUser = await dbGet<any>('user', 'me');
-      if (localUser) meData.balance = localUser.balance;
+      const isLocked = localStorage.getItem('neg_balance_locked') === '1';
+      if (isLocked || (pendingQueue.length > 0 && localUser)) {
+        // Keep local balance — don't let server's stale positive value overwrite it
+        if (localUser) meData.balance = localUser.balance;
+      }
     }
     await dbPut('user', meData, 'me');
 
