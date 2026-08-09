@@ -55,11 +55,12 @@ export async function refreshCache() {
     }
     await dbPut('user', meData, 'me');
 
-    // Sync the refreshed balance into the Zustand store so the UI reflects server state
+    // Set balance in Zustand directly from the value we just wrote to IDB
     if (meData?.id) {
-      useAuthStore.getState().adjustUserBalance(
-        Number(meData.balance) - (Number(useAuthStore.getState().user?.balance) || 0)
-      );
+      const newBalance = Number(meData.balance);
+      useAuthStore.setState((state) => ({
+        user: state.user ? { ...state.user, balance: newBalance } : state.user,
+      }));
     }
 
     const toList = (d: any) => Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : Array.isArray(d?.data?.data) ? d.data.data : [];
@@ -123,6 +124,8 @@ async function _doFlush() {
   const items = await getAllQueued();
   if (items.length === 0) return;
 
+  console.log(`[sync] flushing ${items.length} queued items`);
+
   for (const item of items) {
     // Re-read the item fresh from IDB — a previous iteration (e.g. createGame)
     // may have updated this item's payload (e.g. tempId → realId on finishGame)
@@ -146,6 +149,7 @@ async function _doFlush() {
 
           let realGame: any;
           try {
+            console.log(`[sync] posting createGame tempId=${p.tempId}`);
             const res = await api.post('/games', {
               cartelaIds: p.cartelaIds,
               betAmountPerCartela: p.betAmountPerCartela,
@@ -153,7 +157,9 @@ async function _doFlush() {
               housePercentage: p.housePercentage,
             });
             realGame = res.data.data;
+            console.log(`[sync] createGame success realId=${realGame?.id}`);
           } catch (postErr: any) {
+            console.log(`[sync] createGame failed tempId=${p.tempId} status=${postErr?.response?.status} msg=${postErr?.response?.data?.error?.message ?? postErr?.message}`);
             // Network error — un-mark so we retry next time
             if (!postErr?.response?.status && p.tempId) {
               const ids = getSyncedIds(); ids.delete(p.tempId);
@@ -413,8 +419,23 @@ export async function flushQueue() {
     }
 
     const balanceOk = await checkNegativeBalanceAfterSync();
+    console.log(`[sync] balanceOk=${balanceOk}`);
     if (balanceOk) {
       await refreshCache();
+      // After cache refresh, force one final balance fetch to ensure Zustand shows server truth
+      try {
+        const res = await api.get('/users/me');
+        const fresh = res.data?.data;
+        if (fresh?.id && localStorage.getItem('neg_balance_locked') !== '1') {
+          const balance = Number(fresh.balance);
+          console.log(`[sync] final server balance=${balance}`);
+          const idbUser = await dbGet<any>('user', 'me');
+          if (idbUser) await dbPut('user', { ...idbUser, balance }, 'me');
+          useAuthStore.setState((state) => ({
+            user: state.user ? { ...state.user, balance } : state.user,
+          }));
+        }
+      } catch {}
     } else {
       startRecoveryPolling();
     }
