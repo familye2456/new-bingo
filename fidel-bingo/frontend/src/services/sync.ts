@@ -291,7 +291,19 @@ export async function checkNegativeBalanceAfterSync(): Promise<boolean> {
     const user = await dbGet<any>('user', 'me');
     if (!user || user.paymentType === 'postpaid' || user.role === 'admin' || user.role === 'agent') return true;
 
-    // Check local IDB balance — this reflects all offline deductions
+    // If already locked (set before flush or by offlineApi), keep it locked.
+    // Only recovery polling (after admin top-up) clears this.
+    if (isNegativeBalanceLocked()) {
+      const stored = parseFloat(localStorage.getItem(NEG_BAL_KEY) ?? '');
+      useAuthStore.setState({
+        negativeBalance: true,
+        lastPositiveBalance: isNaN(stored) ? 0 : stored,
+      });
+      try { await api.post('/users/me/alert-negative-balance'); } catch {}
+      return false;
+    }
+
+    // Not locked — check current local IDB balance
     const localBalance = Number(user.balance ?? 0);
     if (localBalance < 0) {
       localStorage.setItem('neg_balance_locked', '1');
@@ -304,14 +316,13 @@ export async function checkNegativeBalanceAfterSync(): Promise<boolean> {
       return false;
     }
 
-    // Local balance is positive — also verify with server (catches edge cases)
+    // Balance genuinely positive and not locked — sync server balance into IDB
     if (navigator.onLine) {
       try {
         const res = await api.get('/users/me');
         const fresh = res.data?.data;
         if (fresh) {
           const serverBalance = Number(fresh.balance ?? 0);
-          // Sync server balance into IDB and store
           await dbPut('user', { ...user, balance: serverBalance }, 'me');
           useAuthStore.getState().adjustUserBalance(serverBalance - (Number(useAuthStore.getState().user?.balance) || 0));
           localStorage.setItem(NEG_BAL_KEY, String(Math.max(serverBalance, 0)));
@@ -319,11 +330,6 @@ export async function checkNegativeBalanceAfterSync(): Promise<boolean> {
       } catch {}
     }
 
-    // Balance is positive — clear any previous lock
-    if (isNegativeBalanceLocked()) {
-      localStorage.removeItem('neg_balance_locked');
-      useAuthStore.setState({ negativeBalance: false });
-    }
     return true;
   } catch {
     return true;
@@ -376,12 +382,34 @@ export async function flushQueue() {
   if (_flushing) return;
   _flushing = true;
   try {
+    // Capture balance BEFORE flush — flush may refund rejected games and make IDB positive again,
+    // but we still need to know if the user was genuinely in negative territory
+    const preFlushUser = await dbGet<any>('user', 'me');
+    const preFlushBalance = Number(preFlushUser?.balance ?? 0);
+    const isPrepaidPlayer = preFlushUser &&
+      preFlushUser.paymentType !== 'postpaid' &&
+      preFlushUser.role !== 'admin' &&
+      preFlushUser.role !== 'agent';
+
     await _doFlush();
+
+    // If balance was negative before flush, lock regardless of post-refund IDB value
+    if (isPrepaidPlayer && preFlushBalance < 0) {
+      localStorage.setItem('neg_balance_locked', '1');
+      const stored = parseFloat(localStorage.getItem(NEG_BAL_KEY) ?? '');
+      useAuthStore.setState({
+        negativeBalance: true,
+        lastPositiveBalance: isNaN(stored) ? 0 : stored,
+      });
+      try { await api.post('/users/me/alert-negative-balance'); } catch {}
+      startRecoveryPolling();
+      return;
+    }
+
     const balanceOk = await checkNegativeBalanceAfterSync();
     if (balanceOk) {
       await refreshCache();
     } else {
-      // Account blocked — start polling for recovery
       startRecoveryPolling();
     }
   } finally {
