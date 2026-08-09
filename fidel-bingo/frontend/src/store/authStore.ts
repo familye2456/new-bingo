@@ -306,12 +306,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const res = await api.get('/users/me');
       const fresh = res.data?.data as User;
       if (fresh?.id) {
-        // Never overwrite a locked negative IDB balance with the server's positive value
+        // Never overwrite a locked negative IDB balance
         const isLocked = localStorage.getItem('neg_balance_locked') === '1';
         if (isLocked) {
           set({ negativeBalance: true });
           return;
         }
+        // Don't overwrite IDB balance if there are pending offline items not yet synced
+        const { getAllQueued } = await import('../services/db');
+        const pending = await getAllQueued();
+        if (pending.length > 0) return;
+
         const balance = Number(fresh.balance);
         const normalized = { ...fresh, balance };
         await dbPut('user', normalized, 'me');
@@ -345,10 +350,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           set({ user: displayUser, initialized: true, negativeBalance: true });
           return;
         }
-        const balance = Number(fresh.balance);
+
         const idbUser = await dbGet<any>('user', 'me');
-        const idbBalance = idbUser ? Number(idbUser.balance ?? 0) : balance;
-        const effectiveBalance = Math.min(balance, idbBalance);
+
+        // If there are pending offline games in the queue, keep the local IDB balance.
+        // Don't let the server's stale pre-sync value overwrite what the user sees.
+        const { getAllQueued } = await import('../services/db');
+        const pending = await getAllQueued();
+        const hasPending = pending.length > 0;
+
+        const serverBalance = Number(fresh.balance);
+        const idbBalance = idbUser ? Number(idbUser.balance ?? 0) : serverBalance;
+        // Use IDB balance when pending (not yet synced), otherwise trust server
+        const effectiveBalance = hasPending ? idbBalance : serverBalance;
+
         const normalized = { ...fresh, balance: effectiveBalance };
         await dbPut('user', normalized, 'me');
         set({ user: normalized, initialized: true });
