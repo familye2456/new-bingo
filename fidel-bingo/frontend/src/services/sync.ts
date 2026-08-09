@@ -3,7 +3,7 @@
  */
 import { api } from './api';
 import { dbGet, dbPut, dbGetAll, dbDelete, dbClear, dequeue, getAllQueued } from './db';
-import { useAuthStore, applyNegativeBalanceCheck } from '../store/authStore';
+import { useAuthStore, applyNegativeBalanceCheck, isNegativeBalanceLocked } from '../store/authStore';
 
 async function isPrepaid(): Promise<boolean> {
   const user = await dbGet<{ paymentType?: string }>('user', 'me');
