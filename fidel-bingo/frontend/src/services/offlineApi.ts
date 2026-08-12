@@ -245,8 +245,8 @@ export const offlineGameApi = {
 
   /**
    * Create a game.
-   * Online  → POST to server, cache result in background, navigate immediately.
-   * Offline → save locally, enqueue for sync.
+   * Prepaid → ALWAYS offline-first (instant), sync in background
+   * Postpaid → POST to server, cache result in background
    */
   create: async (data: { cartelaIds: string[]; betAmountPerCartela: number; winPattern?: string; housePercentage?: number }) => {
     const HOUSE_PCT = data.housePercentage ?? 10;
@@ -257,35 +257,39 @@ export const offlineGameApi = {
       throw Object.assign(new Error('Account locked: negative balance'), { code: 'NEGATIVE_BALANCE' });
     }
 
-    const result = await tryApi(() => api.post('/games', data));
-    if (result.ok) {
-      const game = result.data.data.data;
-      // Cache in background — don't block navigation
-      Promise.resolve().then(async () => {
-        await dbPut('games', { ...game, cartelaIds: data.cartelaIds });
-        await dbPut('gameCartelas', data.cartelaIds, game.id);
-        await _writeBetTransactions(game.id, data.cartelaIds, data.betAmountPerCartela, Number(game.housePercentage ?? HOUSE_PCT));
-        useAuthStore.getState().refreshBalance();
-      }).catch(() => {});
-      return result.data;
+    const user = await dbGet<any>('user', 'me');
+    const isPrepaidUser = !user || user.paymentType !== 'postpaid';
+
+    // Postpaid users → use server (real-time billing required)
+    if (!isPrepaidUser) {
+      const result = await tryApi(() => api.post('/games', data));
+      if (result.ok) {
+        const game = result.data.data.data;
+        // Cache in background — don't block navigation
+        Promise.resolve().then(async () => {
+          await dbPut('games', { ...game, cartelaIds: data.cartelaIds });
+          await dbPut('gameCartelas', data.cartelaIds, game.id);
+          await _writeBetTransactions(game.id, data.cartelaIds, data.betAmountPerCartela, Number(game.housePercentage ?? HOUSE_PCT));
+          useAuthStore.getState().refreshBalance();
+        }).catch(() => {});
+        return result.data;
+      }
+      // Server failed for postpaid → throw error (postpaid requires server)
+      throw Object.assign(new Error('Server unreachable'), { code: 'SERVER_UNREACHABLE' });
     }
 
-    // Server unreachable — fall back to IDB for all users
-    const user = await dbGet<any>('user', 'me');
+    // Prepaid users → ALWAYS use offline mode (instant response, no network wait)
+    // Prepaid users → ALWAYS use offline mode (instant response, no network wait)
     const totalBet = data.betAmountPerCartela * data.cartelaIds.length;
     const houseCut = totalBet * (HOUSE_PCT / 100);
 
-    // Block prepaid users from creating games offline when balance is negative or insufficient
-    if (!user || user.paymentType !== 'postpaid') {
-      // Check both store flag AND persisted lock (survives page reload)
-      if (useAuthStore.getState().negativeBalance || isNegativeBalanceLocked()) {
-        throw Object.assign(new Error('Account locked: negative balance'), { code: 'NEGATIVE_BALANCE' });
-      }
-      const currentBalance = Number(user?.balance ?? 0);
-      // Block if already at/below zero OR if this game would push it below zero
-      if (currentBalance <= 0 || currentBalance < houseCut) {
-        throw Object.assign(new Error('Insufficient balance'), { code: 'INSUFFICIENT_BALANCE' });
-      }
+    // Block prepaid users from creating games when balance is insufficient
+    if (useAuthStore.getState().negativeBalance || isNegativeBalanceLocked()) {
+      throw Object.assign(new Error('Account locked: negative balance'), { code: 'NEGATIVE_BALANCE' });
+    }
+    const currentBalance = Number(user?.balance ?? 0);
+    if (currentBalance <= 0 || currentBalance < houseCut) {
+      throw Object.assign(new Error('Insufficient balance'), { code: 'INSUFFICIENT_BALANCE' });
     }
 
     const tempId = `offline-${Date.now()}`;
@@ -308,13 +312,14 @@ export const offlineGameApi = {
     // After deducting, check if balance went negative — lock immediately if so
     const updatedUser = await dbGet<any>('user', 'me');
     const newBalance = Number(updatedUser?.balance ?? 0);
-    if (newBalance < 0 && (!updatedUser || updatedUser.paymentType !== 'postpaid')) {
+    if (newBalance < 0) {
       localStorage.setItem('neg_balance_locked', '1');
       useAuthStore.setState({ negativeBalance: true });
       // Alert backend in background
-      api.post('/users/me/alert-negative-balance').catch(() => {});
+      if (navigator.onLine) api.post('/users/me/alert-negative-balance').catch(() => {});
     }
 
+    // Queue for background sync when online
     await enqueue({ type: 'createGame', payload: { tempId, ...data } });
     return { data: { data: game } };
   },
@@ -334,22 +339,63 @@ export const offlineGameApi = {
   },
 
   callNumber: async (gameId: string) => {
-    if (!String(gameId).startsWith('offline-')) {
-      const result = await tryApi(() => api.post(`/games/${gameId}/call`));
-      if (result.ok) {
-        const num: number | undefined = result.data.data?.data?.number;
-        if (num != null) {
-          const cached = await dbGet<any>('games', gameId);
-          if (cached) {
-            cached.calledNumbers = [...(cached.calledNumbers ?? []), num];
-            await dbPut('games', cached);
-          }
-        }
-        return result.data;
+    // Offline games always use local logic
+    if (String(gameId).startsWith('offline-')) {
+      const game = await dbGet<any>('games', gameId);
+      if (!game) return { data: { data: { number: null, remaining: 0 } } };
+
+      const called: number[] = game.calledNumbers ?? [];
+      const nextIndex = called.length;
+      if (nextIndex >= 75) return { data: { data: { number: null, remaining: 0 } } };
+
+      if (!game.numberSequence || game.numberSequence.length !== 75) {
+        game.numberSequence = shuffleSequence();
       }
+
+      const number = game.numberSequence[nextIndex];
+      game.calledNumbers = [...called, number];
+      await dbPut('games', game);
+      return { data: { data: { number, remaining: 75 - game.calledNumbers.length } } };
     }
 
-    // Server unreachable — use IDB for all users
+    // Online games from server → check if user is prepaid
+    const user = await dbGet<any>('user', 'me');
+    const isPrepaidUser = !user || user.paymentType !== 'postpaid';
+
+    // Prepaid users → ALWAYS use local cached game (no server call needed)
+    if (isPrepaidUser) {
+      const game = await dbGet<any>('games', gameId);
+      if (!game) return { data: { data: { number: null, remaining: 0 } } };
+
+      const called: number[] = game.calledNumbers ?? [];
+      const nextIndex = called.length;
+      if (nextIndex >= 75) return { data: { data: { number: null, remaining: 0 } } };
+
+      if (!game.numberSequence || game.numberSequence.length !== 75) {
+        game.numberSequence = shuffleSequence();
+      }
+
+      const number = game.numberSequence[nextIndex];
+      game.calledNumbers = [...called, number];
+      await dbPut('games', game);
+      return { data: { data: { number, remaining: 75 - game.calledNumbers.length } } };
+    }
+
+    // Postpaid users → use server (for audit trail / billing)
+    const result = await tryApi(() => api.post(`/games/${gameId}/call`));
+    if (result.ok) {
+      const num: number | undefined = result.data.data?.data?.number;
+      if (num != null) {
+        const cached = await dbGet<any>('games', gameId);
+        if (cached) {
+          cached.calledNumbers = [...(cached.calledNumbers ?? []), num];
+          await dbPut('games', cached);
+        }
+      }
+      return result.data;
+    }
+
+    // Server failed — use local fallback for postpaid too
     const game = await dbGet<any>('games', gameId);
     if (!game) return { data: { data: { number: null, remaining: 0 } } };
 
