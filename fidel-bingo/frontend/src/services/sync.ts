@@ -153,6 +153,11 @@ async function _doFlush() {
           // Skip if already synced (persisted across reloads)
           if (p.tempId && isSynced(p.tempId)) {
             console.log(`[sync] skipping already-synced createGame tempId=${p.tempId}`);
+            // Clean up the offline game even if already synced (may have been left behind)
+            if (p.tempId) {
+              await dbDelete('games', p.tempId);
+              await dbDelete('gameCartelas', p.tempId);
+            }
             await dequeue(current.id!);
             break;
           }
