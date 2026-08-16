@@ -317,16 +317,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
         console.log(`[balance] refreshBalance server=${serverBalance} idb=${idbBalance} pending=${pending.length}`);
 
-        if (pending.length > 0) {
-          console.log(`[balance] refreshBalance skipped — queue not empty`);
-          return;
-        }
-
-        const normalized = { ...fresh, balance: serverBalance };
+        const pendingHouseCuts = pending
+          .filter((item: any) => item.type === 'createGame')
+          .reduce((sum: number, item: any) => {
+            const p = item.payload as any;
+            return sum + (p.betAmountPerCartela ?? 0) * (p.cartelaIds?.length ?? 0) * ((p.housePercentage ?? 10) / 100);
+          }, 0);
+        const effectiveBalance = serverBalance - pendingHouseCuts;
+        console.log(`[balance] refreshBalance server=${serverBalance} pendingHouseCuts=${pendingHouseCuts} effective=${effectiveBalance}`);
+        const normalized = { ...fresh, balance: effectiveBalance };
         await dbPut('user', normalized, 'me');
-        set((state) => ({ user: state.user ? { ...state.user, balance: serverBalance } : normalized }));
-        if (serverBalance < 0 && fresh.paymentType !== 'postpaid' && fresh.role !== 'admin' && fresh.role !== 'agent') {
-          applyNegativeBalanceCheck(serverBalance, fresh.paymentType, fresh.role, get, (p) => set(p as any));
+        set((state) => ({ user: state.user ? { ...state.user, balance: effectiveBalance } : normalized }));
+        if (effectiveBalance < 0 && fresh.paymentType !== 'postpaid' && fresh.role !== 'admin' && fresh.role !== 'agent') {
+          applyNegativeBalanceCheck(effectiveBalance, fresh.paymentType, fresh.role, get, (p) => set(p as any));
         }
       }
     } catch {}
@@ -363,7 +366,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
         const serverBalance = Number(fresh.balance);
         const idbBalance = idbUser ? Number(idbUser.balance ?? 0) : serverBalance;
-        const effectiveBalance = hasPending ? idbBalance : serverBalance;
+        const pendingHouseCuts = pending
+          .filter((item: any) => item.type === 'createGame')
+          .reduce((sum: number, item: any) => {
+            const p = item.payload as any;
+            return sum + (p.betAmountPerCartela ?? 0) * (p.cartelaIds?.length ?? 0) * ((p.housePercentage ?? 10) / 100);
+          }, 0);
+        const effectiveBalance = hasPending ? serverBalance - pendingHouseCuts : serverBalance;
 
         console.log(`[balance] fetchMe server=${serverBalance} idb=${idbBalance} pending=${pending.length} effective=${effectiveBalance}`);
 

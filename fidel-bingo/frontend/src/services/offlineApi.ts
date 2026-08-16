@@ -478,7 +478,7 @@ export const offlineGameApi = {
           createdAt: new Date().toISOString(),
           userId: user?.id,
         });
-        await applyBalanceDelta(prize);
+        // Balance credit deferred — will be applied when server confirms during sync
       }
     }
 
@@ -495,6 +495,19 @@ export const offlineGameApi = {
   },
 
   getCartelas: async (gameId: string) => {
+    // Prepaid users OR offline games - load from IndexedDB only
+    const prepaid = await isPrepaid();
+    if (prepaid || String(gameId).startsWith('offline-')) {
+      const cartelaIds = await dbGet<string[]>('gameCartelas', gameId);
+      if (!cartelaIds || cartelaIds.length === 0) {
+        return { data: { data: [] } };
+      }
+      const cartelas = await Promise.all(
+        cartelaIds.map(id => dbGet('cartelas', id))
+      );
+      return { data: { data: cartelas.filter(Boolean) } };
+    }
+
     const result = await tryApi(() => api.get(`/games/${gameId}/cartelas`));
     if (result.ok) {
       const list = toList(result.data);

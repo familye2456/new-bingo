@@ -283,7 +283,13 @@ async function _doFlush() {
             await dequeue(current.id!);
             break;
           }
-          await api.post(`/games/${p.gameId}/bingo`, { cartelaId: p.cartelaId });
+          const res = await api.post(`/games/${p.gameId}/bingo`, { cartelaId: p.cartelaId });
+          const amount = Number(res.data?.data?.data?.amount ?? 0);
+          if (amount > 0) {
+            const { adjustBalance } = await import('./db');
+            await adjustBalance(amount);
+            useAuthStore.getState().adjustUserBalance(amount);
+          }
           await dequeue(current.id!);
           break;
         }
@@ -301,7 +307,7 @@ async function _doFlush() {
     } catch (err: any) {
       console.log(`[sync] error on item id=${current.id} type=${current.type} status=${err?.response?.status} msg=${err?.message}`);
       if (err?.response?.status) await dequeue(current.id!); // server error — discard
-      else break; // network error — stop, retry later
+      else continue; // network error — skip item, attempt remaining
     }
   }
 }
