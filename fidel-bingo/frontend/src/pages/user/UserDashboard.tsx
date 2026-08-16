@@ -151,7 +151,7 @@ const KPI: React.FC<{
 export const UserDashboard: React.FC = () => {
   const { user } = useAuthStore();
 
-  const { data: games = [], isLoading } = useQuery<Game[]>({
+  const { data: games = [], isLoading, refetch } = useQuery<Game[]>({
     queryKey: ['my-games'],
     queryFn: () => offlineGameApi.myGames() as Promise<Game[]>,
   });
@@ -161,6 +161,16 @@ export const UserDashboard: React.FC = () => {
     queryFn: () => api.get('/games/bonus/today').then(r => r.data.data),
     refetchInterval: 60_000,
   });
+
+  // Refetch games when cache is refreshed (after sync) to prevent duplicate counting
+  React.useEffect(() => {
+    const handleCacheRefresh = () => {
+      console.log('[dashboard] Cache refreshed, refetching games');
+      refetch();
+    };
+    window.addEventListener('cache-refreshed', handleCacheRefresh);
+    return () => window.removeEventListener('cache-refreshed', handleCacheRefresh);
+  }, [refetch]);
 
   const daily   = calcStats(games, 1);
   const weekly  = calcStats(games, 7);

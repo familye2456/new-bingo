@@ -219,6 +219,7 @@ export const offlineGameApi = {
         const offlineGames = allLocal.filter((g: any) => String(g.id).startsWith('offline-'));
         const serverIds = new Set(serverList.map((g: any) => g.id));
         const uniqueOffline = offlineGames.filter((g: any) => !serverIds.has(g.id));
+        console.log(`[myGames] server=${serverList.length} offline=${uniqueOffline.length} total=${mergedList.length + uniqueOffline.length}`);
         return [...mergedList, ...uniqueOffline];
       } catch (err: any) {
         if (err?.response?.status) throw err;
