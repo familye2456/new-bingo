@@ -1,11 +1,34 @@
 import { io, Socket } from 'socket.io-client';
+import { dbGet, dbPut } from './db';
+import { useAuthStore } from '../store/authStore';
 
 let socket: Socket | null = null;
+
+const bindBalanceSocketListeners = (socketInstance: Socket) => {
+  socketInstance.off('balance_updated');
+  socketInstance.on('balance_updated', async ({ userId, balance }: { userId?: string; balance?: number }) => {
+    if (typeof balance !== 'number' || !userId) return;
+    const currentUser = useAuthStore.getState().user;
+    if (currentUser && currentUser.id !== userId) return;
+
+    try {
+      const localUser = await dbGet<any>('user', 'me');
+      if (localUser) {
+        await dbPut('user', { ...localUser, balance }, 'me');
+      }
+      useAuthStore.setState((state) => ({
+        user: state.user ? { ...state.user, balance } : state.user,
+      }));
+      window.dispatchEvent(new CustomEvent('balance-updated', { detail: { userId, balance } }));
+    } catch (err) {
+      console.error('[socket] Failed to update balance from server push:', err);
+    }
+  });
+};
 
 export const getSocket = (token?: string): Socket => {
   if (socket && socket.connected) return socket;
 
-  // If we have an existing disconnected socket, clean it up
   if (socket) {
     socket.removeAllListeners();
     socket.disconnect();
@@ -23,6 +46,13 @@ export const getSocket = (token?: string): Socket => {
     reconnectionDelayMax: 10000,
   });
 
+  // Join personal room so admin balance_updated events are received
+  socket.on('connect', () => {
+    const user = useAuthStore.getState().user;
+    if (user?.id) socket!.emit('join_user_room', user.id);
+  });
+
+  bindBalanceSocketListeners(socket);
   return socket;
 };
 

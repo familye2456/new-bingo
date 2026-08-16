@@ -27,6 +27,7 @@ const io = new Server(httpServer, {
   cors: { origin: env.FRONTEND_URL, credentials: true },
   transports: ['websocket', 'polling'],
 });
+app.locals.io = io;
 
 app.use(helmet({
   contentSecurityPolicy: {

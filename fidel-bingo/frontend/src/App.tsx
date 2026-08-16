@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/reac
 import { useAuthStore } from './store/authStore';
 import { LoginPage } from './pages/LoginPage';
 import { GamePage } from './pages/GamePage';
+import { getSocket } from './services/socket';
 
 // Error boundary — catches extension-injected DOM conflicts and other runtime errors
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: Error | null }> {
@@ -294,6 +295,18 @@ const AppRoutes: React.FC = () => {
     if (fetchedRef.current) return; // prevent double-invoke in React dev mode
     fetchedRef.current = true;
     fetchMe();
+
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      getSocket(token);
+    }
+    
+    // Start periodic sync on app load to catch admin balance updates
+    import('./services/sync').then(({ startPeriodicSync }) => {
+      console.log('[App] Starting periodic sync on app load');
+      startPeriodicSync();
+    });
+    
     // Trigger sync once on app load if online and there are pending items
     if (navigator.onLine) {
       import('./services/sync').then(({ syncWhenOnline }) => {

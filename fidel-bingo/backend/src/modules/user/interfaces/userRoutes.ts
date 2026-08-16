@@ -1,4 +1,5 @@
 import { Router, Response } from 'express';
+import { Server } from 'socket.io';
 import { authenticate, authorize, AuthRequest } from '../../../shared/middleware/authMiddleware';
 import { AppDataSource } from '../../../config/database';
 import { User } from '../domain/User';
@@ -164,6 +165,17 @@ router.patch('/:id', authorize('admin', 'agent'), async (req: AuthRequest, res: 
 });
 
 // Top up balance
+const notifyBalanceUpdate = (req: AuthRequest, userId: string, balance: number) => {
+  const io = (req.app as any).get('io') as Server | undefined;
+  if (!io) return;
+  io.to(`user:${userId}`).emit('balance_updated', {
+    userId,
+    balance,
+    updatedAt: new Date().toISOString(),
+    source: 'admin_adjustment',
+  });
+};
+
 router.patch('/:id/balance', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(User);
   const user = await repo.findOne({ where: { id: req.params.id } });
@@ -178,6 +190,18 @@ router.patch('/:id/balance', authorize('admin', 'agent'), async (req: AuthReques
   await repo.increment({ id: req.params.id }, 'balance', amount);
   const updated = await repo.findOne({ where: { id: req.params.id } });
 
+  // Record deposit transaction so it appears in balance history
+  await AppDataSource.getRepository(Transaction).save(
+    AppDataSource.getRepository(Transaction).create({
+      userId: req.params.id,
+      transactionType: 'deposit',
+      amount,
+      status: 'completed',
+      description: `Top-up by ${req.user!.role} (${req.user!.id.slice(0, 8)})`,
+      processedAt: new Date(),
+    })
+  );
+
   // If balance is now non-negative, dismiss any pending negative-balance alert
   if (updated && Number(updated.balance) >= 0) {
     await AppDataSource.getRepository(Transaction).delete({
@@ -188,6 +212,7 @@ router.patch('/:id/balance', authorize('admin', 'agent'), async (req: AuthReques
     });
   }
 
+  notifyBalanceUpdate(req, req.params.id, Number(updated?.balance ?? user.balance ?? 0));
   res.json({ success: true, data: updated?.sanitize() });
 });
 
@@ -206,6 +231,20 @@ router.patch('/:id/balance/deduct', authorize('admin', 'agent'), async (req: Aut
 
   await repo.decrement({ id: req.params.id }, 'balance', amount);
   const updated = await repo.findOne({ where: { id: req.params.id } });
+
+  // Record withdrawal transaction so it appears in balance history
+  await AppDataSource.getRepository(Transaction).save(
+    AppDataSource.getRepository(Transaction).create({
+      userId: req.params.id,
+      transactionType: 'withdrawal',
+      amount,
+      status: 'completed',
+      description: `Deduction by ${req.user!.role} (${req.user!.id.slice(0, 8)})`,
+      processedAt: new Date(),
+    })
+  );
+
+  notifyBalanceUpdate(req, req.params.id, Number(updated?.balance ?? user.balance ?? 0));
   res.json({ success: true, data: updated?.sanitize() });
 });
 

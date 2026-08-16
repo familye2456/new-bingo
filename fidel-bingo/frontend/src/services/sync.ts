@@ -41,17 +41,28 @@ export async function refreshCache() {
 
     const meData = meRes.data?.data ?? meRes.data;
 
-    // Never overwrite a locally-negative balance with the server's positive value
-    // while the account is locked — the lock exists precisely because local balance
-    // went below zero offline, and the server doesn't know yet.
+    // ⭐ CRITICAL FIX: Balance preservation logic
+    // Only preserve LOCAL balance if account is LOCKED (negative balance scenario)
+    // Otherwise, ALWAYS use SERVER balance as authoritative source
+    // This ensures admin balance updates are NOT overwritten by local cached balance
     const pendingQueue = await getAllQueued();
     if (meData) {
       const localUser = await dbGet<any>('user', 'me');
       const isLocked = localStorage.getItem('neg_balance_locked') === '1';
-      if (isLocked || (pendingQueue.length > 0 && localUser)) {
-        if (localUser) meData.balance = localUser.balance;
+      
+      if (isLocked && localUser) {
+        // Account is locked due to negative balance — preserve it to keep player blocked
+        console.log(`[balance] Account locked, preserving local balance=${localUser.balance}`);
+        meData.balance = localUser.balance;
+      } else if (meData && localUser) {
+        // Account is NOT locked — SERVER BALANCE is AUTHORITATIVE
+        // Use server balance even if there are pending games
+        // Pending games affect temporary deduction, not permanent balance
+        const serverBalance = Number(meData.balance ?? 0);
+        console.log(`[balance] Using server balance=${serverBalance} (locked=${isLocked} pending=${pendingQueue.length})`);
+        // Ensure local IDB is updated with server balance
+        meData.balance = serverBalance;
       }
-      console.log(`[balance] refreshCache server=${meData?.balance} locked=${isLocked} pending=${pendingQueue.length}`);
     }
     await dbPut('user', meData, 'me');
 
@@ -468,15 +479,78 @@ export async function syncWhenOnline() {
   await flushQueue();
 }
 
-// Debounce — don't sync more than once per 10 seconds
+// ── Debounce sync to avoid thrashing ─────────────────────────────────────────
+/**
+ * Debounce — don't sync more than once per 10 seconds
+ * UNLESS we just came online (timer is reset on offline)
+ */
 let _lastSync = 0;
 function debouncedSync() {
   const now = Date.now();
-  if (now - _lastSync < 10_000) return;
+  if (now - _lastSync < 10_000) {
+    console.log('[sync] Debounced (< 10s since last sync)');
+    return;
+  }
   _lastSync = now;
+  console.log('[sync] Running debouncedSync');
   syncWhenOnline();
 }
 
+// ── Periodic sync even when already online ────────────────────────────────────
+/**
+ * Sync every 30 seconds to catch admin balance updates,
+ * even for users who never go offline/online.
+ * This fixes the issue where admin updates aren't visible until next refresh.
+ */
+const PERIODIC_SYNC_INTERVAL = 30_000;  // 30 seconds
+let _periodicSyncInterval: ReturnType<typeof setInterval> | null = null;
+
+export function startPeriodicSync() {
+  if (_periodicSyncInterval) {
+    console.log('[sync] Periodic sync already running');
+    return;
+  }
+  
+  console.log('[sync] Starting periodic sync (every 30s)');
+  _periodicSyncInterval = setInterval(async () => {
+    if (!navigator.onLine) {
+      console.log('[sync] Skipping periodic sync (offline)');
+      return;
+    }
+    
+    try {
+      console.log('[sync] Running periodic refresh cache');
+      await refreshCache();
+    } catch (err) {
+      console.error('[sync] Periodic sync failed:', err);
+      // Continue — don't stop interval on errors
+    }
+  }, PERIODIC_SYNC_INTERVAL);
+}
+
+export function stopPeriodicSync() {
+  if (_periodicSyncInterval) {
+    console.log('[sync] Stopping periodic sync');
+    clearInterval(_periodicSyncInterval);
+    _periodicSyncInterval = null;
+  }
+}
+
 if (typeof window !== 'undefined') {
-  window.addEventListener('online', debouncedSync);
+  // Start periodic sync on page load
+  startPeriodicSync();
+  
+  // Reset debounce timer on offline (so we sync immediately on reconnect)
+  window.addEventListener('offline', () => {
+    console.log('[sync] Going offline, resetting debounce timer');
+    _lastSync = 0;  // Reset so next online event syncs immediately
+    stopPeriodicSync();
+  });
+  
+  // Sync when coming back online + restart periodic sync
+  window.addEventListener('online', () => {
+    console.log('[sync] Back online, restarting periodic sync + immediate sync');
+    startPeriodicSync();
+    debouncedSync();
+  });
 }
