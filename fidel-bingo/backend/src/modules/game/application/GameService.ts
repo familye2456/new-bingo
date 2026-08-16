@@ -19,6 +19,7 @@ export interface CreateGameDTO {
   betAmountPerCartela: number;
   winPattern?: string;
   housePercentage?: number;
+  createdAt?: string; // Optional: preserve original offline creation timestamp
 }
 
 export class GameService {
@@ -43,6 +44,18 @@ export class GameService {
       throw new AppError(400, 'NO_CARTELAS', 'Select at least one cartela');
     if (dto.betAmountPerCartela <= 0)
       throw new AppError(400, 'INVALID_BET', 'Invalid bet amount');
+
+    // Validate createdAt if provided (must not be in the future)
+    if (dto.createdAt) {
+      const providedDate = new Date(dto.createdAt);
+      const now = new Date();
+      if (isNaN(providedDate.getTime())) {
+        throw new AppError(400, 'INVALID_DATE', 'Invalid createdAt timestamp');
+      }
+      if (providedDate.getTime() > now.getTime()) {
+        throw new AppError(400, 'FUTURE_DATE', 'createdAt cannot be in the future');
+      }
+    }
 
     // Verify all selected user_cartelas belong to this user
     const [user, ownedUCs, userGameCount] = await Promise.all([
@@ -89,6 +102,8 @@ export class GameService {
         totalBets: totalCost,
         prizePool: totalCost - houseCut,
         houseCut,
+        // Preserve original offline timestamp if provided, otherwise use current time
+        ...(dto.createdAt && { createdAt: new Date(dto.createdAt) }),
       });
 
       const [savedGame] = await Promise.all([

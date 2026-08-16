@@ -162,12 +162,13 @@ async function _doFlush() {
 
           let realGame: any;
           try {
-            console.log(`[sync] posting createGame tempId=${p.tempId}`);
+            console.log(`[sync] posting createGame tempId=${p.tempId} createdAt=${p.createdAt}`);
             const res = await api.post('/games', {
               cartelaIds: p.cartelaIds,
               betAmountPerCartela: p.betAmountPerCartela,
               winPattern: p.winPattern,
               housePercentage: p.housePercentage,
+              createdAt: p.createdAt, // Send original offline timestamp to preserve correct day
             });
             realGame = res.data.data;
             console.log(`[sync] createGame success realId=${realGame?.id}`);

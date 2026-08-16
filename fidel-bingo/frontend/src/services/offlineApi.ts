@@ -320,7 +320,14 @@ export const offlineGameApi = {
     }
 
     // Queue for background sync when online
-    await enqueue({ type: 'createGame', payload: { tempId, ...data } });
+    await enqueue({ 
+      type: 'createGame', 
+      payload: { 
+        tempId, 
+        ...data,
+        createdAt: now, // Preserve original offline timestamp for server sync
+      } 
+    });
     return { data: { data: game } };
   },
 
