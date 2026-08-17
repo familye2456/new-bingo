@@ -503,9 +503,12 @@ export const offlineGameApi = {
   },
 
   getCartelas: async (gameId: string) => {
-    // Prepaid users OR offline games - load from IndexedDB only
+    // Prepaid users always fetch from IDB (even when online)
+    // Offline games (when system is offline) also use IDB
     const prepaid = await isPrepaid();
-    if (prepaid || String(gameId).startsWith('offline-')) {
+    const isOfflineGame = String(gameId).startsWith('offline-');
+    
+    if (prepaid || isOfflineGame) {
       const cartelaIds = await dbGet<string[]>('gameCartelas', gameId);
       if (!cartelaIds || cartelaIds.length === 0) {
         return { data: { data: [] } };
@@ -516,6 +519,7 @@ export const offlineGameApi = {
       return { data: { data: cartelas.filter(Boolean) } };
     }
 
+    // Postpaid users with online games - fetch from server
     const result = await tryApi(() => api.get(`/games/${gameId}/cartelas`));
     if (result.ok) {
       const list = toList(result.data);

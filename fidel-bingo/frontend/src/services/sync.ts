@@ -218,6 +218,17 @@ async function _doFlush() {
           }
 
           if (p.tempId) {
+            // Preserve the local numberSequence for prepaid users before deleting
+            const { dbGet: getFromDb } = await import('./db');
+            const user = await getFromDb<any>('user', 'me');
+            const isPrepaidUser = !user || user.paymentType !== 'postpaid';
+            let localNumberSequence: number[] | undefined;
+            
+            if (isPrepaidUser) {
+              const offlineGame = await getFromDb<any>('games', p.tempId);
+              localNumberSequence = offlineGame?.numberSequence;
+            }
+            
             // Remove offline game from IDB
             await dbDelete('games', p.tempId);
 
@@ -250,6 +261,11 @@ async function _doFlush() {
                 const updated = { ...qi, payload: { ...qp, gameId: realGame.id } };
                 await db.put('syncQueue', updated);
               }
+            }
+            
+            // Store local numberSequence back into realGame for prepaid users
+            if (isPrepaidUser && localNumberSequence) {
+              realGame.numberSequence = localNumberSequence;
             }
           }
           // Store the real server game (preserve finished status if already marked locally)
