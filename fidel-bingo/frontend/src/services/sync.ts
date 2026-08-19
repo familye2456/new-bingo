@@ -85,6 +85,8 @@ export async function refreshCache() {
 
     const serverGames = toList(gamesRes.data);
     const localGames = await dbGetAll<any>('games');
+    const cachedUser = await dbGet<any>('user', 'me');
+    const preserveLocalGameState = !cachedUser || cachedUser.paymentType !== 'postpaid';
     const offlineGames = localGames.filter((g: any) => String(g.id).startsWith('offline-'));
     // Preserve finished status: locally marked finished OR just finished in this flush cycle
     const localFinishedIds = new Set([
@@ -95,7 +97,16 @@ export async function refreshCache() {
     await dbClear('games');
     const mergedGames = serverGames.map((g: any) => {
       const localGame = localGames.find((l: any) => String(l.id) === String(g.id));
-      const merged = { ...g, cartelaIds: g.cartelaIds ?? localGame?.cartelaIds };
+      const merged = {
+        ...g,
+        cartelaIds: g.cartelaIds ?? localGame?.cartelaIds,
+        ...(preserveLocalGameState && localGame?.numberSequence
+          ? { numberSequence: localGame.numberSequence }
+          : {}),
+        ...(preserveLocalGameState && localGame?.calledNumbers
+          ? { calledNumbers: localGame.calledNumbers }
+          : {}),
+      };
       return localFinishedIds.has(String(g.id)) && g.status !== 'finished'
         ? { ...merged, status: 'finished' }
         : merged;
@@ -223,10 +234,12 @@ async function _doFlush() {
             const user = await getFromDb<any>('user', 'me');
             const isPrepaidUser = !user || user.paymentType !== 'postpaid';
             let localNumberSequence: number[] | undefined;
+            let localCalledNumbers: number[] | undefined;
             
             if (isPrepaidUser) {
               const offlineGame = await getFromDb<any>('games', p.tempId);
               localNumberSequence = offlineGame?.numberSequence;
+              localCalledNumbers = offlineGame?.calledNumbers;
             }
             
             // Remove offline game from IDB
@@ -266,6 +279,9 @@ async function _doFlush() {
             // Store local numberSequence back into realGame for prepaid users
             if (isPrepaidUser && localNumberSequence) {
               realGame.numberSequence = localNumberSequence;
+            }
+            if (isPrepaidUser && localCalledNumbers) {
+              realGame.calledNumbers = localCalledNumbers;
             }
           }
           // Store the real server game (preserve finished status if already marked locally)

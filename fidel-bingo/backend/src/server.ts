@@ -91,6 +91,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/cartelas', cartelaRoutes);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date() }));
+app.get('/api/version', (_req, res) => res.json({ version: env.APP_VERSION }));
 app.get('/ready', (_req, res) => res.json({ status: 'ready' }));
 app.get('/metrics', async (_req, res) => {
   res.set('Content-Type', register.contentType);

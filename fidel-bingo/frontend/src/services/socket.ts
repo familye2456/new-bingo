@@ -3,6 +3,8 @@ import { dbGet, dbPut } from './db';
 import { useAuthStore } from '../store/authStore';
 
 let socket: Socket | null = null;
+const apiUrl = import.meta.env.VITE_API_URL || 'https://fidel-bingo.onrender.com/api';
+const socketUrl = apiUrl.replace(/\/api\/?$/, '');
 
 const bindBalanceSocketListeners = (socketInstance: Socket) => {
   socketInstance.off('balance_updated');
@@ -35,7 +37,7 @@ export const getSocket = (token?: string): Socket => {
     socket = null;
   }
 
-  socket = io('/', {
+  socket = io(socketUrl, {
     path: '/socket.io',
     transports: ['websocket', 'polling'],
     withCredentials: true,
