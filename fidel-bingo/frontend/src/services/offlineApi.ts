@@ -347,49 +347,82 @@ export const offlineGameApi = {
   },
 
   callNumber: async (gameId: string) => {
+    console.log('[offlineApi.callNumber] Starting for gameId:', gameId);
+    
     // Offline games always use local logic
     if (String(gameId).startsWith('offline-')) {
+      console.log('[offlineApi.callNumber] Processing offline game');
       const game = await dbGet<any>('games', gameId);
-      if (!game) return { data: { data: { number: null, remaining: 0 } } };
+      if (!game) {
+        console.log('[offlineApi.callNumber] Game not found in IDB');
+        return { data: { data: { number: null, remaining: 0 } } };
+      }
 
       const called: number[] = game.calledNumbers ?? [];
       const nextIndex = called.length;
-      if (nextIndex >= 75) return { data: { data: { number: null, remaining: 0 } } };
+      console.log('[offlineApi.callNumber] Called numbers:', called.length, 'Next index:', nextIndex);
+      
+      if (nextIndex >= 75) {
+        console.log('[offlineApi.callNumber] All numbers called');
+        return { data: { data: { number: null, remaining: 0 } } };
+      }
 
       if (!game.numberSequence || game.numberSequence.length !== 75) {
+        console.log('[offlineApi.callNumber] Generating new sequence');
         game.numberSequence = shuffleSequence();
       }
 
       const number = game.numberSequence[nextIndex];
       game.calledNumbers = [...called, number];
+      
+      console.log('[offlineApi.callNumber] About to save to IDB - number:', number);
       await dbPut('games', game);
+      console.log('[offlineApi.callNumber] Saved to IDB successfully');
+      
       return { data: { data: { number, remaining: 75 - game.calledNumbers.length } } };
     }
 
     // Online games from server → check if user is prepaid
+    console.log('[offlineApi.callNumber] Processing online game');
     const user = await dbGet<any>('user', 'me');
     const isPrepaidUser = !user || user.paymentType !== 'postpaid';
+    console.log('[offlineApi.callNumber] isPrepaidUser:', isPrepaidUser);
 
     // Prepaid users → ALWAYS use local cached game (no server call needed)
     if (isPrepaidUser) {
+      console.log('[offlineApi.callNumber] Using IDB for prepaid user');
       const game = await dbGet<any>('games', gameId);
-      if (!game) return { data: { data: { number: null, remaining: 0 } } };
+      if (!game) {
+        console.log('[offlineApi.callNumber] Game not found in IDB');
+        return { data: { data: { number: null, remaining: 0 } } };
+      }
 
       const called: number[] = game.calledNumbers ?? [];
       const nextIndex = called.length;
-      if (nextIndex >= 75) return { data: { data: { number: null, remaining: 0 } } };
+      console.log('[offlineApi.callNumber] Called numbers:', called.length, 'Next index:', nextIndex);
+      
+      if (nextIndex >= 75) {
+        console.log('[offlineApi.callNumber] All numbers called');
+        return { data: { data: { number: null, remaining: 0 } } };
+      }
 
       if (!game.numberSequence || game.numberSequence.length !== 75) {
+        console.log('[offlineApi.callNumber] Generating new sequence');
         game.numberSequence = shuffleSequence();
       }
 
       const number = game.numberSequence[nextIndex];
       game.calledNumbers = [...called, number];
+      
+      console.log('[offlineApi.callNumber] About to save to IDB - number:', number);
       await dbPut('games', game);
+      console.log('[offlineApi.callNumber] Saved to IDB successfully');
+      
       return { data: { data: { number, remaining: 75 - game.calledNumbers.length } } };
     }
 
     // Postpaid users → use server (for audit trail / billing)
+    console.log('[offlineApi.callNumber] Postpaid user, calling server API');
     const result = await tryApi(() => api.post(`/games/${gameId}/call`));
     if (result.ok) {
       const num: number | undefined = result.data.data?.data?.number;
@@ -404,6 +437,7 @@ export const offlineGameApi = {
     }
 
     // Server failed — use local fallback for postpaid too
+    console.log('[offlineApi.callNumber] Server failed, using local fallback');
     const game = await dbGet<any>('games', gameId);
     if (!game) return { data: { data: { number: null, remaining: 0 } } };
 

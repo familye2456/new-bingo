@@ -122,13 +122,24 @@ export const PlayBingo: React.FC = () => {
   }, []);
 
   const callMutation = useMutation({
-    mutationFn: () => offlineGameApi.callNumber(game!.id),
+    mutationFn: async () => {
+      console.log('[callMutation] Starting call...');
+      mutationStartTimeRef.current = Date.now();
+      const result = await offlineGameApi.callNumber(game!.id);
+      console.log('[callMutation] Call completed:', result);
+      mutationStartTimeRef.current = 0;
+      return result;
+    },
     onSuccess: (response: any) => {
+      console.log('[callMutation] onSuccess triggered');
+      mutationStartTimeRef.current = 0;
       const num: number | null = response?.data?.data?.number ?? response?.data?.number ?? null;
       if (num != null) setSessionCalledNumbers((prev) => prev.includes(num) ? prev : [...prev, num]);
       queryClient.invalidateQueries({ queryKey: ['games'] });
     },
     onError: (err: any) => {
+      console.log('[callMutation] onError triggered:', err);
+      mutationStartTimeRef.current = 0;
       const status = err?.response?.status;
       const code = err?.response?.data?.error?.code;
       if (status === 429) return; // rate limited — skip this tick, keep going
@@ -138,6 +149,10 @@ export const PlayBingo: React.FC = () => {
       }
       console.error('[callNumber]', err?.response?.data ?? err.message);
       stopAuto(true);
+    },
+    onSettled: () => {
+      console.log('[callMutation] onSettled - mutation completed');
+      mutationStartTimeRef.current = 0;
     },
   });
 
@@ -155,6 +170,20 @@ export const PlayBingo: React.FC = () => {
   useEffect(() => { gameRef.current = game; }, [game]);
   const sessionCalledRef = useRef(sessionCalledNumbers);
   useEffect(() => { sessionCalledRef.current = sessionCalledNumbers; }, [sessionCalledNumbers]);
+  
+  // Track mutation timeout to prevent hanging
+  const mutationStartTimeRef = useRef<number>(0);
+  const checkMutationTimeout = useCallback(() => {
+    if (callMutation.isPending && mutationStartTimeRef.current > 0) {
+      const elapsed = Date.now() - mutationStartTimeRef.current;
+      if (elapsed > 10000) { // 10 second timeout
+        console.error('[callMutation] Timeout detected! Resetting mutation state.');
+        // Force reset by stopping and restarting
+        stopAuto(true);
+        alert('Number calling stuck. Please try again.');
+      }
+    }
+  }, [callMutation.isPending, stopAuto]);
 
   const startAuto = useCallback(() => {
     if (!game || game.status !== 'active') return;
@@ -166,7 +195,11 @@ export const PlayBingo: React.FC = () => {
       if (elapsed < speedRef.current) return;
       elapsed = 0;
       if (sessionCalledRef.current.length >= 75) { stopAuto(); return; }
-      if (callMutation.isPending) return; // don't fire if previous call still in flight
+      if (callMutation.isPending) {
+        checkMutationTimeout(); // Check if mutation is stuck
+        return; // don't fire if previous call still in flight
+      }
+      mutationStartTimeRef.current = Date.now();
       callMutation.mutate();
     }, 500);
   }, [game, callMutation, stopAuto]);
@@ -222,7 +255,7 @@ export const PlayBingo: React.FC = () => {
     <div className="fixed inset-0 flex flex-col" style={{ background: '#0a1220' }}>
 
       {/* ── Top bar ── */}
-      <div className="flex items-center pl-12 pr-3 py-2 shrink-0"
+      <div className="flex flex-wrap lg:flex-nowrap items-center pl-12 pr-3 py-2 shrink-0 min-w-0"
         style={{ background: 'rgba(0,0,0,0.5)', borderBottom: '1px solid rgba(255,255,255,0.1)', gap: 'clamp(6px,2vw,16px)' }}>
 
         {/* Game title */}
@@ -275,7 +308,7 @@ export const PlayBingo: React.FC = () => {
       {winnerInfo && (
         <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2"
           style={{ background: 'rgba(34,197,94,0.15)', borderBottom: '1px solid rgba(34,197,94,0.3)' }}>
-          <span className="text-green-400 font-bold text-sm">
+          <span className="text-green-400 font-bold text-sm min-w-0 break-words">
             🎉 Card #{winnerInfo.cardNumber} — BINGO! ({winnerInfo.pattern}) · {Number(winnerInfo.amount).toFixed(2)} BIRR
           </span>
           <button
@@ -391,7 +424,7 @@ export const PlayBingo: React.FC = () => {
           <div className="flex flex-col lg:flex-row items-center justify-center gap-2 lg:gap-3">
 
             {/* Buttons */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-2 w-full lg:w-auto">
               <CtrlBtn
                 label={autoOn ? '⏸ Auto' : '▶ Auto'}
                 active={autoOn}
@@ -420,7 +453,7 @@ export const PlayBingo: React.FC = () => {
             </div>
 
             {/* Speed */}
-            <div className="flex items-center gap-2 rounded-xl px-3 py-1.5"
+            <div className="flex items-center justify-center gap-2 rounded-xl px-3 py-1.5 w-full lg:w-auto"
               style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
               <span className="text-[10px] text-gray-500 uppercase tracking-wider">Speed</span>
               <input type="range" min={1} max={10} step={1} value={speed}
@@ -430,9 +463,9 @@ export const PlayBingo: React.FC = () => {
             </div>
 
             {/* Card check + last 3 called numbers */}
-            <div className="flex items-center gap-3">
-              <div className="flex flex-col items-center gap-1.5">
-                <div className="flex items-center gap-1.5">
+            <div className="flex items-center justify-center gap-3 w-full lg:w-auto">
+              <div className="flex flex-col items-center gap-1.5 w-full lg:w-auto">
+                <div className="flex items-center justify-center gap-1.5 w-full lg:w-auto">
                   <input
                     type="text" placeholder="Card #" value={checkId}
                     onChange={(e) => { setCheckId(e.target.value); setCheckResult(null); }}
@@ -561,7 +594,7 @@ const CtrlBtn: React.FC<{
 
   return (
     <button onClick={onClick} disabled={disabled}
-      className="px-4 sm:px-5 py-2 rounded-xl font-bold text-sm transition-all disabled:opacity-30 hover:brightness-125"
+      className="px-2 sm:px-5 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all disabled:opacity-30 hover:brightness-125"
       style={{ background: bg, color, border }}>
       {label}
     </button>

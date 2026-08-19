@@ -44,7 +44,22 @@ export async function dbGet<T>(store: string, key: IDBValidKey): Promise<T | und
 }
 
 export async function dbPut(store: string, value: unknown, key?: IDBValidKey) {
-  try { return (await getDB()).put(store, value, key); } catch { /* ignore */ }
+  try { 
+    console.log('[dbPut] Putting to store:', store, 'key:', key);
+    
+    // Add a timeout to prevent hanging indefinitely
+    const putPromise = (await getDB()).put(store, value, key);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('dbPut timeout after 5s')), 5000)
+    );
+    
+    const result = await Promise.race([putPromise, timeoutPromise]);
+    console.log('[dbPut] Success');
+    return result;
+  } catch (err) { 
+    console.error('[dbPut] Error:', err);
+    throw err; // Re-throw so caller knows it failed
+  }
 }
 
 export async function dbGetAll<T>(store: string): Promise<T[]> {
