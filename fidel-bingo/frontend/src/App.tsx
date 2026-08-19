@@ -66,6 +66,133 @@ const queryClient = new QueryClient({
   },
 });
 
+const CLIENT_VERSION = import.meta.env.VITE_APP_VERSION || '2.0.1';
+
+const UpdateRequired: React.FC = () => {
+  const [updating, setUpdating] = React.useState(false);
+  const [progress, setProgress] = React.useState(0);
+
+  const updateClient = async () => {
+    setUpdating(true);
+    setProgress(10);
+    
+    try {
+      // Step 1: Update service worker
+      setProgress(30);
+      const registration = await navigator.serviceWorker?.getRegistration();
+      await registration?.update();
+      
+      // Step 2: Clear all caches
+      setProgress(60);
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map((name) => caches.delete(name)));
+      
+      // Step 3: Unregister service worker
+      setProgress(80);
+      await registration?.unregister();
+      
+      // Step 4: Clear local storage flags
+      setProgress(90);
+      localStorage.removeItem('neg_balance_locked');
+      
+      setProgress(100);
+    } finally {
+      // Always reload after cleanup, even if some steps failed
+      setTimeout(() => window.location.reload(), 500);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center px-6" 
+      style={{ 
+        background: 'linear-gradient(135deg, #0a1220 0%, #1a1f35 100%)',
+        backdropFilter: 'blur(10px)'
+      }}>
+      <div className="w-full max-w-md text-center">
+        {/* Animated logo */}
+        <div className="relative mb-8">
+          <div className="absolute inset-0 animate-ping opacity-20">
+            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-yellow-400 to-orange-500 mx-auto" />
+          </div>
+          <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center mx-auto overflow-hidden shadow-2xl"
+            style={{ boxShadow: '0 0 60px rgba(251,191,36,0.4)' }}>
+            <img src="/icons/logo.png" alt="Fidel Bingo" className="w-full h-full object-contain" />
+          </div>
+        </div>
+
+        {/* Title with pulse animation */}
+        <h1 className="text-white text-2xl font-bold mb-3 animate-pulse">
+          Update Required
+        </h1>
+        
+        <p className="text-gray-400 text-sm mb-2">
+          A new version of Fidel Bingo is available.
+        </p>
+        <p className="text-yellow-400 text-xs font-semibold mb-8">
+          ⚠️ You must update to continue using the app
+        </p>
+
+        {/* Update button */}
+        <button 
+          onClick={updateClient} 
+          disabled={updating}
+          className="w-full px-6 py-4 rounded-xl text-base font-bold shadow-xl transform transition-all hover:scale-105 disabled:hover:scale-100 disabled:opacity-90"
+          style={{ 
+            background: updating 
+              ? 'linear-gradient(90deg, #f59e0b, #fbbf24)' 
+              : 'linear-gradient(90deg, #fbbf24, #f59e0b)',
+            color: '#111',
+            boxShadow: '0 8px 32px rgba(251,191,36,0.3)'
+          }}>
+          {updating ? (
+            <div className="flex items-center justify-center gap-3">
+              <div className="w-5 h-5 rounded-full border-2 border-gray-800/30 border-t-gray-800 animate-spin" />
+              <span>Updating... {progress}%</span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center gap-2">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              Update Now
+            </div>
+          )}
+        </button>
+
+        {/* Progress bar */}
+        {updating && (
+          <div className="mt-6">
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.1)' }}>
+              <div 
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${progress}%`,
+                  background: 'linear-gradient(90deg, #f59e0b, #fbbf24)',
+                  boxShadow: '0 0 8px rgba(251,191,36,0.5)'
+                }}
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Please wait, don't close this window...
+            </p>
+          </div>
+        )}
+
+        {/* Info */}
+        <div className="mt-8 pt-6 border-t border-white/10">
+          <p className="text-xs text-gray-600 mb-2">
+            This ensures you have the latest features and bug fixes
+          </p>
+          <div className="flex items-center justify-center gap-2 text-xs text-gray-700">
+            <div className="w-1.5 h-1.5 rounded-full bg-yellow-400/40" />
+            <span>System will restart automatically</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Splash: React.FC = () => (
   <div className="min-h-screen flex items-center justify-center" style={{ background: '#0a1220' }}>
     <div className="text-center">
@@ -290,30 +417,66 @@ const AppRoutes: React.FC = () => {
   const { fetchMe, refreshBalance } = useAuthStore();
   const qc = useQueryClient();
   const fetchedRef = React.useRef(false);
+  const [updateRequired, setUpdateRequired] = React.useState(false);
+  const [versionChecked, setVersionChecked] = React.useState(false);
+
+  // Check for version updates — runs on mount and every 30 seconds
+  const checkVersion = React.useCallback(async () => {
+    try {
+      if (!navigator.onLine) return false;
+      
+      const response = await fetch(
+        `${(import.meta.env.VITE_API_URL || 'https://fidel-bingo.onrender.com/api')}/version`,
+        { cache: 'no-store' }
+      );
+      
+      if (response.ok) {
+        const { version } = await response.json();
+        console.log('[version] Client:', CLIENT_VERSION, 'Server:', version);
+        
+        if (version && version !== CLIENT_VERSION) {
+          console.log('[version] Update required!');
+          setUpdateRequired(true);
+          return true;
+        }
+      }
+    } catch (err) {
+      console.warn('[version] Check failed:', err);
+    }
+    return false;
+  }, []);
 
   useEffect(() => {
     if (fetchedRef.current) return; // prevent double-invoke in React dev mode
     fetchedRef.current = true;
-    fetchMe();
+    
+    const initialize = async () => {
+      const needsUpdate = await checkVersion();
+      
+      if (!needsUpdate) {
+        fetchMe();
+        const token = localStorage.getItem('access_token');
+        if (token) getSocket(token);
+        import('./services/sync').then(({ startPeriodicSync }) => startPeriodicSync());
+        if (navigator.onLine) {
+          import('./services/sync').then(({ syncWhenOnline }) => setTimeout(syncWhenOnline, 2000));
+        }
+      }
+      
+      setVersionChecked(true);
+    };
+    
+    initialize();
+  }, [checkVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      getSocket(token);
-    }
+  // Continuous version checking every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      checkVersion();
+    }, 30_000); // 30 seconds
     
-    // Start periodic sync on app load to catch admin balance updates
-    import('./services/sync').then(({ startPeriodicSync }) => {
-      console.log('[App] Starting periodic sync on app load');
-      startPeriodicSync();
-    });
-    
-    // Trigger sync once on app load if online and there are pending items
-    if (navigator.onLine) {
-      import('./services/sync').then(({ syncWhenOnline }) => {
-        setTimeout(syncWhenOnline, 2000); // delay to let auth settle first
-      });
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => clearInterval(interval);
+  }, [checkVersion]);
 
   // Keep Render backend alive — ping /health every 10 min to prevent cold starts
   useEffect(() => {
@@ -337,6 +500,9 @@ const AppRoutes: React.FC = () => {
     window.addEventListener('cache-refreshed', handler);
     return () => window.removeEventListener('cache-refreshed', handler);
   }, [qc]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!versionChecked) return <Splash />;
+  if (updateRequired) return <UpdateRequired />;
 
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
