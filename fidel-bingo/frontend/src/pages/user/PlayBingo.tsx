@@ -265,7 +265,7 @@ export const PlayBingo: React.FC = () => {
   }, [sessionCalledNumbers]);
 
   return (
-    <div className="fixed inset-0 flex flex-col" style={{ background: '#0a1220' }}>
+    <div className="fixed inset-0 flex flex-col max-lg:overflow-y-auto" style={{ background: '#0a1220' }}>
 
       {/* ── Top bar ── */}
       <div className="flex flex-wrap lg:flex-nowrap items-center pl-12 pr-3 py-2 shrink-0 min-w-0"
@@ -418,9 +418,9 @@ export const PlayBingo: React.FC = () => {
         )}
 
         {/* ── Desktop layout: no sidebar — full board ── */}
-        <div className="flex-1 min-h-0 flex">
+        <div className="flex-1 min-h-0 flex max-lg:flex-none max-lg:h-[170px] sm:max-lg:h-[220px] max-lg:overflow-x-auto scrollbar-none">
           {/* Number board — fills full available area */}
-          <div className="flex-1 min-h-0 flex flex-col px-2 sm:px-3 lg:px-4 pb-1">
+          <div className="flex-1 min-h-0 flex flex-col px-2 sm:px-3 lg:px-4 pb-1 max-lg:min-w-0">
             {game ? (
               <NumberBoard calledNumbers={calledNumbers} lastNumber={lastNumber} />
             ) : null}
@@ -434,10 +434,10 @@ export const PlayBingo: React.FC = () => {
           style={{ background: 'rgba(0,0,0,0.35)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
 
           {/* Desktop: single row — Mobile: stacked */}
-          <div className="flex flex-col lg:flex-row items-center justify-center gap-2 lg:gap-3">
+          <div className="flex flex-col lg:flex-row items-center justify-center gap-2 lg:gap-3 max-lg:pb-3">
 
             {/* Buttons */}
-            <div className="flex flex-wrap items-center justify-center gap-2 w-full lg:w-auto">
+            <div className="grid grid-cols-2 sm:flex items-center justify-center gap-2 w-full lg:w-auto">
               <CtrlBtn
                 label={autoOn ? '⏸ Auto' : '▶ Auto'}
                 active={autoOn}
