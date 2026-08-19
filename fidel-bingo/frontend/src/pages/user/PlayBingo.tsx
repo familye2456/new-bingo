@@ -103,14 +103,8 @@ export const PlayBingo: React.FC = () => {
     }
   }, [isLoading, activeGames.length, selectedGameId, navigate]);
 
-  // Reset called numbers on mount so the board is always clean after a reload
-  const resetDoneRef = useRef<string | null>(null);
   useEffect(() => {
     if (!game || game.status !== 'active') return;
-    if (resetDoneRef.current === game.id) return;
-    resetDoneRef.current = game.id;
-    // Reset calledNumbers on server/IDB so the sequence restarts from scratch
-    offlineGameApi.reset(game.id).catch(() => {});
     // Pre-cache cartelas for this game so offline check works
     offlineGameApi.getCartelas(game.id).catch(() => {});
   }, [game?.id]);
@@ -310,7 +304,7 @@ export const PlayBingo: React.FC = () => {
 
         {/* Other games — desktop only */}
         {game && activeGames.filter((g) => g.id !== game?.id).slice(0, 2).map((g) => (
-          <button key={g.id} onClick={() => { setSelectedGameId(g.id); resetDoneRef.current = null; }}
+          <button key={g.id} onClick={() => setSelectedGameId(g.id)}
             className="text-xs bg-white/10 hover:bg-white/20 text-gray-300 px-2.5 py-1 rounded-lg hidden sm:block shrink-0">
             #{g.gameNumber ?? g.id.slice(0, 6)}
           </button>
