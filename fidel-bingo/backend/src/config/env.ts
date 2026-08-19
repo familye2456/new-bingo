@@ -29,5 +29,6 @@ export const env = {
 
   // App
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
+  APP_VERSION: process.env.APP_VERSION || '2.0.1',
   HOUSE_PERCENTAGE: parseFloat(process.env.HOUSE_PERCENTAGE || '10'),
 };
