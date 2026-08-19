@@ -124,8 +124,12 @@ export const PlayBingo: React.FC = () => {
   const callMutation = useMutation({
     mutationFn: async () => {
       console.log('[callMutation] Starting call...');
+      if (!gameRef.current) {
+        console.error('[callMutation] Game is null, cannot call number');
+        throw new Error('Game is null');
+      }
       mutationStartTimeRef.current = Date.now();
-      const result = await offlineGameApi.callNumber(game!.id);
+      const result = await offlineGameApi.callNumber(gameRef.current.id);
       console.log('[callMutation] Call completed:', result);
       mutationStartTimeRef.current = 0;
       return result;
@@ -157,7 +161,10 @@ export const PlayBingo: React.FC = () => {
   });
 
   const finishMutation = useMutation({
-    mutationFn: () => offlineGameApi.finish(game!.id),
+    mutationFn: () => {
+      if (!gameRef.current) throw new Error('Game is null');
+      return offlineGameApi.finish(gameRef.current.id);
+    },
     onSuccess: () => {
       stopAuto(true);
       queryClient.invalidateQueries({ queryKey: ['games'] });
@@ -191,6 +198,11 @@ export const PlayBingo: React.FC = () => {
     setAutoOn(true);
     let elapsed = 0;
     autoRef.current = setInterval(() => {
+      // Guard against game becoming null during auto-call
+      if (!gameRef.current || gameRef.current.status !== 'active') {
+        stopAuto(true);
+        return;
+      }
       elapsed += 0.5;
       if (elapsed < speedRef.current) return;
       elapsed = 0;
@@ -202,7 +214,7 @@ export const PlayBingo: React.FC = () => {
       mutationStartTimeRef.current = Date.now();
       callMutation.mutate();
     }, 500);
-  }, [game, callMutation, stopAuto]);
+  }, [game, callMutation, stopAuto, checkMutationTimeout]);
 
   useEffect(() => () => stopAuto(true), [stopAuto]);
   useEffect(() => { if (sessionCalledNumbers.length >= 75 && autoOn) stopAuto(true); }, [sessionCalledNumbers.length, autoOn, stopAuto]);
@@ -211,18 +223,19 @@ export const PlayBingo: React.FC = () => {
 
   const handleCheck = async () => {
     const num = parseInt(checkId.trim(), 10);
-    if (!game || isNaN(num)) return;
+    const currentGame = gameRef.current;
+    if (!currentGame || isNaN(num)) return;
     setCheckLoading(true);
     setCheckResult(null);
     try {
-      const result = await offlineGameApi.checkCartela(game.id, num, sessionCalledNumbers);
+      const result = await offlineGameApi.checkCartela(currentGame.id, num, sessionCalledNumbers);
       setCheckResult(result);
       if (result.registered) {
         if (result.isWinner) {
           playRootSound('winner.wav');
           setWinnerInfo({
             cardNumber: num,
-            amount: Number(game?.prizePool ?? 0),
+            amount: Number(currentGame?.prizePool ?? 0),
             pattern: result.winPattern ?? '',
           });
         } else {
