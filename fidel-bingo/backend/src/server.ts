@@ -23,8 +23,16 @@ import { setupGameGateway } from './modules/game/infrastructure/GameGateway';
 const app = express();
 const httpServer = createServer(app);
 
+const allowedOrigins = [env.FRONTEND_URL, 'https://f-bingo.vercel.app', 'http://localhost:5173' ,'https://bingo-keno.netlify.app'].filter(Boolean);
+const isAllowedOrigin = (origin?: string) => Boolean(
+  !origin ||
+  allowedOrigins.includes(origin) ||
+  origin.endsWith('.vercel.app') ||
+  origin.endsWith('.netlify.app')
+);
+
 const io = new Server(httpServer, {
-  cors: { origin: env.FRONTEND_URL, credentials: true },
+  cors: { origin: (origin, callback) => callback(null, isAllowedOrigin(origin)), credentials: true },
   transports: ['websocket', 'polling'],
 });
 app.locals.io = io;
@@ -42,13 +50,9 @@ app.use(helmet({
   hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
 }));
 
-const allowedOrigins = [env.FRONTEND_URL, 'https://f-bingo.vercel.app', 'http://localhost:5173' ,'https://bingo-keno.netlify.app'].filter(Boolean);
 const corsOptions = {
   origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
-    if (!origin) return cb(null, true);
-    if (allowedOrigins.includes(origin)) return cb(null, true);
-    if (origin.endsWith('.vercel.app') || origin.endsWith('.netlify.app')) return cb(null, true);
-    return cb(null, false);
+    return cb(null, isAllowedOrigin(origin));
   },
   credentials: true,
   maxAge: 600,

@@ -6,6 +6,7 @@ import { openDB, IDBPDatabase } from 'idb';
 
 const DB_NAME = 'fidel-bingo';
 const DB_VERSION = 3; // v3: added gameCartelas store for offline cartela membership check
+const INLINE_KEY_PATH_STORES = new Set(['cartelas', 'games', 'transactions']);
 
 export interface SyncItem {
   id?: number;
@@ -48,7 +49,10 @@ export async function dbPut(store: string, value: unknown, key?: IDBValidKey) {
     console.log('[dbPut] Putting to store:', store, 'key:', key);
     
     // Add a timeout to prevent hanging indefinitely
-    const putPromise = (await getDB()).put(store, value, key);
+    const db = await getDB();
+    const putPromise = key === undefined || INLINE_KEY_PATH_STORES.has(store)
+      ? db.put(store, value)
+      : db.put(store, value, key);
     const timeoutPromise = new Promise((_, reject) => 
       setTimeout(() => reject(new Error('dbPut timeout after 5s')), 5000)
     );

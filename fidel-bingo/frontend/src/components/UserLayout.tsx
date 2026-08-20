@@ -43,14 +43,13 @@ export const UserLayout: React.FC = () => {
   const online = useOnlineStatus();
   const initials = (user?.username ?? 'U').slice(0, 2).toUpperCase();
 
-  // Keep balance fresh — refresh every 30s while online, and immediately on tab focus
+  // Keep balance fresh on entry and when returning to the tab.
   useEffect(() => {
     if (!online) return;
     refreshBalance();
-    const interval = setInterval(refreshBalance, 30_000);
     const onVisible = () => { if (document.visibilityState === 'visible') refreshBalance(); };
     document.addEventListener('visibilitychange', onVisible);
-    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [online, refreshBalance]);
 
   // Auto-dismiss the SW ready toast after 6 seconds

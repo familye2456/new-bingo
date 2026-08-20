@@ -415,7 +415,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean 
 
 // Inner component — lives inside QueryClientProvider so useQueryClient works
 const AppRoutes: React.FC = () => {
-  const { fetchMe, refreshBalance } = useAuthStore();
+  const { fetchMe } = useAuthStore();
   const qc = useQueryClient();
   const fetchedRef = React.useRef(false);
   const [updateRequired, setUpdateRequired] = React.useState(false);
@@ -495,16 +495,9 @@ const AppRoutes: React.FC = () => {
     return () => clearInterval(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Poll balance every 60 seconds when online
-  useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('gameId')?.startsWith('offline-')) return;
-    const id = setInterval(() => refreshBalance(), 60_000);
-    return () => clearInterval(id);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   // When sync.ts finishes flushing + refreshing cache, invalidate all queries
   useEffect(() => {
-    const handler = () => { qc.invalidateQueries(); refreshBalance(); };
+    const handler = () => { qc.invalidateQueries(); };
     window.addEventListener('cache-refreshed', handler);
     return () => window.removeEventListener('cache-refreshed', handler);
   }, [qc]); // eslint-disable-line react-hooks/exhaustive-deps
