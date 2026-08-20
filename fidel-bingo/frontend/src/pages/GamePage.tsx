@@ -60,13 +60,16 @@ export const GamePage: React.FC = () => {
 
     const load = async () => {
       try {
+        // Refreshing an active game replays the stored sequence from its first number.
+        await gameApi.resetGame(gameId).catch(() => {});
+
         const [gameRes, cartelasRes] = await Promise.all([
           gameApi.get(gameId),
           gameApi.getCartelas(gameId),
         ]);
         if (cancelled) return;
 
-        const gameData = gameRes.data.data;
+        const gameData = { ...gameRes.data.data, calledNumbers: [] };
         const cartelas = cartelasRes.data.data ?? gameData.cartelas ?? [];
 
         setGame({ ...gameData, cartelas });

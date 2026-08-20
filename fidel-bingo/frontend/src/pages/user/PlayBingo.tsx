@@ -79,6 +79,7 @@ export const PlayBingo: React.FC = () => {
   } | null>(null);
   const [checkLoading, setCheckLoading] = useState(false);
   const autoRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const resetGameRef = useRef<string | null>(null);
   const [sessionCalledNumbers, setSessionCalledNumbers] = useState<number[]>([]);
   const [winnerInfo, setWinnerInfo] = useState<{ cardNumber: number; amount: number; pattern: string } | null>(null);
   const isOfflineGame = selectedGameId?.startsWith('offline-') ?? false;
@@ -113,6 +114,9 @@ export const PlayBingo: React.FC = () => {
 
   useEffect(() => {
     if (!game || game.status !== 'active') return;
+    if (resetGameRef.current === game.id) return;
+    resetGameRef.current = game.id;
+    offlineGameApi.reset(game.id).then(() => setSessionCalledNumbers([])).catch(() => {});
     // Pre-cache cartelas for this game so offline check works
     offlineGameApi.getCartelas(game.id).catch(() => {});
   }, [game?.id]);
