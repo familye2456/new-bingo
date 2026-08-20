@@ -13,6 +13,8 @@ async function isPrepaid(): Promise<boolean> {
 
 // ── Global flush lock — prevents concurrent flushes ───────────────────────────
 let _flushing = false;
+let _refreshCacheRetryAt = 0;
+const REFRESH_CACHE_RETRY_COOLDOWN_MS = 60_000;
 
 // Persist synced tempIds across page reloads to prevent duplicate POSTs
 const SYNCED_KEY = 'synced_temp_ids';
@@ -29,6 +31,8 @@ function isSynced(id: string): boolean { return getSyncedIds().has(id); }
 // ── Cache refresh ─────────────────────────────────────────────────────────────
 
 export async function refreshCache() {
+  if (Date.now() < _refreshCacheRetryAt) return;
+
   try {
     const requests: Promise<any>[] = [
       api.get('/users/me'),
@@ -131,7 +135,8 @@ export async function refreshCache() {
 
     window.dispatchEvent(new CustomEvent('cache-refreshed'));
   } catch {
-    // server unreachable — skip
+    // Back off briefly when Render is unavailable or rate-limiting requests.
+    _refreshCacheRetryAt = Date.now() + REFRESH_CACHE_RETRY_COOLDOWN_MS;
   }
 }
 
@@ -549,6 +554,10 @@ function debouncedSync() {
 const PERIODIC_SYNC_INTERVAL = 30_000;  // 30 seconds
 let _periodicSyncInterval: ReturnType<typeof setInterval> | null = null;
 
+function isOfflineGameSession() {
+  return typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('gameId')?.startsWith('offline-');
+}
+
 export function startPeriodicSync() {
   if (_periodicSyncInterval) {
     console.log('[sync] Periodic sync already running');
@@ -580,7 +589,7 @@ export function stopPeriodicSync() {
   }
 }
 
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && !isOfflineGameSession()) {
   // Start periodic sync on page load
   startPeriodicSync();
   

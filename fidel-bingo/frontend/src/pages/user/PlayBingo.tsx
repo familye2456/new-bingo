@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { offlineGameApi } from '../../services/offlineApi';
 import { useAuthStore } from '../../store/authStore';
 import { useGameSettings } from '../../store/gameSettingsStore';
-import { playCachedSound } from '../../services/db';
+import { dbGet, playCachedSound } from '../../services/db';
 
 let _userInteracted = false;
 if (typeof window !== 'undefined') {
@@ -81,11 +81,19 @@ export const PlayBingo: React.FC = () => {
   const autoRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [sessionCalledNumbers, setSessionCalledNumbers] = useState<number[]>([]);
   const [winnerInfo, setWinnerInfo] = useState<{ cardNumber: number; amount: number; pattern: string } | null>(null);
+  const isOfflineGame = selectedGameId?.startsWith('offline-') ?? false;
 
   const { data: allGames = [], isLoading } = useQuery<Game[]>({
     queryKey: ['games'],
-    queryFn: () => offlineGameApi.list('active'),
-    refetchInterval: 10000,
+    queryFn: async () => {
+      if (isOfflineGame && selectedGameId) {
+        const localGame = await dbGet<Game>('games', selectedGameId);
+        return localGame ? [localGame] : [];
+      }
+      return offlineGameApi.list('active');
+    },
+    enabled: !isOfflineGame || Boolean(selectedGameId),
+    refetchInterval: isOfflineGame ? false : 10000,
   });
 
   // Only show games belonging to the current user that are active
@@ -133,7 +141,9 @@ export const PlayBingo: React.FC = () => {
       mutationStartTimeRef.current = 0;
       const num: number | null = response?.data?.data?.number ?? response?.data?.number ?? null;
       if (num != null) setSessionCalledNumbers((prev) => prev.includes(num) ? prev : [...prev, num]);
-      queryClient.invalidateQueries({ queryKey: ['games'] });
+      if (!isOfflineGame) {
+        queryClient.invalidateQueries({ queryKey: ['games'] });
+      }
     },
     onError: (err: any) => {
       console.log('[callMutation] onError triggered:', err);

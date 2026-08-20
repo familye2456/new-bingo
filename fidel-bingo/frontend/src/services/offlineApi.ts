@@ -16,30 +16,41 @@ async function applyBalanceDelta(delta: number) {
 // ── Server reachability ───────────────────────────────────────────────────────
 
 let _serverDown = false;
+let _serverDownUntil = 0;
+const SERVER_RETRY_COOLDOWN_MS = 15_000;
 
 export function isOnline() {
-  return navigator.onLine && !_serverDown;
+  return navigator.onLine && (!_serverDown || Date.now() >= _serverDownUntil);
 }
 
 async function tryApi<T>(fn: () => Promise<T>): Promise<{ ok: true; data: T } | { ok: false }> {
   if (!navigator.onLine) {
     _serverDown = true;
+    _serverDownUntil = Date.now() + SERVER_RETRY_COOLDOWN_MS;
     return { ok: false };
   }
-  // Always try the server when online — don't short-circuit on _serverDown
-  // so stale IDB data never gets stuck after a brief hiccup
+  if (_serverDown && Date.now() < _serverDownUntil) return { ok: false };
+
   try {
     const data = await fn();
     _serverDown = false;
+    _serverDownUntil = 0;
     return { ok: true, data };
   } catch (err: any) {
-    // If we got an HTTP status back, server is up — re-throw (e.g. 401, 400)
-    if (err?.response?.status) {
+    const status = err?.response?.status;
+    if (status >= 500 || status === 429) {
+      _serverDown = true;
+      _serverDownUntil = Date.now() + SERVER_RETRY_COOLDOWN_MS;
+      return { ok: false };
+    }
+    // Preserve actionable client/auth errors (e.g. 401, 400).
+    if (status) {
       _serverDown = false;
       throw err;
     }
     // No status = network error = server unreachable
     _serverDown = true;
+    _serverDownUntil = Date.now() + SERVER_RETRY_COOLDOWN_MS;
     return { ok: false };
   }
 }
@@ -186,10 +197,10 @@ export const offlineGameApi = {
   },
 
   myGames: async (): Promise<any[]> => {
-    if (navigator.onLine) {
+    const result = await tryApi(() => api.get('/games/mine'));
+    if (result.ok) {
       try {
-        const res = await api.get('/games/mine');
-        const serverList = toList(res.data);
+        const serverList = toList(result.data.data);
 
         // Preserve locally-finished status in case server hasn't caught up yet
         const allLocal = await dbGetAll<any>('games');
@@ -221,9 +232,7 @@ export const offlineGameApi = {
         const uniqueOffline = offlineGames.filter((g: any) => !serverIds.has(g.id));
         console.log(`[myGames] server=${serverList.length} offline=${uniqueOffline.length} total=${mergedList.length + uniqueOffline.length}`);
         return [...mergedList, ...uniqueOffline];
-      } catch (err: any) {
-        if (err?.response?.status) throw err;
-      }
+      } catch { /* Use the local cache if merging the response fails. */ }
     }
     // All users fall back to IDB cache when server is unreachable
     const user = await dbGet<any>('user', 'me');
@@ -337,12 +346,12 @@ export const offlineGameApi = {
       const result = await tryApi(() => api.post(`/games/${gameId}/reset`));
       if (result.ok) {
         const cached = await dbGet<any>('games', gameId);
-        if (cached) { cached.calledNumbers = []; await dbPut('games', cached); }
+        if (cached) { cached.calledNumbers = []; await dbPut('games', cached, gameId); }
         return result.data;
       }
     }
     const game = await dbGet<any>('games', gameId);
-    if (game) { game.calledNumbers = []; await dbPut('games', game); }
+    if (game) { game.calledNumbers = []; await dbPut('games', game, gameId); }
     return { data: { success: true } };
   },
 
@@ -376,7 +385,7 @@ export const offlineGameApi = {
       game.calledNumbers = [...called, number];
       
       console.log('[offlineApi.callNumber] About to save to IDB - number:', number);
-      await dbPut('games', game);
+      await dbPut('games', game, gameId);
       console.log('[offlineApi.callNumber] Saved to IDB successfully');
       
       return { data: { data: { number, remaining: 75 - game.calledNumbers.length } } };
@@ -415,7 +424,7 @@ export const offlineGameApi = {
       game.calledNumbers = [...called, number];
       
       console.log('[offlineApi.callNumber] About to save to IDB - number:', number);
-      await dbPut('games', game);
+      await dbPut('games', game, gameId);
       console.log('[offlineApi.callNumber] Saved to IDB successfully');
       
       return { data: { data: { number, remaining: 75 - game.calledNumbers.length } } };
@@ -430,7 +439,7 @@ export const offlineGameApi = {
         const cached = await dbGet<any>('games', gameId);
         if (cached) {
           cached.calledNumbers = [...(cached.calledNumbers ?? []), num];
-          await dbPut('games', cached);
+          await dbPut('games', cached, gameId);
         }
       }
       return result.data;
@@ -452,7 +461,7 @@ export const offlineGameApi = {
 
     const number = game.numberSequence[nextIndex];
     game.calledNumbers = [...called, number];
-    await dbPut('games', game);
+    await dbPut('games', game, gameId);
 
     return { data: { data: { number, remaining: 75 - game.calledNumbers.length } } };
   },
@@ -468,7 +477,7 @@ export const offlineGameApi = {
       const result = await tryApi(() => api.post(`/games/${gameId}/finish`));
       if (result.ok) {
         const game = await dbGet<any>('games', gameId);
-        if (game) { game.status = 'finished'; await dbPut('games', game); }
+        if (game) { game.status = 'finished'; await dbPut('games', game, gameId); }
         return result.data;
       }
     }
@@ -477,7 +486,7 @@ export const offlineGameApi = {
     const game = await dbGet<any>('games', gameId);
     if (game) {
       game.status = 'finished';
-      await dbPut('games', game);
+      await dbPut('games', game, gameId);
     }
     await enqueue({ type: 'finishGame', payload: { gameId } });
     return { data: { data: null } };
@@ -506,7 +515,7 @@ export const offlineGameApi = {
     if (game) {
       game.isWinner = true;
       game.winnerIds = [...(game.winnerIds ?? []), user?.id].filter(Boolean);
-      await dbPut('games', game);
+      await dbPut('games', game, gameId);
 
       // prizePool is already correctly calculated (totalBets - houseCut)
       const prize = Number(game.prizePool ?? 0);

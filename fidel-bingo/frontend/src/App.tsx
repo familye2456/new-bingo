@@ -67,6 +67,7 @@ const queryClient = new QueryClient({
 });
 
 const CLIENT_VERSION = import.meta.env.VITE_APP_VERSION || '2.0.1';
+let versionRetryAfter = 0;
 
 const UpdateRequired: React.FC = () => {
   const [updating, setUpdating] = React.useState(false);
@@ -424,6 +425,8 @@ const AppRoutes: React.FC = () => {
   const checkVersion = React.useCallback(async () => {
     try {
       if (!navigator.onLine) return false;
+      if (new URLSearchParams(window.location.search).get('gameId')?.startsWith('offline-')) return false;
+      if (Date.now() < versionRetryAfter) return false;
       
       const response = await fetch(
         `${(import.meta.env.VITE_API_URL || 'https://fidel-bingo.onrender.com/api')}/version`,
@@ -441,6 +444,7 @@ const AppRoutes: React.FC = () => {
         }
       }
     } catch (err) {
+      versionRetryAfter = Date.now() + 60_000;
       console.warn('[version] Check failed:', err);
     }
     return false;
@@ -457,8 +461,9 @@ const AppRoutes: React.FC = () => {
         fetchMe();
         const token = localStorage.getItem('access_token');
         if (token) getSocket(token);
-        import('./services/sync').then(({ startPeriodicSync }) => startPeriodicSync());
-        if (navigator.onLine) {
+        const offlineGameSession = new URLSearchParams(window.location.search).get('gameId')?.startsWith('offline-');
+        if (!offlineGameSession) import('./services/sync').then(({ startPeriodicSync }) => startPeriodicSync());
+        if (navigator.onLine && !offlineGameSession) {
           import('./services/sync').then(({ syncWhenOnline }) => setTimeout(syncWhenOnline, 2000));
         }
       }
@@ -471,6 +476,7 @@ const AppRoutes: React.FC = () => {
 
   // Continuous version checking every 30 seconds
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('gameId')?.startsWith('offline-')) return;
     const interval = setInterval(() => {
       checkVersion();
     }, 30_000); // 30 seconds
@@ -480,6 +486,7 @@ const AppRoutes: React.FC = () => {
 
   // Keep Render backend alive — ping /health every 10 min to prevent cold starts
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('gameId')?.startsWith('offline-')) return;
     const BACKEND = (import.meta.env.VITE_API_URL || 'https://fidel-bingo.onrender.com/api')
       .replace('/api', '');
     const ping = () => fetch(`${BACKEND}/health`, { method: 'GET' }).catch(() => {});
@@ -490,6 +497,7 @@ const AppRoutes: React.FC = () => {
 
   // Poll balance every 60 seconds when online
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('gameId')?.startsWith('offline-')) return;
     const id = setInterval(() => refreshBalance(), 60_000);
     return () => clearInterval(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
