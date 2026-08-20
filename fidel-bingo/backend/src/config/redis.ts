@@ -7,6 +7,9 @@ const noopClient = {
   get: async (_k: string) => null,
   setEx: async () => undefined,
   del: async () => undefined,
+  sAdd: async () => 0,
+  sRem: async () => 0,
+  hSet: async () => 0,
   isReady: false,
   on: () => noopClient,
 } as any;

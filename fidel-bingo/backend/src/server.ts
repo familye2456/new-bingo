@@ -106,6 +106,10 @@ setupGameGateway(io);
 app.use(errorHandler);
 
 const start = async () => {
+  httpServer.listen(env.PORT, () => {
+    logger.info(`Server listening on port ${env.PORT}`);
+  });
+
   try {
     // ── Pre-migration: add new columns / drop stale constraints ───────────────
     // Runs BEFORE AppDataSource.initialize() so TypeORM never sees old schema
@@ -218,9 +222,7 @@ const start = async () => {
       logger.warn('Redis unavailable, running without cache', { err });
     }
 
-    httpServer.listen(env.PORT, () => {
-      logger.info(`Server running on port ${env.PORT}`);
-    });
+    logger.info('Server startup complete');
   } catch (err) {
     logger.error('Failed to start server', { err });
     console.error('FATAL SERVER ERROR:', err);

@@ -35,8 +35,12 @@ export const setupGameGateway = (io: Server) => {
     activePlayers.inc();
 
     // Track online status
-    await redisClient.sAdd('online_users', userId);
-    await redisClient.hSet(`user:${userId}`, { socket: socket.id, connected_at: Date.now().toString() });
+    try {
+      await redisClient.sAdd('online_users', userId);
+      await redisClient.hSet(`user:${userId}`, { socket: socket.id, connected_at: Date.now().toString() });
+    } catch (err) {
+      logger.warn('Redis online-user tracking unavailable', { err, userId });
+    }
 
     socket.join(`user:${userId}`);
 
@@ -114,8 +118,12 @@ export const setupGameGateway = (io: Server) => {
 
     socket.on('disconnect', async () => {
       activePlayers.dec();
-      await redisClient.sRem('online_users', userId);
-      await redisClient.del(`user:${userId}`);
+      try {
+        await redisClient.sRem('online_users', userId);
+        await redisClient.del(`user:${userId}`);
+      } catch (err) {
+        logger.warn('Redis online-user cleanup unavailable', { err, userId });
+      }
       logger.info('WS disconnected', { userId });
     });
   });
