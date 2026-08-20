@@ -181,7 +181,23 @@ export const offlineGameApi = {
       );
       // Only cache games belonging to the current user to avoid cross-user data leaks
       const currentUser = await dbGet<any>('user', 'me');
-      const ownGames = currentUser ? list.filter((g: any) => g.creatorId === currentUser.id) : [];
+      const isPrepaidUser = !currentUser || currentUser.paymentType !== 'postpaid';
+      const ownGames = currentUser
+        ? list
+          .filter((g: any) => g.creatorId === currentUser.id)
+          .map((g: any) => {
+            const localGame = allLocal.find((local: any) => String(local.id) === String(g.id));
+            return {
+              ...g,
+              ...(isPrepaidUser && localGame?.numberSequence
+                ? { numberSequence: localGame.numberSequence }
+                : {}),
+              ...(isPrepaidUser && localGame?.calledNumbers
+                ? { calledNumbers: localGame.calledNumbers }
+                : {}),
+            };
+          })
+        : [];
       await Promise.all(ownGames.map((g: any) => dbPut('games', g)));
       // Also include offline games with matching status
       const offlineGames = allLocal.filter((g: any) =>
