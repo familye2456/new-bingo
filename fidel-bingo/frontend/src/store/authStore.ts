@@ -75,7 +75,7 @@ interface AuthState {
   swReady: boolean;
   login: (identifier: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  fetchMe: () => Promise<void>;
+  fetchMe: (options?: { localOnly?: boolean }) => Promise<void>;
   refreshBalance: () => Promise<void>;
   adjustUserBalance: (delta: number) => void;
   dismissSwReady: () => void;
@@ -342,7 +342,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
   },
 
-  fetchMe: async () => {
+  fetchMe: async (options) => {
+    if (options?.localOnly) {
+      const cached = await dbGet<User>('user', 'me');
+      if (cached) {
+        const balance = Number(cached.balance ?? 0);
+        set({ user: cached, initialized: true });
+        applyNegativeBalanceCheck(balance, cached.paymentType, cached.role, get, (p) => set(p as any));
+      } else {
+        set({ user: null, initialized: true });
+      }
+      return;
+    }
+
     try {
       const res = await api.get('/users/me');
       const fresh = res.data?.data as User;

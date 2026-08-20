@@ -176,7 +176,7 @@ export const PlayBingo: React.FC = () => {
     onSuccess: () => {
       stopAuto(true);
       queryClient.invalidateQueries({ queryKey: ['games'] });
-      refreshBalance();
+      if (!isOfflineGame) refreshBalance();
       navigate('/new-game');
     },
   });

@@ -455,13 +455,13 @@ const AppRoutes: React.FC = () => {
     fetchedRef.current = true;
     
     const initialize = async () => {
+      const offlineGameSession = new URLSearchParams(window.location.search).get('gameId')?.startsWith('offline-');
       const needsUpdate = await checkVersion();
       
       if (!needsUpdate) {
-        fetchMe();
+        fetchMe({ localOnly: offlineGameSession });
         const token = localStorage.getItem('access_token');
-        if (token) getSocket(token);
-        const offlineGameSession = new URLSearchParams(window.location.search).get('gameId')?.startsWith('offline-');
+        if (token && !offlineGameSession) getSocket(token);
         if (!offlineGameSession) import('./services/sync').then(({ startPeriodicSync }) => startPeriodicSync());
         if (navigator.onLine && !offlineGameSession) {
           import('./services/sync').then(({ syncWhenOnline }) => setTimeout(syncWhenOnline, 2000));

@@ -41,16 +41,17 @@ export const UserLayout: React.FC = () => {
   const { user, logout, swReady, dismissSwReady, refreshBalance } = useAuthStore();
   const [open, setOpen] = useState(false);
   const online = useOnlineStatus();
+  const offlineGameSession = new URLSearchParams(window.location.search).get('gameId')?.startsWith('offline-');
   const initials = (user?.username ?? 'U').slice(0, 2).toUpperCase();
 
   // Keep balance fresh on entry and when returning to the tab.
   useEffect(() => {
-    if (!online) return;
+    if (!online || offlineGameSession) return;
     refreshBalance();
     const onVisible = () => { if (document.visibilityState === 'visible') refreshBalance(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [online, refreshBalance]);
+  }, [online, offlineGameSession, refreshBalance]);
 
   // Auto-dismiss the SW ready toast after 6 seconds
   useEffect(() => {
