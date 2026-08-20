@@ -60,19 +60,17 @@ export const GamePage: React.FC = () => {
 
     const load = async () => {
       try {
-        // Reset calledNumbers on the server so the sequence restarts from scratch on reload
-        await gameApi.resetGame(gameId).catch(() => {});
-
         const [gameRes, cartelasRes] = await Promise.all([
           gameApi.get(gameId),
           gameApi.getCartelas(gameId),
         ]);
         if (cancelled) return;
 
-        const gameData = { ...gameRes.data.data, calledNumbers: [] };
+        const gameData = gameRes.data.data;
         const cartelas = cartelasRes.data.data ?? gameData.cartelas ?? [];
 
         setGame({ ...gameData, cartelas });
+        setDisplayedNumbers(gameData.calledNumbers ?? []);
         setIsLoading(false);
         isReplayingRef.current = false;
 
