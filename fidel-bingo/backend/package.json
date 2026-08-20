@@ -1,6 +1,6 @@
 {
   "name": "fidel-bingo-api",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Fidel Bingo Enterprise API",
   "main": "dist/server.js",
   "scripts": {

@@ -32,6 +32,10 @@ npm run dev
 ```
 Frontend runs on http://localhost:5173
 
+## Required Client Updates
+
+The frontend checks `/api/version` before starting auth, sync, or gameplay. Set `APP_VERSION` on the backend and `VITE_APP_VERSION` on the frontend to the same new value for every release. A client with an older value is blocked until it clears the old PWA cache and reloads the new build.
+
 ## Architecture
 
 ```
