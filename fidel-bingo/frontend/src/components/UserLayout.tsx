@@ -1,15 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+import { isServerReachable } from '../services/offlineApi';
 
 function useOnlineStatus() {
-  const [online, setOnline] = useState(navigator.onLine);
+  const [online, setOnline] = useState(isServerReachable());
   useEffect(() => {
-    const on = () => setOnline(true);
+    // Update on browser online/offline events
+    const on = () => setOnline(isServerReachable());
     const off = () => setOnline(false);
     window.addEventListener('online', on);
     window.addEventListener('offline', off);
-    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+
+    // Poll every 5 s to catch server-down state even when navigator.onLine is true
+    const timer = setInterval(() => setOnline(isServerReachable()), 5_000);
+
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+      clearInterval(timer);
+    };
   }, []);
   return online;
 }
@@ -48,7 +58,7 @@ export const UserLayout: React.FC = () => {
   useEffect(() => {
     if (!online || offlineGameSession) return;
     refreshBalance();
-    const onVisible = () => { if (document.visibilityState === 'visible') refreshBalance(); };
+    const onVisible = () => { if (document.visibilityState === 'visible' && isServerReachable()) refreshBalance(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [online, offlineGameSession, refreshBalance]);

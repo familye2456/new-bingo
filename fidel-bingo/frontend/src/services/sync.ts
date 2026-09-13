@@ -2,7 +2,7 @@
  * Online/offline sync manager.
  */
 import { api } from './api';
-import { dbGet, dbPut, dbGetAll, dbDelete, dbClear, dequeue, getAllQueued } from './db';
+import { dbGet, dbPut, dbPutMany, dbGetAll, dbDelete, dbClear, dequeue, getAllQueued } from './db';
 import { useAuthStore, applyNegativeBalanceCheck, isNegativeBalanceLocked } from '../store/authStore';
 
 async function isPrepaid(): Promise<boolean> {
@@ -18,6 +18,9 @@ const REFRESH_CACHE_RETRY_COOLDOWN_MS = 60_000;
 
 // Persist synced tempIds across page reloads to prevent duplicate POSTs
 const SYNCED_KEY = 'synced_temp_ids';
+
+// Negative balance localStorage keys — declared here so refreshCache can access them
+const NEG_BAL_KEY = 'neg_balance_last_positive';
 function getSyncedIds(): Set<string> {
   try { return new Set(JSON.parse(localStorage.getItem(SYNCED_KEY) || '[]')); } catch { return new Set(); }
 }
@@ -45,27 +48,41 @@ export async function refreshCache() {
 
     const meData = meRes.data?.data ?? meRes.data;
 
-    // ⭐ CRITICAL FIX: Balance preservation logic
-    // Only preserve LOCAL balance if account is LOCKED (negative balance scenario)
-    // Otherwise, ALWAYS use SERVER balance as authoritative source
-    // This ensures admin balance updates are NOT overwritten by local cached balance
+    // ⭐ Balance preservation logic
+    // If account is LOCKED → preserve local negative balance (keeps player blocked)
+    // If there are PENDING offline games → server hasn't billed yet, keep local deducted balance
+    // Otherwise → server balance is authoritative
     const pendingQueue = await getAllQueued();
+    const pendingCreateGames = pendingQueue.filter((item: any) => item.type === 'createGame');
     if (meData) {
       const localUser = await dbGet<any>('user', 'me');
       const isLocked = localStorage.getItem('neg_balance_locked') === '1';
       
       if (isLocked && localUser) {
         // Account is locked due to negative balance — preserve it to keep player blocked
-        console.log(`[balance] Account locked, preserving local balance=${localUser.balance}`);
+        console.log(`[balance] refreshCache: locked, preserving local balance=${localUser.balance}`);
         meData.balance = localUser.balance;
-      } else if (meData && localUser) {
-        // Account is NOT locked — SERVER BALANCE is AUTHORITATIVE
-        // Use server balance even if there are pending games
-        // Pending games affect temporary deduction, not permanent balance
+      } else if (pendingCreateGames.length > 0 && localUser) {
+        // Pending games not yet synced — server balance is stale (pre-billing).
+        // Keep the locally-deducted IDB balance to avoid showing inflated balance.
+        const localBalance = Number(localUser.balance ?? 0);
         const serverBalance = Number(meData.balance ?? 0);
-        console.log(`[balance] Using server balance=${serverBalance} (locked=${isLocked} pending=${pendingQueue.length})`);
-        // Ensure local IDB is updated with server balance
+        // Only keep local if it's lower (i.e. the local deduction happened)
+        if (localBalance < serverBalance) {
+          console.log(`[balance] refreshCache: pending games, keeping local balance=${localBalance} (server=${serverBalance})`);
+          meData.balance = localBalance;
+        } else {
+          console.log(`[balance] refreshCache: pending games but server already lower, using server balance=${serverBalance}`);
+        }
+      } else {
+        // No pending games, not locked — server balance is authoritative
+        const serverBalance = Number(meData.balance ?? 0);
+        console.log(`[balance] refreshCache: using server balance=${serverBalance} (pending=${pendingCreateGames.length})`);
         meData.balance = serverBalance;
+        // Track last positive balance for recovery UI
+        if (serverBalance > 0 && localUser?.paymentType !== 'postpaid') {
+          localStorage.setItem(NEG_BAL_KEY, String(serverBalance));
+        }
       }
     }
     await dbPut('user', meData, 'me');
@@ -84,7 +101,7 @@ export async function refreshCache() {
     {
       const userId = meData?.id;
       await dbClear('cartelas');
-      await Promise.all(toList(cartelasRes.data).map((c: any) => dbPut('cartelas', { ...c, userId })));
+      await dbPutMany('cartelas', toList(cartelasRes.data).map((c: any) => ({ ...c, userId })));
     }
 
     const serverGames = toList(gamesRes.data);
@@ -115,12 +132,8 @@ export async function refreshCache() {
         ? { ...merged, status: 'finished' }
         : merged;
     });
-    await Promise.all(mergedGames.map((g: any) => dbPut('games', g)));
-    await Promise.all(
-      offlineGames
-        .filter((g: any) => !serverGameIds.has(g.id))
-        .map((g: any) => dbPut('games', g))
-    );
+    const preservedOfflineGames = offlineGames.filter((g: any) => !serverGameIds.has(g.id));
+    await dbPutMany('games', [...mergedGames, ...preservedOfflineGames]);
 
     const serverTx = toList(txRes.data);
     const localTx = await dbGetAll<any>('transactions');
@@ -128,10 +141,7 @@ export async function refreshCache() {
       String(t.id).startsWith('tx-bet-offline-') || String(t.id).startsWith('tx-win-offline-')
     );
     await dbClear('transactions');
-    await Promise.all([
-      ...serverTx.map((t: any) => dbPut('transactions', t)),
-      ...offlineTx.map((t: any) => dbPut('transactions', t)),
-    ]);
+    await dbPutMany('transactions', [...serverTx, ...offlineTx]);
 
     window.dispatchEvent(new CustomEvent('cache-refreshed'));
   } catch {
@@ -357,8 +367,6 @@ async function _doFlush() {
 
 // ── Negative balance check ────────────────────────────────────────────────────
 
-const NEG_BAL_KEY = 'neg_balance_last_positive';
-
 /**
  * After coming online and syncing:
  * - Fetch real server balance
@@ -385,7 +393,7 @@ export async function checkNegativeBalanceAfterSync(): Promise<boolean> {
       return false;
     }
 
-    // Not locked — check current local IDB balance
+    // Not locked — check current local IDB balance (already updated by _doFlush refunds)
     const localBalance = Number(user.balance ?? 0);
     if (localBalance < 0) {
       localStorage.setItem('neg_balance_locked', '1');
@@ -398,20 +406,8 @@ export async function checkNegativeBalanceAfterSync(): Promise<boolean> {
       return false;
     }
 
-    // Balance genuinely positive and not locked — sync server balance into IDB
-    if (navigator.onLine) {
-      try {
-        const res = await api.get('/users/me');
-        const fresh = res.data?.data;
-        if (fresh) {
-          const serverBalance = Number(fresh.balance ?? 0);
-          await dbPut('user', { ...user, balance: serverBalance }, 'me');
-          useAuthStore.getState().adjustUserBalance(serverBalance - (Number(useAuthStore.getState().user?.balance) || 0));
-          localStorage.setItem(NEG_BAL_KEY, String(Math.max(serverBalance, 0)));
-        }
-      } catch {}
-    }
-
+    // Balance looks positive — let refreshCache() do the authoritative server balance write.
+    // Do NOT make an extra GET /users/me here; that causes the delta-based double-update bug.
     return true;
   } catch {
     return true;
@@ -499,21 +495,10 @@ export async function flushQueue() {
     const balanceOk = await checkNegativeBalanceAfterSync();
     console.log(`[sync] balanceOk=${balanceOk}`);
     if (balanceOk) {
+      // refreshCache() does the authoritative GET /users/me → IDB → Zustand write.
+      // Do NOT make another fetch after this — it causes a race where a stale response
+      // can overwrite the correct balance that refreshCache just set.
       await refreshCache();
-      // After cache refresh, force one final balance fetch to ensure Zustand shows server truth
-      try {
-        const res = await api.get('/users/me');
-        const fresh = res.data?.data;
-        if (fresh?.id && localStorage.getItem('neg_balance_locked') !== '1') {
-          const balance = Number(fresh.balance);
-          console.log(`[sync] final server balance=${balance}`);
-          const idbUser = await dbGet<any>('user', 'me');
-          if (idbUser) await dbPut('user', { ...idbUser, balance }, 'me');
-          useAuthStore.setState((state) => ({
-            user: state.user ? { ...state.user, balance } : state.user,
-          }));
-        }
-      } catch {}
     } else {
       startRecoveryPolling();
     }
@@ -570,13 +555,30 @@ export function startPeriodicSync() {
       console.log('[sync] Skipping periodic sync (offline)');
       return;
     }
+
+    // Skip if a flush is already in progress — it will call refreshCache itself
+    if (_flushing) {
+      console.log('[sync] Skipping periodic sync (flush in progress)');
+      return;
+    }
+
+    // Skip if there are queued offline games — let the next flush handle it.
+    // Running refreshCache now would overwrite the local-deducted IDB balance with the
+    // pre-billing server balance, making the user appear to have more money than they do.
+    try {
+      const pending = await getAllQueued();
+      const hasPendingGames = pending.some((item: any) => item.type === 'createGame');
+      if (hasPendingGames) {
+        console.log('[sync] Skipping periodic sync (pending offline games in queue)');
+        return;
+      }
+    } catch { /* proceed if queue read fails */ }
     
     try {
       console.log('[sync] Running periodic refresh cache');
       await refreshCache();
     } catch (err) {
       console.error('[sync] Periodic sync failed:', err);
-      // Continue — don't stop interval on errors
     }
   }, PERIODIC_SYNC_INTERVAL);
 }

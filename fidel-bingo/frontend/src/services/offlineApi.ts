@@ -23,6 +23,11 @@ export function isOnline() {
   return navigator.onLine && (!_serverDown || Date.now() >= _serverDownUntil);
 }
 
+/** Expose server-down state so UI can show accurate connectivity status */
+export function isServerReachable() {
+  return navigator.onLine && (!_serverDown || Date.now() >= _serverDownUntil);
+}
+
 async function tryApi<T>(fn: () => Promise<T>): Promise<{ ok: true; data: T } | { ok: false }> {
   if (!navigator.onLine) {
     _serverDown = true;
@@ -304,8 +309,7 @@ export const offlineGameApi = {
       throw Object.assign(new Error('Server unreachable'), { code: 'SERVER_UNREACHABLE' });
     }
 
-    // Prepaid users → ALWAYS use offline mode (instant response, no network wait)
-    // Prepaid users → ALWAYS use offline mode (instant response, no network wait)
+    // Prepaid users → try server first when online; fall back to offline if unreachable
     const totalBet = data.betAmountPerCartela * data.cartelaIds.length;
     const houseCut = totalBet * (HOUSE_PCT / 100);
 
@@ -318,9 +322,27 @@ export const offlineGameApi = {
       throw Object.assign(new Error('Insufficient balance'), { code: 'INSUFFICIENT_BALANCE' });
     }
 
-    const tempId = `offline-${Date.now()}`;
+    // When online, create directly on server (no temp ID, real game immediately)
+    if (isOnline()) {
+      const result = await tryApi(() => api.post('/games', data));
+      if (result.ok) {
+        const game = result.data.data.data ?? result.data.data ?? result.data;
+        // Cache in background so offline fallback works for this game
+        Promise.resolve().then(async () => {
+          await dbPut('games', { ...game, cartelaIds: data.cartelaIds });
+          await dbPut('gameCartelas', data.cartelaIds, game.id);
+          await _writeBetTransactions(game.id, data.cartelaIds, data.betAmountPerCartela, Number(game.housePercentage ?? HOUSE_PCT));
+          useAuthStore.getState().refreshBalance();
+        }).catch(() => {});
+        return result.data;
+      }
+      // Server call failed — fall through to offline creation below
+    }
+
+    // Offline fallback: create locally in IndexedDB and queue for sync
     const now = new Date().toISOString();
     const prizePool = totalBet - houseCut;
+    const tempId = `offline-${Date.now()}`;
 
     const game = {
       id: tempId, status: 'active', betAmount: data.betAmountPerCartela,

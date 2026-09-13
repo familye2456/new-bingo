@@ -66,6 +66,20 @@ export async function dbPut(store: string, value: unknown, key?: IDBValidKey) {
   }
 }
 
+export async function dbPutMany(store: string, values: unknown[]) {
+  if (values.length === 0) return;
+
+  try {
+    const db = await getDB();
+    const tx = db.transaction(store, 'readwrite');
+    for (const value of values) tx.store.put(value);
+    await tx.done;
+  } catch (err) {
+    console.error('[dbPutMany] Error:', err);
+    throw err;
+  }
+}
+
 export async function dbGetAll<T>(store: string): Promise<T[]> {
   try { return (await getDB()).getAll(store); } catch { return []; }
 }

@@ -310,27 +310,35 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (isLocked) { set({ negativeBalance: true }); return; }
 
         const { getAllQueued } = await import('../services/db');
-        const pending = await getAllQueued();
         const idbUser = await dbGet<any>('user', 'me');
-        const idbBalance = Number(idbUser?.balance ?? 0);
         const serverBalance = Number(fresh.balance);
+        const idbBalance = Number(idbUser?.balance ?? 0);
 
-        console.log(`[balance] refreshBalance server=${serverBalance} idb=${idbBalance} pending=${pending.length}`);
+        // Only subtract pending house cuts from the server balance when the server
+        // has NOT yet been charged (i.e. the server balance is still the pre-game value).
+        // We detect this by comparing: if idbBalance < serverBalance, the server hasn't
+        // billed yet so we project the deduction. If idbBalance >= serverBalance (or equal),
+        // the server has already charged the user — use it directly to avoid double-deduction.
+        const pending = await getAllQueued();
+        const pendingCreateGames = pending.filter((item: any) => item.type === 'createGame');
+        const pendingHouseCuts = pendingCreateGames.reduce((sum: number, item: any) => {
+          const p = item.payload as any;
+          return sum + (p.betAmountPerCartela ?? 0) * (p.cartelaIds?.length ?? 0) * ((p.housePercentage ?? 10) / 100);
+        }, 0);
 
-        const pendingHouseCuts = pending
-          .filter((item: any) => item.type === 'createGame')
-          .reduce((sum: number, item: any) => {
-            const p = item.payload as any;
-            return sum + (p.betAmountPerCartela ?? 0) * (p.cartelaIds?.length ?? 0) * ((p.housePercentage ?? 10) / 100);
-          }, 0);
-        const effectiveBalance = serverBalance - pendingHouseCuts;
-        console.log(`[balance] refreshBalance server=${serverBalance} pendingHouseCuts=${pendingHouseCuts} effective=${effectiveBalance}`);
+        // If server balance already reflects billing (server <= idb), use server directly.
+        // Only project deduction when server is still showing the pre-billing balance.
+        const serverAlreadyCharged = pendingCreateGames.length === 0 || serverBalance <= idbBalance;
+        const effectiveBalance = serverAlreadyCharged
+          ? serverBalance
+          : serverBalance - pendingHouseCuts;
+
+        console.log(`[balance] refreshBalance server=${serverBalance} idb=${idbBalance} pending=${pendingCreateGames.length} cuts=${pendingHouseCuts} alreadyCharged=${serverAlreadyCharged} effective=${effectiveBalance}`);
+
         const normalized = { ...fresh, balance: effectiveBalance };
         await dbPut('user', normalized, 'me');
         set((state) => ({ user: state.user ? { ...state.user, balance: effectiveBalance } : normalized }));
-        if (effectiveBalance < 0 && fresh.paymentType !== 'postpaid' && fresh.role !== 'admin' && fresh.role !== 'agent') {
-          applyNegativeBalanceCheck(effectiveBalance, fresh.paymentType, fresh.role, get, (p) => set(p as any));
-        }
+        applyNegativeBalanceCheck(effectiveBalance, fresh.paymentType, fresh.role ?? '', get, (p) => set(p as any));
       }
     } catch {}
   },
@@ -374,19 +382,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         // Don't let the server's stale pre-sync value overwrite what the user sees.
         const { getAllQueued } = await import('../services/db');
         const pending = await getAllQueued();
-        const hasPending = pending.length > 0;
 
         const serverBalance = Number(fresh.balance);
         const idbBalance = idbUser ? Number(idbUser.balance ?? 0) : serverBalance;
-        const pendingHouseCuts = pending
-          .filter((item: any) => item.type === 'createGame')
-          .reduce((sum: number, item: any) => {
-            const p = item.payload as any;
-            return sum + (p.betAmountPerCartela ?? 0) * (p.cartelaIds?.length ?? 0) * ((p.housePercentage ?? 10) / 100);
-          }, 0);
-        const effectiveBalance = hasPending ? serverBalance - pendingHouseCuts : serverBalance;
+        const pendingCreateGames = pending.filter((item: any) => item.type === 'createGame');
+        const pendingHouseCuts = pendingCreateGames.reduce((sum: number, item: any) => {
+          const p = item.payload as any;
+          return sum + (p.betAmountPerCartela ?? 0) * (p.cartelaIds?.length ?? 0) * ((p.housePercentage ?? 10) / 100);
+        }, 0);
 
-        console.log(`[balance] fetchMe server=${serverBalance} idb=${idbBalance} pending=${pending.length} effective=${effectiveBalance}`);
+        // Only project deduction when server hasn't billed yet.
+        // If server balance is already <= idb, the server has processed the charges.
+        const serverAlreadyCharged = pendingCreateGames.length === 0 || serverBalance <= idbBalance;
+        const effectiveBalance = serverAlreadyCharged
+          ? serverBalance
+          : serverBalance - pendingHouseCuts;
+
+        console.log(`[balance] fetchMe server=${serverBalance} idb=${idbBalance} pending=${pendingCreateGames.length} alreadyCharged=${serverAlreadyCharged} effective=${effectiveBalance}`);
 
         const normalized = { ...fresh, balance: effectiveBalance };
         await dbPut('user', normalized, 'me');
