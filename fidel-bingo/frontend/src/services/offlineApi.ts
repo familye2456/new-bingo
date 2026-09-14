@@ -626,14 +626,69 @@ export const offlineGameApi = {
     if (!String(gameId).startsWith('offline-')) {
       const result = await tryApi(() => api.get(`/games/${gameId}/check/${cardNumber}`));
       if (result.ok) {
-        const data = result.data.data.data;
-        // Override the patternMask with session-based called numbers so the cartela
-        // preview always matches what the board shows (empty after refresh = no marks)
-        if (data && Array.isArray(data.numbers) && sessionCalledNumbers !== undefined) {
+        // Server returns { success, data: { registered, isWinner, winPattern, numbers, patternMask } }
+        // Note: data.winPattern = achieved pattern on the cartela (best completed pattern)
+        //       data.isWinner   = server's authoritative answer (computed against game's required pattern)
+        const data = result.data.data;
+        if (!data) return { registered: false, cardNumber, isWinner: false, winPattern: null };
+
+        // Recalculate patternMask from session called numbers so the cartela preview
+        // matches what the board shows (avoids stale mask from server's game.calledNumbers).
+        // Then recompute isWinner locally so it's consistent with the recalculated mask.
+        if (data.registered && Array.isArray(data.numbers) && sessionCalledNumbers !== undefined) {
           const mask: boolean[] = data.numbers.map((n: number, i: number) =>
             i === 12 ? true : sessionCalledNumbers.includes(n)
           );
-          return { ...data, patternMask: mask };
+
+          // Get the game's REQUIRED win pattern (what the game demands, not what the cartela achieved)
+          const cachedGame = await dbGet<any>('games', gameId);
+          const requiredPattern: string = cachedGame?.winPattern ?? 'line1';
+
+          const countL = (): number => {
+            let n = 0;
+            for (let r = 0; r < 5; r++) if ([0,1,2,3,4].every(c => mask[r*5+c])) n++;
+            for (let c = 0; c < 5; c++) if ([0,1,2,3,4].every(r => mask[r*5+c])) n++;
+            if ([0,6,12,18,24].every(i => mask[i])) n++;
+            if ([4,8,12,16,20].every(i => mask[i])) n++;
+            if (mask[0] && mask[4] && mask[20] && mask[24]) n++;
+            if ([6,7,8,11,13,16,17,18].every(i => mask[i])) n++;
+            return n;
+          };
+          const checkWinFromMask = (pattern: string): boolean => {
+            switch (pattern) {
+              case 'line1': case 'any': return countL() >= 1;
+              case 'line2': return countL() >= 2;
+              case 'line3': return countL() >= 3;
+              case 'fullhouse': case 'blackout': return mask.every(Boolean);
+              case 'fourCorners': return mask[0] && mask[4] && mask[20] && mask[24];
+              case 'X': return [0,6,12,18,24].every(i=>mask[i]) && [4,8,12,16,20].every(i=>mask[i]);
+              case 'plus': return [10,11,12,13,14].every(i=>mask[i]) && [2,7,12,17,22].every(i=>mask[i]);
+              case 'T': return [0,1,2,3,4].every(i=>mask[i]) && [2,7,12,17,22].every(i=>mask[i]);
+              case 'L': return [0,5,10,15,20].every(i=>mask[i]) && [20,21,22,23,24].every(i=>mask[i]);
+              case 'frame': return [0,1,2,3,4,5,9,10,14,15,19,20,21,22,23,24].every(i=>mask[i]);
+              case 'roundFree': return [6,7,8,11,13,16,17,18].every(i=>mask[i]);
+              default: return countL() >= 1;
+            }
+          };
+          const getAchievedPattern = (): string | null => {
+            if (mask.every(Boolean)) return 'fullhouse';
+            if (checkWinFromMask('frame')) return 'frame';
+            if (checkWinFromMask('X')) return 'X';
+            if (checkWinFromMask('plus')) return 'plus';
+            if (checkWinFromMask('T')) return 'T';
+            if (checkWinFromMask('L')) return 'L';
+            if (checkWinFromMask('roundFree')) return 'roundFree';
+            if (checkWinFromMask('fourCorners')) return 'fourCorners';
+            const lines = countL();
+            if (lines >= 3) return 'line3';
+            if (lines >= 2) return 'line2';
+            if (lines >= 1) return 'line1';
+            return null;
+          };
+
+          const isWinner = checkWinFromMask(requiredPattern);
+          const achievedPattern = getAchievedPattern();
+          return { ...data, patternMask: mask, isWinner, winPattern: achievedPattern };
         }
         return data;
       }
