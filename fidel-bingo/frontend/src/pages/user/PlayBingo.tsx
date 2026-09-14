@@ -62,6 +62,25 @@ export const PlayBingo: React.FC = () => {
   const queryClient = useQueryClient();
 
   const [selectedGameId, setSelectedGameId] = useState<string | null>(searchParams.get('gameId'));
+
+  // When sync converts an offline-xxx game to a real server game,
+  // update the URL and selectedGameId so checks work with the real ID
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { tempId, realId } = (e as CustomEvent<{ tempId: string; realId: string }>).detail;
+      if (selectedGameId === tempId) {
+        setSelectedGameId(realId);
+        // Update the URL without reloading so the address bar shows the real game ID
+        const url = new URL(window.location.href);
+        url.searchParams.set('gameId', realId);
+        window.history.replaceState({}, '', url.toString());
+        // Refresh the game query so the real game loads
+        queryClient.invalidateQueries({ queryKey: ['games'] });
+      }
+    };
+    window.addEventListener('game-synced', handler);
+    return () => window.removeEventListener('game-synced', handler);
+  }, [selectedGameId, queryClient]);
   const [autoOn, setAutoOn] = useState(false);
   const [speed, setSpeed] = useState(() => {
     const saved = localStorage.getItem('bingo_speed');

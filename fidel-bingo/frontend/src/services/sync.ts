@@ -303,6 +303,13 @@ async function _doFlush() {
           const wasFinished = _justFinishedIds.has(String(realGame.id));
           await dbPut('games', wasFinished ? { ...realGame, status: 'finished' } : realGame);
           await dequeue(current.id!);
+
+          // Notify any open game page that its offline gameId has a real server ID now
+          if (p.tempId) {
+            window.dispatchEvent(new CustomEvent('game-synced', {
+              detail: { tempId: p.tempId, realId: realGame.id }
+            }));
+          }
           break;
         }
 
