@@ -712,7 +712,7 @@ function getWinIndices(mask: boolean[], pattern: string | null): number[] {
     return ring.every(i => mask[i]) ? ring : [];
   }
 
-  // line-based: highlight all completed lines
+  // line-based: highlight all completed lines (rows, cols, diagonals, corners, ring)
   const result = new Set<number>();
   for (let r = 0; r < 5; r++) {
     const idxs = [0,1,2,3,4].map(c => r*5+c);
@@ -725,6 +725,7 @@ function getWinIndices(mask: boolean[], pattern: string | null): number[] {
   const main=[0,6,12,18,24]; if (main.every(i=>mask[i])) main.forEach(i=>result.add(i));
   const anti=[4,8,12,16,20]; if (anti.every(i=>mask[i])) anti.forEach(i=>result.add(i));
   if (mask[0]&&mask[4]&&mask[20]&&mask[24]) [0,4,20,24].forEach(i=>result.add(i));
+  const ring=[6,7,8,11,13,16,17,18]; if (ring.every(i=>mask[i])) ring.forEach(i=>result.add(i));
   return Array.from(result);
 }
 
