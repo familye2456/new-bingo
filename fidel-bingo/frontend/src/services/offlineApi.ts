@@ -591,13 +591,33 @@ export const offlineGameApi = {
     
     if (prepaid || isOfflineGame) {
       const cartelaIds = await dbGet<string[]>('gameCartelas', gameId);
-      if (!cartelaIds || cartelaIds.length === 0) {
-        return { data: { data: [] } };
+      if (cartelaIds && cartelaIds.length > 0) {
+        const cartelas = await Promise.all(
+          cartelaIds.map(id => dbGet('cartelas', id))
+        );
+        return { data: { data: cartelas.filter(Boolean) } };
       }
-      const cartelas = await Promise.all(
-        cartelaIds.map(id => dbGet('cartelas', id))
-      );
-      return { data: { data: cartelas.filter(Boolean) } };
+
+      // IDB empty and it's a real server game (not offline-) — fetch from server to populate cache
+      if (!isOfflineGame && navigator.onLine) {
+        const result = await tryApi(() => api.get(`/games/${gameId}/cartelas`));
+        if (result.ok) {
+          const list = toList(result.data);
+          const ids: string[] = [];
+          const currentUser = await dbGet<any>('user', 'me');
+          for (const c of list) {
+            if (c.id) {
+              await dbPut('cartelas', { ...c, userId: currentUser?.id });
+              ids.push(c.id);
+            }
+          }
+          if (ids.length > 0) await dbPut('gameCartelas', ids, gameId);
+          const cachedGame = await dbGet<any>('games', gameId);
+          if (cachedGame) { cachedGame.cartelaIds = ids; await dbPut('games', cachedGame); }
+          return result.data;
+        }
+      }
+      return { data: { data: [] } };
     }
 
     // Postpaid users with online games - fetch from server
@@ -698,9 +718,17 @@ export const offlineGameApi = {
     const game = await dbGet<any>('games', gameId);
     if (!game) return { registered: false, cardNumber, isWinner: false, winPattern: null };
 
-    // Find cartela by cardNumber in IDB
+    // Get current user to scope cartela search — prevents cross-user false negatives
+    const currentUser = await dbGet<any>('user', 'me');
+    const currentUserId: string | undefined = currentUser?.id;
+
+    // Find cartela by cardNumber in IDB — scoped to current user first, fallback to any
     const allCartelas = await dbGetAll<any>('cartelas');
-    const cartela = allCartelas.find((c: any) => c.cardNumber === cardNumber);
+    // Use Number() comparison on both sides to handle string/number type mismatch from IDB
+    const cartela = allCartelas.find((c: any) =>
+      Number(c.cardNumber) === Number(cardNumber) &&
+      (!currentUserId || c.userId === currentUserId)
+    ) ?? allCartelas.find((c: any) => Number(c.cardNumber) === Number(cardNumber));
     if (!cartela) return { registered: false, cardNumber, isWinner: false, winPattern: null };
 
     // Check membership: use dedicated gameCartelas store first (most reliable),
@@ -709,7 +737,8 @@ export const offlineGameApi = {
     const cartelaIdList: string[] = storedIds
       ?? (Array.isArray(game.cartelaIds) ? game.cartelaIds : []);
 
-    const inGame = cartelaIdList.includes(cartela.id);
+    // String-normalize both sides to handle any UUID type inconsistency
+    const inGame = cartelaIdList.map(String).includes(String(cartela.id));
     if (!inGame) return { registered: false, cardNumber, isWinner: false, winPattern: null };
 
     const called: number[] = sessionCalledNumbers ?? game.calledNumbers ?? [];
