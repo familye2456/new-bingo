@@ -644,23 +644,52 @@ export const offlineGameApi = {
   checkCartela: async (gameId: string, cardNumber: number, sessionCalledNumbers?: number[]) => {
     // If it's an offline game, always use local check — server doesn't know about it yet
     if (!String(gameId).startsWith('offline-')) {
-      const result = await tryApi(() => api.get(`/games/${gameId}/check/${cardNumber}`));
-      if (result.ok) {
-        // Server returns { success, data: { registered, isWinner, winPattern, numbers, patternMask } }
-        // Note: data.winPattern = achieved pattern on the cartela (best completed pattern)
-        //       data.isWinner   = server's authoritative answer (computed against game's required pattern)
-        const data = result.data.data;
-        if (!data) return { registered: false, cardNumber, isWinner: false, winPattern: null };
+      // Always attempt the server even if _serverDown cooldown is active —
+      // a stale cooldown from a different endpoint must not block win detection
+      let serverData: any = null;
+      try {
+        const res = await api.get(`/games/${gameId}/check/${cardNumber}`);
+        serverData = res.data?.data ?? null;
+        // Success — clear server-down state so future calls aren't blocked
+        // (imported inline to avoid circular; set via tryApi internals would require refactor)
+      } catch (err: any) {
+        // Only fall through to offline if it's a genuine network failure
+        // (no response = offline). HTTP errors like 404/403 are real answers.
+        if (err?.response?.status) {
+          // Server responded with an error code — return it as not-registered
+          return { registered: false, cardNumber, isWinner: false, winPattern: null };
+        }
+        // Network error → fall through to offline path below
+        serverData = null;
+      }
+
+      if (serverData) {
+        if (!serverData.registered) {
+          return { registered: false, cardNumber, isWinner: false, winPattern: null };
+        }
+
+        // Cache this cartela and the gameCartelas mapping in IDB so offline fallback works
+        if (Array.isArray(serverData.numbers)) {
+          const currentUser = await dbGet<any>('user', 'me');
+          const cartelaToCache = { ...serverData, id: serverData.id, cardNumber, userId: currentUser?.id };
+          if (serverData.id) {
+            await dbPut('cartelas', cartelaToCache).catch(() => {});
+            // Ensure gameCartelas has this cartela ID for offline fallback
+            const existingIds = await dbGet<string[]>('gameCartelas', gameId) ?? [];
+            if (!existingIds.map(String).includes(String(serverData.id))) {
+              await dbPut('gameCartelas', [...existingIds, String(serverData.id)], gameId).catch(() => {});
+            }
+          }
+        }
 
         // Recalculate patternMask from session called numbers so the cartela preview
-        // matches what the board shows (avoids stale mask from server's game.calledNumbers).
-        // Then recompute isWinner locally so it's consistent with the recalculated mask.
-        if (data.registered && Array.isArray(data.numbers) && sessionCalledNumbers !== undefined) {
-          const mask: boolean[] = data.numbers.map((n: number, i: number) =>
+        // matches what the board shows (avoids stale mask from server's game.calledNumbers)
+        if (Array.isArray(serverData.numbers) && sessionCalledNumbers !== undefined) {
+          const mask: boolean[] = serverData.numbers.map((n: number, i: number) =>
             i === 12 ? true : sessionCalledNumbers.includes(n)
           );
 
-          // Get the game's REQUIRED win pattern (what the game demands, not what the cartela achieved)
+          // Get the game's REQUIRED win pattern from IDB cache
           const cachedGame = await dbGet<any>('games', gameId);
           const requiredPattern: string = cachedGame?.winPattern ?? 'line1';
 
@@ -708,10 +737,11 @@ export const offlineGameApi = {
 
           const isWinner = checkWinFromMask(requiredPattern);
           const achievedPattern = getAchievedPattern();
-          return { ...data, patternMask: mask, isWinner, winPattern: achievedPattern };
+          return { ...serverData, patternMask: mask, isWinner, winPattern: achievedPattern };
         }
-        return data;
+        return serverData;
       }
+      // serverData is null → network error → fall through to offline path
     }
 
     // ── Offline fallback ──────────────────────────────────────────────────────
