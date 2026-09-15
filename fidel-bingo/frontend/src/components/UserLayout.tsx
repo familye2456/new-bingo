@@ -55,12 +55,19 @@ export const UserLayout: React.FC = () => {
   const initials = (user?.username ?? 'U').slice(0, 2).toUpperCase();
 
   // Keep balance fresh on entry and when returning to the tab.
+  // Always fetch from server when online — prepaid users must not rely on stale IDB balance.
   useEffect(() => {
-    if (!online || offlineGameSession) return;
-    refreshBalance();
-    const onVisible = () => { if (document.visibilityState === 'visible' && isServerReachable()) refreshBalance(); };
+    if (offlineGameSession) return;
+    if (online) refreshBalance();
+
+    const onOnline = () => refreshBalance();
+    const onVisible = () => { if (document.visibilityState === 'visible') refreshBalance(); };
+    window.addEventListener('online', onOnline);
     document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [online, offlineGameSession, refreshBalance]);
 
   // Auto-dismiss the SW ready toast after 6 seconds

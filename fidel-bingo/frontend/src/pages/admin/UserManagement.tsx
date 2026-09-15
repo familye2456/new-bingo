@@ -99,7 +99,12 @@ export const UserManagement: React.FC = () => {
   });
   const updateMutation = useMutation({
     mutationFn: () => adminApi.updateUser(editUser!.id, { email: form.email, username: form.username, paymentType: form.paymentType }),
-    onSuccess: () => { invalidate(); closeModal(); },
+    onSuccess: () => {
+      // Store the voice assignment so it applies on the user's next login
+      const username = form.username;
+      if (username && form.voice) localStorage.setItem(`default_voice_${username}`, form.voice);
+      invalidate(); closeModal();
+    },
   });
   const activateMutation = useMutation({ mutationFn: (id: string) => adminApi.activateUser(id), onSuccess: invalidate });
   const deactivateMutation = useMutation({ mutationFn: (id: string) => adminApi.deactivateUser(id), onSuccess: invalidate });
@@ -190,7 +195,7 @@ export const UserManagement: React.FC = () => {
 
   const openEdit = (u: UserRecord) => {
     setEditUser(u);
-    setForm({ username: u.username, email: u.email, password: '', paymentType: u.paymentType, voice: 'boy sound', role: 'player', agentId: '' });
+    setForm({ username: u.username, email: u.email, password: '', paymentType: u.paymentType, voice: (u as any).assignedVoice ?? 'boy sound', role: 'player', agentId: '' });
     setModal('edit');
   };
 
@@ -240,9 +245,9 @@ export const UserManagement: React.FC = () => {
                 </select>
               </div>
             )}
-            {modal === 'create' && (
+            {(modal === 'create' || modal === 'edit') && (
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">Default Caller Voice</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Caller Voice</label>
                 <div className="grid grid-cols-2 gap-2">
                   {ALL_VOICE_CATEGORIES.map(({ value, label }) => (
                     <button

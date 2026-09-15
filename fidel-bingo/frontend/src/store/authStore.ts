@@ -172,15 +172,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (accessToken) localStorage.setItem('access_token', accessToken);
       await dbPut('user', user, 'me');
 
-      // Apply admin-set default voice if this is the first login
-      const defaultVoice = localStorage.getItem(`default_voice_${user.username}`);
+      // Apply admin-set default voice
       const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina'];
+      const defaultVoice = localStorage.getItem(`default_voice_${user.username}`);
       if (defaultVoice && validVoices.includes(defaultVoice)) {
-        const existing = localStorage.getItem('game-settings');
-        if (!existing) {
-          localStorage.setItem('game-settings', JSON.stringify({ state: { voice: defaultVoice, autoCallInterval: 5 }, version: 0 }));
-        }
+        // Persist admin-assigned voice into the IDB user record so it survives cross-device sessions
+        const userWithVoice = { ...user, assignedVoice: defaultVoice };
+        await dbPut('user', userWithVoice, 'me');
         localStorage.removeItem(`default_voice_${user.username}`);
+        // Apply to game-settings store — always overwrite so admin-assigned voice takes effect
+        localStorage.setItem('game-settings', JSON.stringify({ state: { voice: defaultVoice, autoCallInterval: 5 }, version: 0 }));
+      } else {
+        // Restore previously-assigned voice from IDB user record (works across devices/page reloads)
+        const storedUser = await dbGet<any>('user', 'me');
+        const assignedVoice = storedUser?.assignedVoice ?? user.assignedVoice;
+        if (assignedVoice && validVoices.includes(assignedVoice)) {
+          const existing = localStorage.getItem('game-settings');
+          const parsed = existing ? JSON.parse(existing) : null;
+          // Only apply if the user hasn't manually changed it away from the default
+          if (!parsed || !parsed.state?.voice) {
+            localStorage.setItem('game-settings', JSON.stringify({ state: { voice: assignedVoice, autoCallInterval: 5 }, version: 0 }));
+          }
+        }
       }
 
       if (user.paymentType === 'prepaid' && user.role !== 'admin') {
@@ -351,12 +364,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   fetchMe: async (options) => {
+    const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina'];
+
+    /** Apply assignedVoice from user record to gameSettingsStore if not already overridden */
+    function applyAssignedVoice(assignedVoice: string | undefined) {
+      if (!assignedVoice || !validVoices.includes(assignedVoice)) return;
+      const existing = localStorage.getItem('game-settings');
+      const parsed = existing ? (() => { try { return JSON.parse(existing); } catch { return null; } })() : null;
+      if (!parsed?.state?.voice) {
+        localStorage.setItem('game-settings', JSON.stringify({ state: { voice: assignedVoice, autoCallInterval: 5 }, version: 0 }));
+      }
+    }
+
     if (options?.localOnly) {
       const cached = await dbGet<User>('user', 'me');
       if (cached) {
         const balance = Number(cached.balance ?? 0);
         set({ user: cached, initialized: true });
         applyNegativeBalanceCheck(balance, cached.paymentType, cached.role, get, (p) => set(p as any));
+        applyAssignedVoice((cached as any).assignedVoice);
       } else {
         set({ user: null, initialized: true });
       }
@@ -404,6 +430,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         await dbPut('user', normalized, 'me');
         set({ user: normalized, initialized: true });
         applyNegativeBalanceCheck(effectiveBalance, fresh.paymentType, fresh.role, get, (p) => set(p as any));
+        applyAssignedVoice((idbUser as any)?.assignedVoice ?? (fresh as any).assignedVoice);
         return;
       }
     } catch (err: any) {
@@ -417,6 +444,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const balance = Number(cached.balance ?? 0);
       set({ user: cached, initialized: true });
       applyNegativeBalanceCheck(balance, cached.paymentType, cached.role, get, (p) => set(p as any));
+      applyAssignedVoice((cached as any).assignedVoice);
+
+      // Server was unreachable — schedule a balance refresh once back online
+      // so prepaid users don't keep seeing a stale IDB balance
+      if (navigator.onLine) {
+        const retryRefresh = () => {
+          get().refreshBalance();
+        };
+        const onOnline = () => {
+          retryRefresh();
+          window.removeEventListener('online', onOnline);
+        };
+        // If already online, retry after a short delay (server may have been temporarily slow)
+        setTimeout(() => {
+          if (navigator.onLine) retryRefresh();
+          else window.addEventListener('online', onOnline);
+        }, 5_000);
+      }
     } else {
       set({ user: null, initialized: true });
     }
