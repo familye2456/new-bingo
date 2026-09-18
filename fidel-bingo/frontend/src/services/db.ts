@@ -137,29 +137,25 @@ async function getVoiceCache(): Promise<Cache | null> {
 /**
  * Play a sound file. Checks Cache Storage first to avoid network requests
  * during gameplay, then falls back to network if not cached.
- * Pass bypassCache=true for postpaid users who don't pre-cache sounds.
  */
-export async function playCachedSound(path: string, volume = 1, bypassCache = false): Promise<HTMLAudioElement | undefined> {
-  // Postpaid users: skip cache lookup, play directly from public folder
-  if (!bypassCache) {
-    const cache = await getVoiceCache();
-    if (cache) {
-      try {
-        const response = await cache.match(path);
-        if (response) {
-          const blob = await response.blob();
-          const url = URL.createObjectURL(blob);
-          const audio = new Audio(url);
-          audio.volume = volume;
-          await new Promise<void>((resolve) => {
-            audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
-            audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
-            audio.play().catch(() => resolve());
-          });
-          return audio;
-        }
-      } catch { /* fall through to network */ }
-    }
+export async function playCachedSound(path: string, volume = 1): Promise<HTMLAudioElement | undefined> {
+  const cache = await getVoiceCache();
+  if (cache) {
+    try {
+      const response = await cache.match(path);
+      if (response) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.volume = volume;
+        await new Promise<void>((resolve) => {
+          audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+          audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+          audio.play().catch(() => resolve());
+        });
+        return audio;
+      }
+    } catch { /* fall through to network */ }
   }
 
   // Network/public fallback: serve directly from /public/sounds/
@@ -290,11 +286,10 @@ export const audioQueue = new AudioQueue();
 
 /**
  * Enqueue a number sound for sequential playback via the AudioQueue.
- * Routes through playCachedSound so offline cache is used when available.
- * Pass bypassCache=true for postpaid users to play directly from public folder.
+ * Routes through playCachedSound so local cache is always used when available.
  */
-export function playNumberSoundQueued(number: number, voice: string, volume?: number, bypassCache = false): void {
+export function playNumberSoundQueued(number: number, voice: string, volume?: number): void {
   const ext = getVoiceExt(voice);
   const path = `/sounds/${encodeURIComponent(voice)}/${number}${ext}`;
-  audioQueue.enqueue(() => playCachedSound(path, volume, bypassCache).then(() => {}));
+  audioQueue.enqueue(() => playCachedSound(path, volume).then(() => {}));
 }

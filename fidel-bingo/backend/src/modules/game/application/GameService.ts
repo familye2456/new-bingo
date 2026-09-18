@@ -75,17 +75,9 @@ export class GameService {
       ? dto.housePercentage : env.HOUSE_PERCENTAGE;
     const houseCut = totalCost * (HOUSE_PCT / 100);
 
-    if (user.paymentType !== 'postpaid') {
-      if (Number(user.balance) < houseCut)
-        throw new AppError(400, 'INSUFFICIENT_BALANCE', 'Insufficient balance');
-    } else {
-      const creditLimit = Number(user.creditLimit ?? 0);
-      if (creditLimit > 0) {
-        const currentDebt = Math.max(0, -Number(user.balance));
-        if (currentDebt + houseCut > creditLimit)
-          throw new AppError(400, 'CREDIT_LIMIT_EXCEEDED', 'Credit limit exceeded');
-      }
-    }
+    // Both prepaid and postpaid users must have sufficient balance
+    if (Number(user.balance) < houseCut)
+      throw new AppError(400, 'INSUFFICIENT_BALANCE', 'Insufficient balance');
 
     return AppDataSource.transaction(async (manager) => {
       const game = manager.create(Game, {
@@ -295,7 +287,7 @@ export class GameService {
     if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'User not found');
 
     const totalCost = game.betAmount * cartelaCount;
-    if (user.paymentType !== 'postpaid' && user.balance < totalCost)
+    if (user.balance < totalCost)
       throw new AppError(400, 'INSUFFICIENT_BALANCE', 'Insufficient balance');
 
     return AppDataSource.transaction(async (manager) => {

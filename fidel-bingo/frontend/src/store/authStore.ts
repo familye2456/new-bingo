@@ -280,10 +280,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           })();
         }
       } else {
-        // Non-prepaid: clear any previous user's cartelas and games, then open immediately
-        const { dbClear: _dbClear } = await import('../services/db');
+        // Non-prepaid (postpaid/admin): clear any previous user's cartelas and games, then open immediately
+        // Also download voice sounds into cache so audio plays locally like prepaid users
+        const { dbClear: _dbClear, downloadVoiceSounds } = await import('../services/db');
         await Promise.all([_dbClear('cartelas'), _dbClear('games')]);
         set({ user, loading: false, initialized: true });
+
+        // Kick off voice sound caching in the background — don't block login
+        if (user.role !== 'admin') {
+          const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina'];
+          const currentVoice = (() => {
+            try {
+              const s = localStorage.getItem('game-settings');
+              const v = s ? JSON.parse(s)?.state?.voice : null;
+              return validVoices.includes(v) ? v : 'boy sound';
+            } catch { return 'boy sound'; }
+          })();
+          downloadVoiceSounds(currentVoice).catch(() => {});
+        }
       }
     } catch (err) {
       set({ loading: false, cacheSteps: [] });

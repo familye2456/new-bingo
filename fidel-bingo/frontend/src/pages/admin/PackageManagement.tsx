@@ -20,31 +20,33 @@ export const PackageManagement: React.FC = () => {
     queryFn: () => adminApi.listUsers().then((r) => r.data.data),
   });
 
-  const prepaidUsers = allUsers.filter((u) => u.paymentType === 'prepaid');
-  const selectedUser = prepaidUsers.find((u) => u.id === selectedUserId) ?? null;
+  // All users (prepaid + postpaid) can be topped up
+  const players = allUsers.filter((u) => u.status !== undefined);
+  const selectedUser = players.find((u) => u.id === selectedUserId) ?? null;
 
   const topUpMutation = useMutation({
     mutationFn: () => adminApi.topUpBalance(selectedUserId, parseFloat(amount)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
       const newBal = (Number(selectedUser?.balance ?? 0) + parseFloat(amount)).toFixed(2);
-      setSuccessMsg(`Balance updated. New balance: $${newBal}`);
+      setSuccessMsg(`Balance updated. New balance: ${newBal}`);
       setAmount('');
       setTimeout(() => setSuccessMsg(''), 4000);
     },
   });
 
   const canSubmit = selectedUserId && amount && parseFloat(amount) > 0 && !topUpMutation.isPending;
-  const totalPrepaidBalance = prepaidUsers.reduce((s, u) => s + Number(u.balance), 0);
+  const totalBalance = players.reduce((s, u) => s + Number(u.balance), 0);
+  const activeCount = players.filter((u) => u.status === 'active').length;
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: 'Prepaid Users', value: prepaidUsers.length, color: 'from-violet-500 to-violet-600' },
-          { label: 'Active Prepaid', value: prepaidUsers.filter(u => u.status === 'active').length, color: 'from-emerald-500 to-emerald-600' },
-          { label: 'Total Balance', value: `$${totalPrepaidBalance.toFixed(2)}`, color: 'from-blue-500 to-blue-600' },
+          { label: 'Total Users', value: players.length, color: 'from-violet-500 to-violet-600' },
+          { label: 'Active Users', value: activeCount, color: 'from-emerald-500 to-emerald-600' },
+          { label: 'Total Balance', value: `${totalBalance.toFixed(2)}`, color: 'from-blue-500 to-blue-600' },
         ].map(({ label, value, color }) => (
           <div key={label} className={`bg-gradient-to-br ${color} rounded-2xl p-5`}>
             <div className="text-2xl font-bold text-white">{value}</div>
@@ -57,25 +59,25 @@ export const PackageManagement: React.FC = () => {
         {/* Top-up form */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <h2 className="font-semibold text-gray-800 mb-1">Add Balance</h2>
-          <p className="text-sm text-gray-400 mb-5">Top up a prepaid user's account balance.</p>
+          <p className="text-sm text-gray-400 mb-5">Top up any user's account balance.</p>
 
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Select User</label>
               {isLoading ? (
                 <div className="text-sm text-gray-400 py-2">Loading users...</div>
-              ) : prepaidUsers.length === 0 ? (
-                <div className="text-sm text-gray-400 py-2">No prepaid users found.</div>
+              ) : players.length === 0 ? (
+                <div className="text-sm text-gray-400 py-2">No users found.</div>
               ) : (
                 <select
                   value={selectedUserId}
                   onChange={(e) => { setSelectedUserId(e.target.value); setAmount(''); setSuccessMsg(''); }}
                   className={inputCls}
                 >
-                  <option value="">— Select a prepaid user —</option>
-                  {prepaidUsers.map((u) => (
+                  <option value="">— Select a user —</option>
+                  {players.map((u) => (
                     <option key={u.id} value={u.id}>
-                      {u.username} ({u.email})
+                      {u.username} ({u.paymentType})
                     </option>
                   ))}
                 </select>
@@ -91,17 +93,20 @@ export const PackageManagement: React.FC = () => {
                   <div>
                     <div className="text-sm font-medium text-gray-800">{selectedUser.username}</div>
                     <div className="text-xs text-gray-400">{selectedUser.email}</div>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium mt-0.5 inline-block ${selectedUser.paymentType === 'postpaid' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                      {selectedUser.paymentType}
+                    </span>
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="text-xs text-gray-400">Current balance</div>
-                  <div className="text-lg font-bold text-emerald-600">${Number(selectedUser.balance).toFixed(2)}</div>
+                  <div className="text-lg font-bold text-emerald-600">{Number(selectedUser.balance).toFixed(2)}</div>
                 </div>
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Amount ($)</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Amount</label>
               <input
                 type="number" min="0.01" step="0.01" value={amount}
                 onChange={(e) => { setAmount(e.target.value); setSuccessMsg(''); }}
@@ -111,7 +116,7 @@ export const PackageManagement: React.FC = () => {
 
             {selectedUser && amount && parseFloat(amount) > 0 && (
               <div className="bg-blue-50 rounded-xl p-3 text-sm text-blue-700">
-                New balance will be: <strong>${(Number(selectedUser.balance) + parseFloat(amount)).toFixed(2)}</strong>
+                New balance will be: <strong>{(Number(selectedUser.balance) + parseFloat(amount)).toFixed(2)}</strong>
               </div>
             )}
 
@@ -139,47 +144,52 @@ export const PackageManagement: React.FC = () => {
           </div>
         </div>
 
-        {/* Prepaid users table */}
+        {/* All users table */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="font-semibold text-gray-800">Prepaid Users</h2>
+            <h2 className="font-semibold text-gray-800">All Users</h2>
           </div>
-          {prepaidUsers.length === 0 ? (
-            <div className="py-12 text-center text-gray-400 text-sm">No prepaid users.</div>
+          {players.length === 0 ? (
+            <div className="py-12 text-center text-gray-400 text-sm">No users found.</div>
           ) : (
             <div className="overflow-y-auto max-h-[420px]">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-white border-b border-gray-100">
                   <tr>
-                    {['User', 'Status', 'Balance'].map((h) => (
-                      <th key={h} className="text-left px-5 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide">{h}</th>
+                    {['User', 'Type', 'Status', 'Balance'].map((h) => (
+                      <th key={h} className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {prepaidUsers.map((u) => (
+                  {players.map((u) => (
                     <tr
                       key={u.id}
                       onClick={() => { setSelectedUserId(u.id); setAmount(''); setSuccessMsg(''); }}
                       className={`cursor-pointer transition-colors ${selectedUserId === u.id ? 'bg-violet-50' : 'hover:bg-gray-50/50'}`}
                     >
-                      <td className="px-5 py-3.5">
+                      <td className="px-4 py-3.5">
                         <div className="flex items-center gap-2.5">
                           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-400 to-violet-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
                             {u.username[0].toUpperCase()}
                           </div>
                           <div>
                             <div className="font-medium text-gray-800 text-xs">{u.username}</div>
-                            <div className="text-[11px] text-gray-400 truncate max-w-[120px]">{u.email}</div>
+                            <div className="text-[11px] text-gray-400 truncate max-w-[100px]">{u.email}</div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-3.5">
+                      <td className="px-4 py-3.5">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${u.paymentType === 'postpaid' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {u.paymentType}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${u.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
                           {u.status}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 font-semibold text-emerald-600">${Number(u.balance).toFixed(2)}</td>
+                      <td className="px-4 py-3.5 font-semibold text-emerald-600">{Number(u.balance).toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>
