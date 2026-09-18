@@ -21,6 +21,8 @@ import cartelaRoutes from './modules/game/interfaces/cartelaRoutes';
 import { setupGameGateway } from './modules/game/infrastructure/GameGateway';
 
 const app = express();
+// Trust the first proxy hop (required on Render/Heroku for X-Forwarded-For)
+app.set('trust proxy', 1);
 const httpServer = createServer(app);
 
 const allowedOrigins = [env.FRONTEND_URL, 'https://f-bingo.vercel.app', 'http://localhost:5173' ,'https://bingo-keno.netlify.app'].filter(Boolean);
