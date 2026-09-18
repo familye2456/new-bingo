@@ -48,9 +48,9 @@ export const NumberBoard: React.FC<Props> = ({ calledNumbers, lastNumber }) => {
               <div
                 key={num}
                 aria-label={`${num}${called ? ' called' : ''}`}
-                className="flex items-center justify-center font-bold rounded-md transition-all duration-300 flex-1 aspect-square"
+                className="flex items-center justify-center font-bold rounded-md transition-all duration-300 flex-1 aspect-square md:font-extrabold"
                 style={{
-                  fontSize: 'clamp(8px, 1.8vw, 18px)',
+                  fontSize: 'clamp(8px, 1.8vw, 25px)',
                   background: isLast
                     ? 'linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%)'
                     : called
