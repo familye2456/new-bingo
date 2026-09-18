@@ -435,7 +435,7 @@ export const AdminBalancePage: React.FC = () => {
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-1.5">
                           <button onClick={() => setSelectedUser(u)} className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-100 transition-colors font-medium">Report</button>
-                          <button onClick={() => { setTopUpUser(u); setAmount(''); setSuccessMsg(''); }} className="text-xs px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-100 transition-colors font-medium">Top Up</button>mount(''); setSuccessMsg(''); }} className="text-xs px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-100 transition-colors font-medium">Top Up</button>}
+                          <button onClick={() => { setTopUpUser(u); setAmount(''); setSuccessMsg(''); }} className="text-xs px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-100 transition-colors font-medium">Top Up</button>
                         </div>
                       </td>
                     </tr>
