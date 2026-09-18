@@ -351,7 +351,7 @@ export const AdminBalancePage: React.FC = () => {
 
   const prepaidUsers = allUsers.filter(u => u.paymentType === 'prepaid');
   const postpaidUsers = allUsers.filter(u => u.paymentType === 'postpaid');
-  const totalBalance = prepaidUsers.reduce((s, u) => s + Number(u.balance), 0);
+  const totalBalance = allUsers.filter(u => u.role !== 'admin').reduce((s, u) => s + Number(u.balance), 0);
   const todayTotalProfit = Object.values(todayProfitMap).reduce((s, v) => s + v.profit, 0);
   const rows = allUsers.filter(u => u.role !== 'admin')
     .map(u => ({ ...u, today: todayProfitMap[u.id] ?? { games: 0, totalBet: 0, profit: 0 } }))
@@ -364,7 +364,7 @@ export const AdminBalancePage: React.FC = () => {
         {[
           { label: 'Prepaid Users', value: String(prepaidUsers.length), color: 'from-violet-500 to-violet-600' },
           { label: 'Postpaid Users', value: String(postpaidUsers.length), color: 'from-orange-500 to-orange-600' },
-          { label: 'Total Prepaid Balance', value: fmtBirr(totalBalance), color: 'from-blue-500 to-blue-600' },
+          { label: 'Total Balance', value: fmtBirr(totalBalance), color: 'from-blue-500 to-blue-600' },
           { label: "Today's Total Profit", value: fmtBirr(todayTotalProfit), color: 'from-emerald-500 to-emerald-600' },
         ].map(({ label, value, color }) => (
           <div key={label} className={`bg-gradient-to-br ${color} rounded-2xl p-3 sm:p-4`}>
@@ -396,14 +396,14 @@ export const AdminBalancePage: React.FC = () => {
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${u.paymentType === 'prepaid' ? 'bg-violet-100 text-violet-700' : 'bg-orange-100 text-orange-700'}`}>{u.paymentType}</span>
                   </div>
                   <div className="flex items-center gap-3 text-xs flex-wrap">
-                    {u.paymentType === 'prepaid' && <span className="text-emerald-600 font-semibold">{fmtBirr(Number(u.balance))}</span>}
+                    <span className="text-emerald-600 font-semibold">{fmtBirr(Number(u.balance))}</span>
                     {u.today.games > 0 && <span className="text-indigo-600 font-medium">{u.today.games} games</span>}
                     {u.today.totalBet > 0 && <span className="text-blue-600 font-medium">{fmtBirr(u.today.totalBet)}</span>}
                     {u.today.profit > 0 && <span className="font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">{fmtBirr(u.today.profit)}</span>}
                   </div>
                   <div className="flex items-center gap-1.5">
                     <button onClick={() => setSelectedUser(u)} className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 border border-blue-100 font-medium">Report</button>
-                    {u.paymentType === 'prepaid' && <button onClick={() => { setTopUpUser(u); setAmount(''); setSuccessMsg(''); }} className="text-xs px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 font-medium">Top Up</button>}
+                    <button onClick={() => { setTopUpUser(u); setAmount(''); setSuccessMsg(''); }} className="text-xs px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 font-medium">Top Up</button>
                   </div>
                 </div>
               ))}
@@ -428,14 +428,14 @@ export const AdminBalancePage: React.FC = () => {
                         </button>
                       </td>
                       <td className="px-5 py-3.5"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${u.paymentType === 'prepaid' ? 'bg-violet-100 text-violet-700' : 'bg-orange-100 text-orange-700'}`}>{u.paymentType}</span></td>
-                      <td className="px-5 py-3.5 font-semibold text-emerald-600 text-xs">{u.paymentType === 'prepaid' ? fmtBirr(Number(u.balance)) : '—'}</td>
+                      <td className="px-5 py-3.5 font-semibold text-emerald-600 text-xs">{fmtBirr(Number(u.balance))}</td>
                       <td className="px-5 py-3.5 text-center">{u.today.games > 0 ? <span className="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold bg-indigo-50 text-indigo-600 border border-indigo-100">{u.today.games}</span> : <span className="text-gray-300 text-xs">—</span>}</td>
                       <td className="px-5 py-3.5 text-xs font-medium text-blue-600">{u.today.totalBet > 0 ? fmtBirr(u.today.totalBet) : <span className="text-gray-300">—</span>}</td>
                       <td className="px-5 py-3.5">{u.today.profit > 0 ? <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">{fmtBirr(u.today.profit)}</span> : <span className="text-gray-300 text-xs">—</span>}</td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-1.5">
                           <button onClick={() => setSelectedUser(u)} className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-100 transition-colors font-medium">Report</button>
-                          {u.paymentType === 'prepaid' && <button onClick={() => { setTopUpUser(u); setAmount(''); setSuccessMsg(''); }} className="text-xs px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-100 transition-colors font-medium">Top Up</button>}
+                          <button onClick={() => { setTopUpUser(u); setAmount(''); setSuccessMsg(''); }} className="text-xs px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-100 transition-colors font-medium">Top Up</button>mount(''); setSuccessMsg(''); }} className="text-xs px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-100 transition-colors font-medium">Top Up</button>}
                         </div>
                       </td>
                     </tr>
@@ -460,7 +460,7 @@ export const AdminBalancePage: React.FC = () => {
               <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-400 to-violet-600 flex items-center justify-center text-white text-sm font-bold shrink-0">{topUpUser.username[0].toUpperCase()}</div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold text-gray-800 truncate">{topUpUser.username}</div>
-                <div className="text-xs text-gray-400">Current: {fmtBirr(Number(topUpUser.balance))}</div>
+                <div className="text-xs text-gray-400">Current: {fmtBirr(Number(topUpUser.balance))} · {topUpUser.paymentType}</div>
               </div>
             </div>
             <input type="number" min="1" step="1" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (Birr)"
