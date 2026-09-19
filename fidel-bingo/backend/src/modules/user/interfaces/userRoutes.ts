@@ -182,7 +182,6 @@ router.patch('/:id/balance', authorize('admin', 'agent'), async (req: AuthReques
   if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
   if (user.role === 'admin') throw new AppError(403, 'FORBIDDEN', 'Cannot modify an admin');
   assertAgentOwns(req.user!, user);
-  if (user.paymentType !== 'prepaid') throw new AppError(400, 'NOT_PREPAID', 'Balance top-up is only for prepaid users');
 
   const amount = parseFloat(req.body.amount);
   if (isNaN(amount) || amount <= 0) throw new AppError(400, 'INVALID_AMOUNT', 'Amount must be a positive number');
@@ -223,7 +222,6 @@ router.patch('/:id/balance/deduct', authorize('admin', 'agent'), async (req: Aut
   if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
   if (user.role === 'admin') throw new AppError(403, 'FORBIDDEN', 'Cannot modify an admin');
   assertAgentOwns(req.user!, user);
-  if (user.paymentType !== 'prepaid') throw new AppError(400, 'NOT_PREPAID', 'Balance deduction is only for prepaid users');
 
   const amount = parseFloat(req.body.amount);
   if (isNaN(amount) || amount <= 0) throw new AppError(400, 'INVALID_AMOUNT', 'Amount must be a positive number');
