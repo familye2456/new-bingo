@@ -119,7 +119,7 @@ export const GamePage: React.FC = () => {
       if (isReplayingRef.current) return; // ignore during replay
       addCalledNumber(number);
       setDisplayedNumbers(prev => [...prev, number]);
-      playNumberSoundQueued(number, voiceRef.current, volumeRef.current, soundCallModeRef.current);
+      playNumberSoundQueued(number, voiceRef.current, volumeRef.current, soundCallModeRef.current ?? 'single');
     });
 
     socket.on('game_finished', () => {

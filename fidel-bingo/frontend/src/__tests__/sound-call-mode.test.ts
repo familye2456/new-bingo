@@ -55,11 +55,17 @@ let audioInstances: MockAudioInstance[] = [];
 
 function setupAudioMock() {
   audioInstances = [];
+  // Make caches unavailable so playCachedSound takes the direct Audio path (no cache fetch)
+  vi.stubGlobal('caches', undefined);
   class MockAudio {
     src: string; volume = 1;
     onended: (() => void) | null = null;
     onerror: (() => void) | null = null;
-    play = vi.fn().mockResolvedValue(undefined);
+    play = vi.fn().mockImplementation(() => {
+      // Trigger onended asynchronously so playCachedSound's promise resolves
+      Promise.resolve().then(() => { this.onended?.(); });
+      return Promise.resolve();
+    });
     constructor(src: string) { this.src = src; audioInstances.push(this as unknown as MockAudioInstance); }
   }
   vi.stubGlobal('Audio', MockAudio);
@@ -80,16 +86,19 @@ describe('Sound Call Mode — Unit Tests', () => {
     spy.mockRestore();
   });
 
-  it('5.2 — double mode: enqueues exactly two tasks with identical path', () => {
-    // Verify same task reference is enqueued twice (design: `enqueue(task); if double enqueue(task)`)
+  it('5.2 — double mode: enqueues exactly two tasks with identical path', async () => {
+    setupAudioMock();
     const captured: Array<() => Promise<void>> = [];
     const spy = vi.spyOn(audioQueue, 'enqueue').mockImplementation((task) => { captured.push(task); });
     playNumberSoundQueued(7, 'boy sound', 0.8, 'double');
     expect(spy).toHaveBeenCalledTimes(2);
-    // Both enqueue calls receive the same function reference — same path and volume guaranteed
-    expect(captured[0]).toBe(captured[1]);
+    // Execute both tasks and verify they produce Audio with the same src
+    await captured[0]();
+    await captured[1]();
+    expect(audioInstances).toHaveLength(2);
+    expect(audioInstances[0].src).toBe(audioInstances[1].src);
     spy.mockRestore();
-  });
+  }, 15000);
 
   it('5.3 — store default: soundCallMode is "single" when localStorage is empty', () => {
     localStorage.removeItem('game-settings');
@@ -171,24 +180,27 @@ describe('Sound Call Mode — Property-Based Tests', () => {
    * Property 3: Double mode uses identical tasks for both enqueues
    * Feature: sound-call-mode, Property 3: Double mode uses identical tasks for both enqueues
    */
-  it('5.7 — PBT P3: both tasks in double mode reference the same function (same path & volume)', () => {
-    fc.assert(
-      fc.property(
+  it('5.7 — PBT P3: both tasks in double mode produce Audio with same src', async () => {
+    setupAudioMock();
+    await fc.assert(
+      fc.asyncProperty(
         fc.integer({ min: 1, max: 75 }),
         fc.constantFrom(...ALL_VOICES),
         fc.float({ min: 0, max: 1 }),
-        (number, voice, volume) => {
+        async (number, voice, volume) => {
           const captured: Array<() => Promise<void>> = [];
           const spy = vi.spyOn(audioQueue, 'enqueue').mockImplementation((task) => { captured.push(task); });
+          audioInstances = [];
           playNumberSoundQueued(number, voice, volume, 'double');
+          await captured[0]();
+          await captured[1]();
           spy.mockRestore();
-          // Same reference means identical path and volume — no need to execute (avoids IndexedDB)
-          return captured.length === 2 && captured[0] === captured[1];
+          return audioInstances.length === 2 && audioInstances[0].src === audioInstances[1].src;
         }
       ),
       { numRuns: 25 }
     );
-  });
+  }, 30000);
 
   /**
    * Property 5: Store persistence round-trip
