@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { offlineGameApi } from '../../services/offlineApi';
 import { useAuthStore } from '../../store/authStore';
 import { useGameSettings } from '../../store/gameSettingsStore';
-import { dbGet, playCachedSound } from '../../services/db';
+import { dbGet, playCachedSound, playNumberSoundQueued } from '../../services/db';
 
 let _userInteracted = false;
 if (typeof window !== 'undefined') {
@@ -13,14 +13,20 @@ if (typeof window !== 'undefined') {
   window.addEventListener('keydown', mark, { once: true });
 }
 
-// Always reads latest voice from store — never stale
+// Always reads latest voice/mode from store — never stale
 function playSound(name: string) {
   if (!_userInteracted) return;
-  const category = useGameSettings.getState().voice;
-  const ext = category === 'boy sound' ? '.wav' : '.mp3';
+  const { voice, volume, soundCallMode } = useGameSettings.getState();
+  // If name is a plain number string, route through the queue so double-sound works
+  const num = parseInt(name, 10);
+  if (!isNaN(num) && String(num) === name) {
+    playNumberSoundQueued(num, voice, volume, soundCallMode);
+    return;
+  }
+  const ext = voice === 'boy sound' ? '.wav' : '.mp3';
   const file = name.includes('.') ? name : `${name}${ext}`;
   const bypassCache = useAuthStore.getState().user?.paymentType === 'postpaid';
-  playCachedSound(`/sounds/${encodeURIComponent(category)}/${file}`, 1, bypassCache).catch(() => {});
+  playCachedSound(`/sounds/${encodeURIComponent(voice)}/${file}`, volume, bypassCache).catch(() => {});
 }
 
 // Play a root-level sound (not category-specific), works offline via cache
