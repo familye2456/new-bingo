@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { userApi } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
-import { useGameSettings, VoiceCategory, ALL_VOICE_CATEGORIES } from '../../store/gameSettingsStore';
+import { useGameSettings, VoiceCategory, ALL_VOICE_CATEGORIES, SoundCallMode } from '../../store/gameSettingsStore';
 import { getVoiceCacheStatus, downloadVoiceSounds, getVoiceExt } from '../../services/db';
 
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
@@ -34,7 +34,7 @@ const Card: React.FC<{ title: string; subtitle?: string; icon: React.ReactNode; 
 
 export const Settings: React.FC = () => {
   const { user, fetchMe } = useAuthStore();
-  const { voice, autoCallInterval, setVoice, setAutoCallInterval } = useGameSettings();
+  const { voice, autoCallInterval, soundCallMode, setVoice, setAutoCallInterval, setSoundCallMode } = useGameSettings();
   const [form, setForm] = useState({ firstName: user?.firstName ?? '', lastName: user?.lastName ?? '' });
   const [saved, setSaved] = useState(false);
   const [dlProgress, setDlProgress] = useState<{ cached: number; total: number; downloading: boolean }>({
@@ -227,6 +227,20 @@ export const Settings: React.FC = () => {
                       ? { background: 'rgba(251,191,36,0.15)', border: '1.5px solid rgba(251,191,36,0.5)', color: '#fbbf24' }
                       : { background: '#0e1a35', border: '1px solid rgba(255,255,255,0.07)', color: '#6b7280' }}>
                     {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs font-medium mb-2.5" style={{ color: '#6b7280' }}>Sound Call Mode</div>
+              <div className="grid grid-cols-2 gap-2">
+                {(['single', 'double'] as SoundCallMode[]).map((mode) => (
+                  <button key={mode} onClick={() => setSoundCallMode(mode)}
+                    className="py-3 rounded-xl text-sm font-medium transition-all"
+                    style={soundCallMode === mode
+                      ? { background: 'rgba(251,191,36,0.15)', border: '1.5px solid rgba(251,191,36,0.5)', color: '#fbbf24' }
+                      : { background: '#0e1a35', border: '1px solid rgba(255,255,255,0.07)', color: '#6b7280' }}>
+                    {mode === 'single' ? '🔔 Single Sound' : '🔔🔔 Double Sound'}
                   </button>
                 ))}
               </div>

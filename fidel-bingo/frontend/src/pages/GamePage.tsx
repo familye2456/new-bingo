@@ -36,7 +36,7 @@ export const GamePage: React.FC = () => {
   const { user } = useAuthStore();
   const { currentGame, lastCalledNumber, setGame, addCalledNumber, updateCartela } = useGameStore();
 
-  const { voice, autoCallInterval, volume } = useGameSettings();
+  const { voice, autoCallInterval, volume, soundCallMode } = useGameSettings();
   const [autoCall, setAutoCall] = useState(false);
   const autoCallRef = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -44,6 +44,8 @@ export const GamePage: React.FC = () => {
   useEffect(() => { voiceRef.current = voice; }, [voice]);
   const volumeRef = useRef(volume);
   useEffect(() => { volumeRef.current = volume; }, [volume]);
+  const soundCallModeRef = useRef(soundCallMode);
+  useEffect(() => { soundCallModeRef.current = soundCallMode; }, [soundCallMode]);
   const gameStatusRef = useRef(currentGame?.status);
   useEffect(() => { gameStatusRef.current = currentGame?.status; }, [currentGame?.status]);
 
@@ -117,7 +119,7 @@ export const GamePage: React.FC = () => {
       if (isReplayingRef.current) return; // ignore during replay
       addCalledNumber(number);
       setDisplayedNumbers(prev => [...prev, number]);
-      playNumberSoundQueued(number, voiceRef.current, volumeRef.current);
+      playNumberSoundQueued(number, voiceRef.current, volumeRef.current, soundCallModeRef.current);
     });
 
     socket.on('game_finished', () => {
