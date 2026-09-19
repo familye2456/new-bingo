@@ -101,7 +101,7 @@ export async function refreshCache() {
     {
       const userId = meData?.id;
       await dbClear('cartelas');
-      await dbPutMany('cartelas', toList(cartelasRes.data).map((c: any) => ({ ...c, userId })));
+      await dbPutMany('cartelas', toList(cartelasRes.data).map((c: any) => ({ ...c, userId })).filter((c: any) => c.id));
     }
 
     const serverGames = toList(gamesRes.data);

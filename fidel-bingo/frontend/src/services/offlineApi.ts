@@ -126,7 +126,7 @@ export const offlineUserApi = {
           const list = toList(result.data);
           // Tag each cartela with the current userId before storing
           const tagged = list.map((c: any) => ({ ...c, userId: currentUserId }));
-          Promise.all(tagged.map((c: any) => dbPut('cartelas', c)));
+          Promise.all(tagged.filter((c: any) => c.id).map((c: any) => dbPut('cartelas', c)));
         }
       });
       return cached;
@@ -138,7 +138,7 @@ export const offlineUserApi = {
       if (result.ok) {
         const list = toList(result.data);
         const tagged = list.map((c: any) => ({ ...c, userId: currentUserId }));
-        await Promise.all(tagged.map((c: any) => dbPut('cartelas', c)));
+        await Promise.all(tagged.filter((c: any) => c.id).map((c: any) => dbPut('cartelas', c)));
         return tagged;
       }
     }
@@ -203,7 +203,7 @@ export const offlineGameApi = {
             };
           })
         : [];
-      await Promise.all(ownGames.map((g: any) => dbPut('games', g)));
+      await Promise.all(ownGames.filter((g: any) => g.id).map((g: any) => dbPut('games', g)));
       // Also include offline games with matching status
       const offlineGames = allLocal.filter((g: any) =>
         String(g.id).startsWith('offline-') &&
@@ -244,7 +244,7 @@ export const offlineGameApi = {
         });
 
         // Only cache games belonging to the current user
-        const ownGames = mergedList.filter((g: any) => g.creatorId === currentUser?.id);
+        const ownGames = mergedList.filter((g: any) => g.creatorId === currentUser?.id && g.id);
         for (const g of ownGames) await dbPut('games', g);
 
         // Merge still-pending offline games, deduplicate by id
