@@ -181,7 +181,6 @@ export function unlockAudioContext(): void {
 async function playAudioBuffer(url: string, volume: number): Promise<void> {
   const ctx = getAudioContext();
   if (!ctx) {
-    // Fallback: HTMLAudioElement
     await playHtmlAudio(url, volume);
     return;
   }
@@ -190,8 +189,10 @@ async function playAudioBuffer(url: string, volume: number): Promise<void> {
   }
   try {
     const response = await fetch(url);
+    if (!response.ok) throw new Error(`fetch failed: ${response.status}`);
     const arrayBuffer = await response.arrayBuffer();
     const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+    console.log('[audio] decoded', url, 'duration:', audioBuffer.duration.toFixed(2) + 's');
     await new Promise<void>((resolve) => {
       const src = ctx.createBufferSource();
       const gainNode = ctx.createGain();
@@ -199,13 +200,12 @@ async function playAudioBuffer(url: string, volume: number): Promise<void> {
       src.buffer = audioBuffer;
       src.connect(gainNode);
       gainNode.connect(ctx.destination);
-      src.onended = () => resolve();
+      src.onended = () => { console.log('[audio] ended', url); resolve(); };
       src.start(0);
-      // Safety timeout
       setTimeout(resolve, 15000);
     });
-  } catch {
-    // Fallback to HTMLAudioElement if WebAudio fails
+  } catch (err) {
+    console.warn('[audio] WebAudio failed, falling back to HTMLAudio:', url, err);
     await playHtmlAudio(url, volume);
   }
 }
@@ -215,11 +215,17 @@ async function playHtmlAudio(url: string, volume: number): Promise<void> {
   audio.volume = volume;
   await new Promise<void>((resolve) => {
     let resolved = false;
-    const done = () => { if (!resolved) { resolved = true; resolve(); } };
-    audio.onended = done;
-    audio.onerror = done;
-    setTimeout(done, 15000);
-    audio.play().catch(() => done());
+    const done = (reason: string) => {
+      if (!resolved) {
+        resolved = true;
+        console.log('[audio] htmlAudio', reason, url);
+        resolve();
+      }
+    };
+    audio.onended = () => done('ended');
+    audio.onerror = () => done('error');
+    setTimeout(() => done('timeout'), 15000);
+    audio.play().catch((e) => { console.warn('[audio] play() rejected:', e?.message, url); done('play-rejected'); });
   });
 }
 
