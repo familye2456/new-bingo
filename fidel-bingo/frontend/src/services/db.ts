@@ -317,6 +317,7 @@ export function playNumberSoundQueued(
 ): void {
   const ext = getVoiceExt(voice);
   const path = `/sounds/${encodeURIComponent(voice)}/${number}${ext}`;
+  console.log('[audioQueue] enqueue', path, 'mode:', mode, 'queueLen:', audioQueue['queue'].length);
   // Each enqueue call creates its own closure so both plays are independent
   audioQueue.enqueue(() => playCachedSound(path, volume).then(() => {}));
   if (mode === 'double') {

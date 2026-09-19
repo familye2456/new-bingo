@@ -15,8 +15,12 @@ if (typeof window !== 'undefined') {
 
 // Always reads latest voice/mode from store — never stale
 function playSound(name: string) {
-  if (!_userInteracted) return;
+  if (!_userInteracted) {
+    console.log('[playSound] blocked — no user interaction yet');
+    return;
+  }
   const { voice, volume, soundCallMode } = useGameSettings.getState();
+  console.log('[playSound] name:', name, 'voice:', voice, 'mode:', soundCallMode);
   // If name is a plain number string, route through the queue so double-sound works
   const num = parseInt(name, 10);
   if (!isNaN(num) && String(num) === name) {
