@@ -331,13 +331,8 @@ export class AudioQueue {
   private queue: Array<() => Promise<void>> = [];
   playing = false;
   private drainResolvers: Array<() => void> = [];
-  private static MAX_QUEUE = 3; // never let more than 3 sounds back up
 
   enqueue(task: () => Promise<void>): void {
-    // If queue is too long, drop the oldest pending task (not the current playing one)
-    if (this.queue.length >= AudioQueue.MAX_QUEUE) {
-      this.queue.shift();
-    }
     this.queue.push(task);
     if (!this.playing) this.drain();
   }

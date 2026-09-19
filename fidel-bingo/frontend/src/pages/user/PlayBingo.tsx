@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { offlineGameApi } from '../../services/offlineApi';
 import { useAuthStore } from '../../store/authStore';
 import { useGameSettings } from '../../store/gameSettingsStore';
-import { dbGet, playCachedSound, playNumberSoundQueued, unlockAudioContext } from '../../services/db';
+import { dbGet, playCachedSound, playNumberSoundQueued, unlockAudioContext, audioQueue } from '../../services/db';
 
 let _userInteracted = false;
 if (typeof window !== 'undefined') {
@@ -252,6 +252,8 @@ export const PlayBingo: React.FC = () => {
       }
       elapsed += 0.5;
       if (elapsed < speedRef.current) return;
+      // Also wait for audio queue to finish — don't call next number while sound is playing
+      if (audioQueue.playing) return;
       elapsed = 0;
       if (sessionCalledRef.current.length >= 75) { stopAuto(); return; }
       if (isMutationPendingRef.current) {
