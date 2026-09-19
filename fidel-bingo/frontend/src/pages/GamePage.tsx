@@ -5,7 +5,7 @@ import { getSocket } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 import { useAuthStore } from '../store/authStore';
 import { useGameSettings, ALL_VOICE_CATEGORIES } from '../store/gameSettingsStore';
-import { playCachedSound, playNumberSoundQueued, downloadVoiceSounds, audioQueue } from '../services/db';
+import { playCachedSound, playNumberSoundQueued, downloadVoiceSounds, audioQueue, unlockAudioContext } from '../services/db';
 import { CartelaCard } from '../components/CartelaCard';
 import { NumberBoard } from '../components/NumberBoard';
 
@@ -14,7 +14,7 @@ if (typeof window !== 'undefined') {
   const unlock = () => {
     if (_unlocked) return;
     _unlocked = true;
-    try { new AudioContext().resume(); } catch { /* ignore */ }
+    unlockAudioContext();
   };
   document.addEventListener('pointerdown', unlock, { capture: true, once: true });
   document.addEventListener('touchstart', unlock, { capture: true, once: true });

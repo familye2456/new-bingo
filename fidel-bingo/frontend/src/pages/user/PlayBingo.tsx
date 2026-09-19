@@ -4,13 +4,17 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { offlineGameApi } from '../../services/offlineApi';
 import { useAuthStore } from '../../store/authStore';
 import { useGameSettings } from '../../store/gameSettingsStore';
-import { dbGet, playCachedSound, playNumberSoundQueued } from '../../services/db';
+import { dbGet, playCachedSound, playNumberSoundQueued, unlockAudioContext } from '../../services/db';
 
 let _userInteracted = false;
 if (typeof window !== 'undefined') {
-  const mark = () => { _userInteracted = true; };
+  const mark = () => {
+    _userInteracted = true;
+    unlockAudioContext(); // keep AudioContext alive for setInterval-triggered sounds
+  };
   window.addEventListener('click', mark, { once: true });
   window.addEventListener('keydown', mark, { once: true });
+  window.addEventListener('pointerdown', mark, { once: true });
 }
 
 // Always reads latest voice/mode from store — never stale

@@ -144,11 +144,90 @@ async function getVoiceCache(): Promise<Cache | null> {
   }
 }
 
+// ── AudioContext unlock ──────────────────────────────────────────────────────
+// Browsers suspend AudioContext (and block Audio.play()) without a user gesture.
+// We create and resume the context once on first user interaction so it stays
+// unlocked for the entire session — even when sounds are triggered by setInterval.
+let _audioCtx: AudioContext | null = null;
+
+function getAudioContext(): AudioContext | null {
+  if (typeof AudioContext === 'undefined') return null;
+  if (!_audioCtx) _audioCtx = new AudioContext();
+  return _audioCtx;
+}
+
+/** Call this once from a click/keydown handler to unlock audio for the session. */
+export function unlockAudioContext(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
+  // Play a silent buffer to fully unlock on iOS
+  try {
+    const buf = ctx.createBuffer(1, 1, 22050);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start(0);
+  } catch { /* ignore */ }
+}
+
+/**
+ * Play a sound via AudioContext (decoded from blob) so the session AudioContext
+ * is used instead of a new HTMLAudioElement — avoids autoplay policy blocks
+ * mid-session.
+ */
+async function playAudioBuffer(url: string, volume: number): Promise<void> {
+  const ctx = getAudioContext();
+  if (!ctx) {
+    // Fallback: HTMLAudioElement
+    await playHtmlAudio(url, volume);
+    return;
+  }
+  if (ctx.state === 'suspended') {
+    await ctx.resume().catch(() => {});
+  }
+  try {
+    const response = await fetch(url);
+    const arrayBuffer = await response.arrayBuffer();
+    const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+    await new Promise<void>((resolve) => {
+      const src = ctx.createBufferSource();
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = volume;
+      src.buffer = audioBuffer;
+      src.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      src.onended = () => resolve();
+      src.start(0);
+      // Safety timeout
+      setTimeout(resolve, 15000);
+    });
+  } catch {
+    // Fallback to HTMLAudioElement if WebAudio fails
+    await playHtmlAudio(url, volume);
+  }
+}
+
+async function playHtmlAudio(url: string, volume: number): Promise<void> {
+  const audio = new Audio(url);
+  audio.volume = volume;
+  await new Promise<void>((resolve) => {
+    let resolved = false;
+    const done = () => { if (!resolved) { resolved = true; resolve(); } };
+    audio.onended = done;
+    audio.onerror = done;
+    setTimeout(done, 15000);
+    audio.play().catch(() => done());
+  });
+}
+
 /**
  * Play a sound file. Checks Cache Storage first to avoid network requests
  * during gameplay, then falls back to network if not cached.
  */
-export async function playCachedSound(path: string, volume = 1, bypassCache = false): Promise<HTMLAudioElement | undefined> {
+export async function playCachedSound(path: string, volume = 1, bypassCache = false): Promise<void> {
   const cache = bypassCache ? null : await getVoiceCache();
   if (cache) {
     try {
@@ -156,37 +235,18 @@ export async function playCachedSound(path: string, volume = 1, bypassCache = fa
       if (response) {
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audio.volume = volume;
-        await new Promise<void>((resolve) => {
-          let resolved = false;
-          const done = () => { if (!resolved) { resolved = true; URL.revokeObjectURL(url); resolve(); } };
-          audio.onended = done;
-          audio.onerror = done;
-          const timer = setTimeout(done, 15000); // safety: never block queue >15s
-          audio.play().catch(() => { clearTimeout(timer); done(); });
-        });
-        return audio;
+        try {
+          await playAudioBuffer(url, volume);
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+        return;
       }
     } catch { /* fall through to network */ }
   }
 
-  // Network/public fallback: serve directly from /public/sounds/
-  try {
-    const audio = new Audio(path);
-    audio.volume = volume;
-    await new Promise<void>((resolve) => {
-      let resolved = false;
-      const done = () => { if (!resolved) { resolved = true; resolve(); } };
-      audio.onended = done;
-      audio.onerror = done;
-      const timer = setTimeout(done, 15000); // safety: never block queue >15s
-      audio.play().catch(() => { clearTimeout(timer); done(); });
-    });
-    return audio;
-  } catch {
-    return undefined;
-  }
+  // Network/public fallback
+  await playAudioBuffer(path, volume);
 }
 
 // ── Voice sound pre-caching ──────────────────────────────────────────────────
