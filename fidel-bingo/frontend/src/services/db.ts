@@ -46,6 +46,11 @@ export async function dbGet<T>(store: string, key: IDBValidKey): Promise<T | und
 }
 
 export async function dbPut(store: string, value: unknown, key?: IDBValidKey) {
+  // Guard: inline-key stores require a valid id on the value — skip silently if missing
+  if (INLINE_KEY_PATH_STORES.has(store) && (value as any)?.id == null) {
+    console.warn('[dbPut] Skipping write to', store, '— missing id');
+    return;
+  }
   try { 
     console.log('[dbPut] Putting to store:', store, 'key:', key);
     
@@ -68,12 +73,16 @@ export async function dbPut(store: string, value: unknown, key?: IDBValidKey) {
 }
 
 export async function dbPutMany(store: string, values: unknown[]) {
-  if (values.length === 0) return;
+  // Filter out records with missing id for inline-key stores
+  const filtered = INLINE_KEY_PATH_STORES.has(store)
+    ? values.filter((v: any) => v?.id != null)
+    : values;
+  if (filtered.length === 0) return;
 
   try {
     const db = await getDB();
     const tx = db.transaction(store, 'readwrite');
-    for (const value of values) tx.store.put(value);
+    for (const value of filtered) tx.store.put(value);
     await tx.done;
   } catch (err) {
     console.error('[dbPutMany] Error:', err);
