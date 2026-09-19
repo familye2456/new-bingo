@@ -211,19 +211,25 @@ export const PlayBingo: React.FC = () => {
   const sessionCalledRef = useRef(sessionCalledNumbers);
   useEffect(() => { sessionCalledRef.current = sessionCalledNumbers; }, [sessionCalledNumbers]);
   
-  // Track mutation timeout to prevent hanging
+  // Track mutation pending state via ref so interval closure never captures stale value
   const mutationStartTimeRef = useRef<number>(0);
+  const isMutationPendingRef = useRef(false);
+  useEffect(() => { isMutationPendingRef.current = callMutation.isPending; }, [callMutation.isPending]);
+
   const checkMutationTimeout = useCallback(() => {
-    if (callMutation.isPending && mutationStartTimeRef.current > 0) {
+    if (isMutationPendingRef.current && mutationStartTimeRef.current > 0) {
       const elapsed = Date.now() - mutationStartTimeRef.current;
       if (elapsed > 10000) { // 10 second timeout
         console.error('[callMutation] Timeout detected! Resetting mutation state.');
-        // Force reset by stopping and restarting
         stopAuto(true);
         alert('Number calling stuck. Please try again.');
       }
     }
-  }, [callMutation.isPending, stopAuto]);
+  }, [stopAuto]);
+
+  // Stable mutate ref so startAuto doesn't need callMutation in its deps
+  const mutateRef = useRef(callMutation.mutate);
+  useEffect(() => { mutateRef.current = callMutation.mutate; }, [callMutation.mutate]);
 
   const startAuto = useCallback(() => {
     if (!game || game.status !== 'active') return;
@@ -240,14 +246,14 @@ export const PlayBingo: React.FC = () => {
       if (elapsed < speedRef.current) return;
       elapsed = 0;
       if (sessionCalledRef.current.length >= 75) { stopAuto(); return; }
-      if (callMutation.isPending) {
+      if (isMutationPendingRef.current) {
         checkMutationTimeout(); // Check if mutation is stuck
         return; // don't fire if previous call still in flight
       }
       mutationStartTimeRef.current = Date.now();
-      callMutation.mutate();
+      mutateRef.current();
     }, 500);
-  }, [game, callMutation, stopAuto, checkMutationTimeout]);
+  }, [game, stopAuto, checkMutationTimeout]);
 
   useEffect(() => () => stopAuto(true), [stopAuto]);
   useEffect(() => { if (sessionCalledNumbers.length >= 75 && autoOn) stopAuto(true); }, [sessionCalledNumbers.length, autoOn, stopAuto]);
