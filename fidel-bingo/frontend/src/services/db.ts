@@ -159,9 +159,12 @@ export async function playCachedSound(path: string, volume = 1, bypassCache = fa
         const audio = new Audio(url);
         audio.volume = volume;
         await new Promise<void>((resolve) => {
-          audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
-          audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
-          audio.play().catch(() => resolve());
+          let resolved = false;
+          const done = () => { if (!resolved) { resolved = true; URL.revokeObjectURL(url); resolve(); } };
+          audio.onended = done;
+          audio.onerror = done;
+          const timer = setTimeout(done, 15000); // safety: never block queue >15s
+          audio.play().catch(() => { clearTimeout(timer); done(); });
         });
         return audio;
       }
@@ -173,9 +176,12 @@ export async function playCachedSound(path: string, volume = 1, bypassCache = fa
     const audio = new Audio(path);
     audio.volume = volume;
     await new Promise<void>((resolve) => {
-      audio.onended = () => resolve();
-      audio.onerror = () => resolve();
-      audio.play().catch(() => resolve());
+      let resolved = false;
+      const done = () => { if (!resolved) { resolved = true; resolve(); } };
+      audio.onended = done;
+      audio.onerror = done;
+      const timer = setTimeout(done, 15000); // safety: never block queue >15s
+      audio.play().catch(() => { clearTimeout(timer); done(); });
     });
     return audio;
   } catch {
@@ -265,8 +271,13 @@ export class AudioQueue {
   private queue: Array<() => Promise<void>> = [];
   playing = false;
   private drainResolvers: Array<() => void> = [];
+  private static MAX_QUEUE = 3; // never let more than 3 sounds back up
 
   enqueue(task: () => Promise<void>): void {
+    // If queue is too long, drop the oldest pending task (not the current playing one)
+    if (this.queue.length >= AudioQueue.MAX_QUEUE) {
+      this.queue.shift();
+    }
     this.queue.push(task);
     if (!this.playing) this.drain();
   }
