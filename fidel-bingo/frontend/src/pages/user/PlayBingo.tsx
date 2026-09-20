@@ -303,7 +303,6 @@ export const PlayBingo: React.FC = () => {
   };
   const calledNumbers = sessionCalledNumbers;
   const lastNumber = calledNumbers.length > 0 ? calledNumbers[calledNumbers.length - 1] : null;
-  const prevNumber = calledNumbers.length > 1 ? calledNumbers[calledNumbers.length - 2] : null;
   const isCreator = game?.creatorId === user?.id;
 
   const prevCalledRef = useRef<number[]>([]);
@@ -314,295 +313,193 @@ export const PlayBingo: React.FC = () => {
   }, [sessionCalledNumbers]);
 
   return (
-    <div className="fixed inset-0 flex flex-col max-lg:overflow-y-auto" style={{ background: '#0a1220' }}>
-
-      {/* ── Top bar ── */}
-      <div className="flex flex-wrap lg:flex-nowrap items-center pl-12 pr-3 py-2 shrink-0 min-w-0"
-        style={{ background: 'rgba(0,0,0,0.5)', borderBottom: '1px solid rgba(255,255,255,0.1)', gap: 'clamp(6px,2vw,16px)' }}>
-
-        {/* Game title */}
-        <h1 className="text-yellow-400 font-extrabold tracking-widest shrink-0"
-          style={{ fontSize: 'clamp(13px,3.5vw,20px)' }}>
-          {game ? `#${game.gameNumber ?? game.id.slice(0, 6).toUpperCase()}` : 'BINGO'}
-        </h1>
-
-        {/* Cartela count */}
-        {game && (
-          <span className="text-xs font-bold px-2 py-1 rounded-lg shrink-0"
-            style={{ background: 'rgba(255,255,255,0.07)', color: '#94a3b8', border: '1px solid rgba(255,255,255,0.1)', fontSize: 'clamp(10px,2.5vw,13px)' }}>
-            {game.cartelaCount} 🎴
-          </span>
-        )}
-
-        {/* Spacer */}
-        <div className="flex-1" />
-
-        {/* Called count */}
-        {game && (
-          <span className="font-bold shrink-0"
-            style={{ fontSize: 'clamp(11px,2.8vw,14px)', color: '#60a5fa' }}>
-            {calledNumbers.length}<span style={{ color: '#374151' }}>/75</span>
-          </span>
-        )}
-
-        {/* Prize pool */}
-        {game && (
-          <div className="flex items-center gap-1 rounded-xl shrink-0"
-            style={{ background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.3)', padding: 'clamp(4px,1vw,8px) clamp(6px,1.5vw,12px)' }}>
-            <span className="text-yellow-400 font-extrabold tabular-nums"
-              style={{ fontSize: 'clamp(11px,2.8vw,15px)', textShadow: '0 0 8px rgba(251,191,36,0.5)' }}>
-              {Number(game.prizePool).toFixed(2)}
-            </span>
-            <span className="text-yellow-400/60 font-bold" style={{ fontSize: 'clamp(9px,2vw,11px)' }}>BIRR</span>
-          </div>
-        )}
-
-        {/* Other games — desktop only */}
-        {game && activeGames.filter((g) => g.id !== game?.id).slice(0, 2).map((g) => (
-          <button key={g.id} onClick={() => setSelectedGameId(g.id)}
-            className="text-xs bg-white/10 hover:bg-white/20 text-gray-300 px-2.5 py-1 rounded-lg hidden sm:block shrink-0">
-            #{g.gameNumber ?? g.id.slice(0, 6)}
-          </button>
-        ))}
-      </div>
+    <div className="fixed inset-0 flex flex-col" style={{ background: '#0a1220' }}>
 
       {/* ── Winner banner ── */}
       {winnerInfo && (
-        <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2"
+        <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-1.5"
           style={{ background: 'rgba(34,197,94,0.15)', borderBottom: '1px solid rgba(34,197,94,0.3)' }}>
           <span className="text-green-400 font-bold text-sm min-w-0 break-words">
             🎉 Card #{winnerInfo.cardNumber} — BINGO! ({winnerInfo.pattern}) · {Number(winnerInfo.amount).toFixed(2)} BIRR
           </span>
-          <button
-            onClick={() => setWinnerInfo(null)}
+          <button onClick={() => setWinnerInfo(null)}
             className="text-green-400 hover:text-white text-lg leading-none px-1"
-            aria-label="Close winner banner">
-            ×
-          </button>
+            aria-label="Close winner banner">×</button>
         </div>
       )}
-      <div className="flex-1 flex flex-col min-h-0">
-        {/* ── Called number balls — mobile/tablet only ── */}
-        {game && (
-          <div className="lg:hidden shrink-0 flex items-center justify-center gap-3 pt-2 pb-1 px-3">
-            {/* Previous number — smaller */}
-            {prevNumber != null ? (
-              <div className="flex flex-col items-center gap-0.5 opacity-60">
-                <span className="text-[9px] font-bold uppercase tracking-widest"
-                  style={{ color: getBingoColor(prevNumber) }}>
-                  {getBingoLetter(prevNumber)}
-                </span>
-                <div className="flex items-center justify-center font-black rounded-full"
-                  style={{
-                    width: 'clamp(44px,8vw,60px)',
-                    height: 'clamp(44px,8vw,60px)',
-                    fontSize: 'clamp(16px,3vw,22px)',
-                    background: `radial-gradient(circle at 35% 35%, ${getBingoColor(prevNumber)}33, ${getBingoColor(prevNumber)}11)`,
-                    border: `2px solid ${getBingoColor(prevNumber)}55`,
-                    color: getBingoColor(prevNumber),
-                  }}>
-                  {prevNumber}
-                </div>
-                <span className="text-[9px] text-gray-600 font-medium">prev</span>
-              </div>
-            ) : (
-              <div style={{ width: 'clamp(44px,8vw,60px)' }} />
-            )}
 
-            {/* Current number — large and glowing */}
-            <div className="flex flex-col items-center gap-1">
-              {lastNumber != null ? (
-                <>
-                  <span className="text-xs font-black uppercase tracking-widest"
-                    style={{ color: getBingoColor(lastNumber) }}>
-                    {getBingoLetter(lastNumber)}
-                  </span>
-                  <div className="flex items-center justify-center font-black rounded-full relative"
-                    style={{
-                      width: 'clamp(64px,12vw,88px)',
-                      height: 'clamp(64px,12vw,88px)',
-                      fontSize: 'clamp(24px,5vw,36px)',
-                      background: `radial-gradient(circle at 35% 35%, ${getBingoColor(lastNumber)}55, ${getBingoColor(lastNumber)}22)`,
-                      border: `3px solid ${getBingoColor(lastNumber)}`,
-                      color: '#fff',
-                      boxShadow: `0 0 24px ${getBingoColor(lastNumber)}66, 0 0 8px ${getBingoColor(lastNumber)}44`,
-                      animation: 'ballPop 0.35s cubic-bezier(0.34,1.56,0.64,1)',
-                    }}>
-                    {lastNumber}
-                  </div>
-                  <span className="text-[10px] font-bold text-yellow-400/70 uppercase tracking-widest">current</span>
-                </>
-              ) : (
-                <div className="flex items-center justify-center font-black rounded-full"
-                  style={{
-                    width: 'clamp(64px,12vw,88px)',
-                    height: 'clamp(64px,12vw,88px)',
-                    background: 'rgba(255,255,255,0.04)',
-                    border: '3px solid rgba(255,255,255,0.1)',
-                    color: 'rgba(255,255,255,0.15)',
-                    fontSize: 'clamp(18px,3vw,24px)',
-                  }}>
-                  ?
-                </div>
-              )}
-            </div>
-
-            {/* Count badge */}
-            <div className="flex flex-col items-center gap-0.5">
-              <span className="text-[9px] text-gray-600 uppercase tracking-wider">called</span>
-              <div className="flex items-center justify-center font-black rounded-full"
-                style={{
-                  width: 'clamp(44px,8vw,60px)',
-                  height: 'clamp(44px,8vw,60px)',
-                  fontSize: 'clamp(14px,2.5vw,18px)',
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '2px solid rgba(255,255,255,0.12)',
-                  color: '#e2e8f0',
-                }}>
-                {calledNumbers.length}
-              </div>
-              <span className="text-[9px] text-gray-600 font-medium">/ 75</span>
-            </div>
-          </div>
-        )}
-
-        {/* ── Desktop layout: no sidebar — full board ── */}
-        <div className="flex-1 min-h-0 flex max-lg:flex-none max-lg:h-[170px] sm:max-lg:h-[220px] max-lg:overflow-x-auto scrollbar-none">
-          {/* Number board — fills full available area */}
-          <div className="flex-1 min-h-0 flex flex-col px-2 sm:px-3 lg:px-4 pb-1 max-lg:min-w-0">
-            {game ? (
-              <NumberBoard calledNumbers={calledNumbers} lastNumber={lastNumber} />
-            ) : null}
-          </div>
-        </div>
+      {/* ── Number board — fills all available space ── */}
+      <div className="flex-1 min-h-0 px-2 sm:px-3 pt-2 pb-1">
+        {game
+          ? <NumberBoard calledNumbers={calledNumbers} lastNumber={lastNumber} />
+          : <div className="flex items-center justify-center h-full text-gray-600 text-sm">Loading…</div>
+        }
       </div>
 
-      {/* ── Controls ── */}
+      {/* ── Bottom control bar ── */}
       {game && (
-        <div className="shrink-0 px-3 py-2 lg:py-2"
-          style={{ background: 'rgba(0,0,0,0.35)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="shrink-0 flex items-center gap-2 px-2 py-1 overflow-x-auto"
+          style={{ background: 'rgba(0,0,0,0.6)', borderTop: '1px solid rgba(255,255,255,0.08)', minHeight: 100, maxHeight: 100 }}>
 
-          {/* Desktop: single row — Mobile: stacked */}
-          <div className="flex flex-col lg:flex-row items-center justify-center gap-2 lg:gap-3 max-lg:pb-3">
-
-            {/* Buttons */}
-            <div className="grid grid-cols-2 sm:flex items-center justify-center gap-2 w-full lg:w-auto">
-              <CtrlBtn
-                label={autoOn ? '⏸ Auto' : '▶ Auto'}
-                active={autoOn}
-                onClick={toggleAuto}
-                disabled={!isCreator || game.status !== 'active' || calledNumbers.length >= 75}
-              />
-              <CtrlBtn
-                label="Next ›"
-                onClick={() => callMutation.mutate()}
-                disabled={!isCreator || game.status !== 'active' || callMutation.isPending || calledNumbers.length >= 75}
-              />
-              <CtrlBtn
-                label={finishMutation.isPending ? '...' : 'Finish'}
-                onClick={() => { stopAuto(true); finishMutation.mutate(); }}
-                disabled={!isCreator || game.status !== 'active' || finishMutation.isPending}
-                danger
-              />
-              <CtrlBtn
-                label="🔀"
-                purple
-                onClick={() => {
-                  playCachedSound('/sounds/shuffle-audio-TfqyAnvz.mp3').catch(() => {});
-                  setTimeout(() => window.location.reload(), 5000);
-                }}
-              />
+          {/* ── Left: cartela count + derash payout (inline, compact) ── */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center justify-center rounded-full font-black shrink-0"
+              style={{
+                width: 32, height: 32,
+                background: 'linear-gradient(135deg,#22c55e,#15803d)',
+                color: '#fff', fontSize: 13,
+                boxShadow: '0 0 10px rgba(34,197,94,0.5)',
+              }}>
+              {game.cartelaCount}
             </div>
-
-            {/* Speed */}
-            <div className="flex items-center justify-center gap-2 rounded-xl px-3 py-1.5 w-full lg:w-auto"
-              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <span className="text-[10px] text-gray-500 uppercase tracking-wider">Speed</span>
-              <input type="range" min={1} max={10} step={1} value={speed}
-                onChange={(e) => setSpeed(Number(e.target.value))}
-                className="w-24 accent-yellow-400" />
-              <span className="text-yellow-400 font-bold text-sm w-6 text-center">{speed}s</span>
-            </div>
-
-            {/* Card check + last 3 called numbers */}
-            <div className="flex items-center justify-center gap-3 w-full lg:w-auto">
-              <div className="flex flex-col items-center gap-1.5 w-full lg:w-auto">
-                <div className="flex items-center justify-center gap-1.5 w-full lg:w-auto">
-                  <input
-                    type="text" placeholder="Card #" value={checkId}
-                    onChange={(e) => { setCheckId(e.target.value); setCheckResult(null); }}
-                    onKeyDown={(e) => e.key === 'Enter' && handleCheck()}
-                    className="rounded-xl px-3 py-1.5 text-sm w-28 sm:w-24 focus:outline-none focus:border-yellow-400/50"
-                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
-                  />
-                  <button
-                    onClick={handleCheck}
-                    disabled={checkLoading || !checkId}
-                    className="font-bold px-4 py-1.5 rounded-xl text-sm disabled:opacity-40"
-                    style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
-                    {checkLoading ? '...' : 'Check'}
-                  </button>
-
-                  {/* Last 3 called numbers — desktop only, right of Check button */}
-                  {calledNumbers.length > 0 && (
-                    <div className="hidden lg:flex items-center gap-1.5 ml-1">
-                      {[...calledNumbers].slice(-3).map((num, idx, arr) => {
-                        const isLatest = idx === arr.length - 1;
-                        const dist = arr.length - 1 - idx;
-                        return (
-                          <div key={num}
-                            className="flex items-center justify-center font-black rounded-full"
-                            style={{
-                              width: isLatest ? 42 : 30,
-                              height: isLatest ? 42 : 30,
-                              fontSize: isLatest ? 16 : 12,
-                              opacity: dist === 0 ? 1 : dist === 1 ? 0.55 : 0.3,
-                              background: `radial-gradient(circle at 35% 35%, ${getBingoColor(num)}55, ${getBingoColor(num)}22)`,
-                              border: `${isLatest ? 2 : 1}px solid ${getBingoColor(num)}`,
-                              color: '#fff',
-                              boxShadow: isLatest ? `0 0 10px ${getBingoColor(num)}66` : 'none',
-                              animation: isLatest ? 'ballPop 0.35s cubic-bezier(0.34,1.56,0.64,1)' : undefined,
-                              flexShrink: 0,
-                            }}>
-                            {num}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-                {checkResult && (
-                  <>
-                    <div className="text-xs font-semibold px-3 py-1 rounded-lg"
-                      style={
-                        !checkResult.registered
-                          ? { background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }
-                          : checkResult.isWinner
-                          ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }
-                          : { background: 'rgba(255,255,255,0.06)', color: '#9ca3af', border: '1px solid rgba(255,255,255,0.1)' }
-                      }>
-                      {!checkResult.registered
-                        ? `Card #${checkId} not registered`
-                        : checkResult.isWinner
-                        ? `🎉 BINGO! (${checkResult.winPattern})`
-                        : `Card #${checkId} — no win yet`}
-                    </div>
-                    {checkResult.registered && checkResult.numbers && (
-                      <CartelaPreviewModal
-                        cardNumber={Number(checkId)}
-                        numbers={checkResult.numbers}
-                        patternMask={checkResult.patternMask ?? []}
-                        winPattern={checkResult.isWinner ? (checkResult.winPattern ?? null) : null}
-                        lastCalledNumber={lastNumber}
-                        onClose={() => setCheckResult(null)}
-                      />
-                    )}
-                  </>
-                )}
+            <div className="flex flex-col items-start leading-none shrink-0">
+              <span className="text-gray-500 font-semibold" style={{ fontSize: 9 }}>ደራሽ</span>
+              <div className="flex items-baseline gap-1">
+                <span className="font-black tabular-nums text-white" style={{ fontSize: 'clamp(18px,2.8vw,32px)', lineHeight: 1 }}>
+                  {Number(game.prizePool).toFixed(0)}
+                </span>
+                <span className="text-yellow-400 font-extrabold" style={{ fontSize: 11 }}>ብር</span>
               </div>
             </div>
           </div>
+
+          {/* Divider */}
+          <div className="shrink-0 w-px self-stretch" style={{ background: 'rgba(255,255,255,0.1)' }} />
+
+          {/* Buttons */}
+          <div className="flex items-center gap-1 shrink-0">
+            <CtrlBtn
+              label={autoOn ? '⏸' : '▶ Play'}
+              active={autoOn}
+              onClick={toggleAuto}
+              disabled={!isCreator || game.status !== 'active' || calledNumbers.length >= 75}
+            />
+            <CtrlBtn
+              label="Next"
+              onClick={() => callMutation.mutate()}
+              disabled={!isCreator || game.status !== 'active' || callMutation.isPending || calledNumbers.length >= 75}
+            />
+            <CtrlBtn
+              label={finishMutation.isPending ? '…' : 'End'}
+              onClick={() => { stopAuto(true); finishMutation.mutate(); }}
+              disabled={!isCreator || game.status !== 'active' || finishMutation.isPending}
+              danger
+            />
+            <CtrlBtn
+              label="🔀"
+              purple
+              onClick={() => {
+                playCachedSound('/sounds/shuffle-audio-TfqyAnvz.mp3').catch(() => {});
+                setTimeout(() => window.location.reload(), 5000);
+              }}
+            />
+          </div>
+
+          {/* Divider */}
+          <div className="shrink-0 w-px self-stretch" style={{ background: 'rgba(255,255,255,0.1)' }} />
+
+          {/* Speed + called count */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-gray-500 text-[10px] uppercase tracking-wider">Speed</span>
+            <input type="range" min={1} max={10} step={1} value={speed}
+              onChange={(e) => setSpeed(Number(e.target.value))}
+              className="w-20 accent-yellow-400" />
+            <span className="text-yellow-400 font-bold text-[11px] w-5">{speed}s</span>
+            <span className="text-blue-400 font-bold text-[11px] tabular-nums ml-1">
+              {calledNumbers.length}<span className="text-gray-600">/75</span>
+            </span>
+          </div>
+
+          {/* Divider */}
+          <div className="shrink-0 w-px self-stretch" style={{ background: 'rgba(255,255,255,0.1)' }} />
+
+          {/* Card check */}
+          <div className="flex flex-col gap-0.5 shrink-0">
+            <div className="flex items-center gap-1">
+              <input
+                type="text" placeholder="Card #" value={checkId}
+                onChange={(e) => { setCheckId(e.target.value); setCheckResult(null); }}
+                onKeyDown={(e) => e.key === 'Enter' && handleCheck()}
+                className="rounded-lg px-2 py-1 text-xs w-16 focus:outline-none"
+                style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff' }}
+              />
+              <button
+                onClick={handleCheck}
+                disabled={checkLoading || !checkId}
+                className="font-bold px-3 py-1 rounded-lg text-xs disabled:opacity-40"
+                style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
+                {checkLoading ? '…' : 'Check'}
+              </button>
+            </div>
+            {checkResult && (
+              <div className="text-[10px] font-semibold px-2 py-0.5 rounded whitespace-nowrap"
+                style={
+                  !checkResult.registered
+                    ? { background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }
+                    : checkResult.isWinner
+                    ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }
+                    : { background: 'rgba(255,255,255,0.06)', color: '#9ca3af', border: '1px solid rgba(255,255,255,0.1)' }
+                }>
+                {!checkResult.registered
+                  ? `#${checkId} not registered`
+                  : checkResult.isWinner
+                  ? `🎉 BINGO! (${checkResult.winPattern})`
+                  : `#${checkId} — no win yet`}
+              </div>
+            )}
+          </div>
+
+          {/* Spacer */}
+          <div className="flex-1 min-w-[8px]" />
+
+          {/* ── Large current number display (bottom-right) ── */}
+          <div className="shrink-0 flex flex-col items-center justify-center rounded-2xl"
+            style={{
+              width: 'clamp(80px,12vw,120px)',
+              height: 'clamp(58px,8vw,88px)',
+              background: 'linear-gradient(135deg,#4c3fa0,#7c3aed)',
+              border: '2px solid rgba(147,51,234,0.6)',
+              boxShadow: '0 0 24px rgba(124,58,237,0.5)',
+            }}>
+            {lastNumber != null ? (
+              <>
+                <span className="font-extrabold leading-none"
+                  style={{
+                    fontSize: 'clamp(8px,1.4vw,11px)',
+                    color: getBingoColor(lastNumber),
+                    letterSpacing: '0.2em',
+                    textTransform: 'uppercase',
+                  }}>
+                  {getBingoLetter(lastNumber)}
+                </span>
+                <span className="font-black tabular-nums leading-none"
+                  style={{
+                    fontSize: 'clamp(26px,4.5vw,50px)',
+                    color: '#fff',
+                    textShadow: `0 0 20px ${getBingoColor(lastNumber)}`,
+                    animation: 'ballPop 0.35s cubic-bezier(0.34,1.56,0.64,1)',
+                  }}>
+                  {String(lastNumber).padStart(3, '0')}
+                </span>
+              </>
+            ) : (
+              <span className="font-black text-white/20" style={{ fontSize: 'clamp(26px,4.5vw,50px)' }}>---</span>
+            )}
+          </div>
+
         </div>
+      )}
+
+      {/* ── Cartela preview modal — rendered at root level so it escapes all overflow ── */}
+      {checkResult?.registered && checkResult.numbers && (
+        <CartelaPreviewModal
+          cardNumber={Number(checkId)}
+          numbers={checkResult.numbers}
+          patternMask={checkResult.patternMask ?? []}
+          winPattern={checkResult.isWinner ? (checkResult.winPattern ?? null) : null}
+          lastCalledNumber={lastNumber}
+          onClose={() => setCheckResult(null)}
+        />
       )}
 
     </div>
@@ -634,14 +531,6 @@ if (typeof document !== 'undefined' && !document.getElementById('ball-pop-style'
   document.head.appendChild(s);
 }
 
-// ── InfoChip ──────────────────────────────────────────────────────────────────
-const InfoChip: React.FC<{ label: string; highlight?: boolean }> = ({ label }) => (
-  <span className="text-xs sm:text-sm font-bold px-3 py-1.5 rounded-xl whitespace-nowrap shrink-0"
-    style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.4)' }}>
-    {label}
-  </span>
-);
-
 // ── CtrlBtn ───────────────────────────────────────────────────────────────────
 const CtrlBtn: React.FC<{
   label: string; onClick: () => void;
@@ -668,50 +557,59 @@ const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null
   calledNumbers, lastNumber,
 }) => (
   <div className="w-full h-full flex flex-col" role="region" aria-label="Bingo number board"
-    style={{ gap: 'clamp(2px, 0.6vh, 6px)' }}>
+    style={{ gap: 'clamp(2px, 0.5vh, 6px)' }}>
     {ROWS_DEF.map(({ letter, start }) => (
-      <div key={letter} className="flex items-stretch flex-1 min-h-0"
-        style={{ gap: 'clamp(2px, 0.6vw, 6px)' }}>
+      <div key={letter} className="flex-1 min-h-0 flex"
+        style={{ gap: 'clamp(2px, 0.5vw, 6px)' }}>
 
-        {/* Letter */}
-        <div className="flex items-center justify-center font-extrabold text-gray-900 rounded-lg shrink-0"
+        {/* BINGO letter label */}
+        <div className="flex items-center justify-center font-black shrink-0"
           style={{
-            width: 'clamp(32px, 5vw, 80px)',
-            fontSize: 'clamp(12px, 2vw, 32px)',
-            background: 'linear-gradient(180deg,#fbbf24,#f59e0b)',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+            width: 'clamp(28px, 4vw, 60px)',
+            borderRadius: 'clamp(4px, 0.6vw, 10px)',
+            background: 'linear-gradient(180deg, #f5a623, #e08c00)',
+            color: '#111',
+            fontSize: 'clamp(14px, 2.2vw, 32px)',
+            boxShadow: '0 2px 8px rgba(245,166,35,0.4)',
           }}>
           {letter}
         </div>
 
-        {/* 15 cells */}
-        <div className="flex-1 grid h-full"
-          style={{ gridTemplateColumns: 'repeat(15,1fr)', gap: 'clamp(2px, 0.5vw, 5px)' }}>
-          {Array.from({ length: 15 }, (_, i) => {
-            const num = start + i;
-            const called = calledNumbers.includes(num);
-            const isLast = num === lastNumber;
-            return (
-              <div key={num}
-                aria-label={`${num}${called ? ' called' : ''}`}
-                className="flex items-center justify-center font-extrabold rounded-md w-full h-full transition-all duration-300"
-                style={{
-                  fontSize: 'clamp(10px, 1.8vw, 26px)',
-                  background: isLast
-                    ? 'linear-gradient(180deg,#fbbf24,#f59e0b)'
-                    : called
-                    ? 'linear-gradient(180deg,#22c55e,#16a34a)'
-                    : 'linear-gradient(180deg,#334155,#1e293b)',
-                  color: isLast ? '#111' : called ? '#fff' : '#e2e8f0',
-                  boxShadow: isLast ? '0 0 10px rgba(251,191,36,0.7)' : called ? '0 0 6px rgba(34,197,94,0.5)' : 'none',
-                  border: isLast ? '2px solid #fbbf24' : called ? '1px solid rgba(34,197,94,0.7)' : '1px solid rgba(255,255,255,0.12)',
-                  transform: isLast ? 'scale(1.05)' : 'scale(1)',
-                }}>
-                {num}
-              </div>
-            );
-          })}
-        </div>
+        {/* 15 number cells */}
+        {Array.from({ length: 15 }, (_, i) => {
+          const num = start + i;
+          const called = calledNumbers.includes(num);
+          const isLast = num === lastNumber;
+          return (
+            <div key={num}
+              aria-label={`${num}${called ? ' called' : ''}`}
+              className="flex-1 flex items-center justify-center font-bold transition-all duration-200"
+              style={{
+                fontSize: 'clamp(15px, 2.4vw, 38px)',
+                borderRadius: 'clamp(4px, 0.6vw, 10px)',
+                background: isLast
+                  ? 'linear-gradient(180deg, #f5a623, #e08c00)'
+                  : called
+                  ? 'linear-gradient(180deg, #22c55e, #15803d)'
+                  : 'linear-gradient(180deg, #1e2d45, #162033)',
+                color: '#fff',
+                boxShadow: isLast
+                  ? '0 2px 12px rgba(245,166,35,0.5)'
+                  : called
+                  ? '0 2px 8px rgba(34,197,94,0.35)'
+                  : 'inset 0 1px 0 rgba(255,255,255,0.05)',
+                border: isLast
+                  ? '2px solid #f5a623'
+                  : called
+                  ? '2px solid #22c55e'
+                  : '1px solid rgba(255,255,255,0.08)',
+                fontWeight: 800,
+                textShadow: isLast || called ? 'none' : '0 1px 3px rgba(0,0,0,0.8)',
+              }}>
+              {num}
+            </div>
+          );
+        })}
       </div>
     ))}
   </div>
