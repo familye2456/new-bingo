@@ -178,6 +178,31 @@ export function unlockAudioContext(): void {
  * is used instead of a new HTMLAudioElement — avoids autoplay policy blocks
  * mid-session.
  */
+async function playDecodedAudio(arrayBuffer: ArrayBuffer, volume: number): Promise<void> {
+  const ctx = getAudioContext();
+  if (!ctx) return; // no WebAudio, skip
+  if (ctx.state === 'suspended') {
+    await ctx.resume().catch(() => {});
+  }
+  try {
+    const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+    console.log('[audio] decoded duration:', audioBuffer.duration.toFixed(2) + 's');
+    await new Promise<void>((resolve) => {
+      const src = ctx.createBufferSource();
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = volume;
+      src.buffer = audioBuffer;
+      src.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      src.onended = () => { console.log('[audio] ended'); resolve(); };
+      src.start(0);
+      setTimeout(resolve, 15000);
+    });
+  } catch (err) {
+    console.warn('[audio] decodeAudioData failed:', err);
+  }
+}
+
 async function playAudioBuffer(url: string, volume: number): Promise<void> {
   const ctx = getAudioContext();
   if (!ctx) {
@@ -191,19 +216,7 @@ async function playAudioBuffer(url: string, volume: number): Promise<void> {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`fetch failed: ${response.status}`);
     const arrayBuffer = await response.arrayBuffer();
-    const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-    console.log('[audio] decoded', url, 'duration:', audioBuffer.duration.toFixed(2) + 's');
-    await new Promise<void>((resolve) => {
-      const src = ctx.createBufferSource();
-      const gainNode = ctx.createGain();
-      gainNode.gain.value = volume;
-      src.buffer = audioBuffer;
-      src.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      src.onended = () => { console.log('[audio] ended', url); resolve(); };
-      src.start(0);
-      setTimeout(resolve, 15000);
-    });
+    await playDecodedAudio(arrayBuffer, volume);
   } catch (err) {
     console.warn('[audio] WebAudio failed, falling back to HTMLAudio:', url, err);
     await playHtmlAudio(url, volume);
@@ -239,12 +252,16 @@ export async function playCachedSound(path: string, volume = 1, bypassCache = fa
     try {
       const response = await cache.match(path);
       if (response) {
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        try {
-          await playAudioBuffer(url, volume);
-        } finally {
-          URL.revokeObjectURL(url);
+        // Decode directly from the cached ArrayBuffer — no network request needed
+        const arrayBuffer = await response.arrayBuffer();
+        const ctx = getAudioContext();
+        if (ctx) {
+          await playDecodedAudio(arrayBuffer, volume);
+        } else {
+          // No WebAudio — fall back to blob URL + HTMLAudioElement
+          const blob = new Blob([arrayBuffer]);
+          const url = URL.createObjectURL(blob);
+          try { await playHtmlAudio(url, volume); } finally { URL.revokeObjectURL(url); }
         }
         return;
       }
@@ -382,6 +399,8 @@ export function playNumberSoundQueued(
   // Each enqueue call creates its own closure so both plays are independent
   audioQueue.enqueue(() => playCachedSound(path, volume).then(() => {}));
   if (mode === 'double') {
+    // 1 second gap between the two plays
+    audioQueue.enqueue(() => new Promise<void>(resolve => setTimeout(resolve, 1000)));
     audioQueue.enqueue(() => playCachedSound(path, volume).then(() => {}));
   }
 }
