@@ -305,6 +305,34 @@ export const PlayBingo: React.FC = () => {
   const lastNumber = calledNumbers.length > 0 ? calledNumbers[calledNumbers.length - 1] : null;
   const isCreator = game?.creatorId === user?.id;
 
+  // Keyboard shortcuts for game controls
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle shortcuts when not typing in an input
+      if (e.target instanceof HTMLInputElement) return;
+      
+      if (!game || !isCreator || game.status !== 'active') return;
+      
+      if (e.key === ' ' || e.key === 'Spacebar') { // Space to toggle auto
+        e.preventDefault();
+        toggleAuto();
+      }
+      if (e.key === 'ArrowRight' || e.key === 'n') { // Right arrow or 'n' for next
+        e.preventDefault();
+        if (!callMutation.isPending && calledNumbers.length < 75) {
+          callMutation.mutate();
+        }
+      }
+      if (e.key === 'Escape') { // Escape to stop auto
+        e.preventDefault();
+        stopAuto();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [game, isCreator, toggleAuto, stopAuto, callMutation, calledNumbers.length]);
+
   const prevCalledRef = useRef<number[]>([]);
   useEffect(() => {
     const newNums = sessionCalledNumbers.filter((n) => !prevCalledRef.current.includes(n));
@@ -328,165 +356,527 @@ export const PlayBingo: React.FC = () => {
         </div>
       )}
 
-      {/* ── Number board — fills all available space ── */}
-      <div className="flex-1 min-h-0 px-2 sm:px-3 pt-2 pb-1">
+      {/* ── Number board — compact on mobile, fills rest on desktop ── */}
+      <style>{`
+        @media (max-width: 767px) {
+          .number-board-wrap { flex: 0 0 auto !important; height: 42vh !important; }
+        }
+        @media (min-width: 768px) and (max-width: 1023px) {
+          .number-board-wrap { flex: 0 0 auto !important; height: 48vh !important; }
+        }
+        @media (min-width: 1024px) {
+          .number-board-wrap { flex: 1 1 0% !important; min-height: 0 !important; }
+        }
+      `}</style>
+      <div className="number-board-wrap min-h-0 px-3 sm:px-3 pt-1.5 sm:pt-2 pb-1">
         {game
           ? <NumberBoard calledNumbers={calledNumbers} lastNumber={lastNumber} />
-          : <div className="flex items-center justify-center h-full text-gray-600 text-sm">Loading…</div>
+          : <div className="flex items-center justify-center h-full text-gray-900 text-sm">Loading…</div>
         }
       </div>
 
       {/* ── Bottom control bar ── */}
       {game && (
-        <div className="shrink-0 flex items-center gap-2 px-2 py-1 overflow-x-auto"
-          style={{ background: 'rgba(0,0,0,0.6)', borderTop: '1px solid rgba(255,255,255,0.08)', minHeight: 100, maxHeight: 100 }}>
+        <div className="shrink-0 lg:shrink-0 mt-auto lg:mt-0"
+          style={{ background: 'rgba(0,0,0,0.7)', borderTop: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(8px)' }}>
 
-          {/* ── Left: cartela count + derash payout (inline, compact) ── */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <div className="flex items-center justify-center rounded-full font-black shrink-0"
-              style={{
-                width: 32, height: 32,
-                background: 'linear-gradient(135deg,#22c55e,#15803d)',
-                color: '#fff', fontSize: 13,
-                boxShadow: '0 0 10px rgba(34,197,94,0.5)',
-              }}>
-              {game.cartelaCount}
-            </div>
-            <div className="flex flex-col items-start leading-none shrink-0">
-              <span className="text-gray-500 font-semibold" style={{ fontSize: 9 }}>ደራሽ</span>
-              <div className="flex items-baseline gap-1">
-                <span className="font-black tabular-nums text-white" style={{ fontSize: 'clamp(18px,2.8vw,32px)', lineHeight: 1 }}>
+          {/* ── Mobile layout (< md) — fixed bottom bar ── */}
+          <div className="md:hidden flex flex-col" style={{ minHeight: 180, paddingBottom: 'env(safe-area-inset-bottom)' }}>
+
+            {/* ── Row 1: prize ball | buttons | last-number ball ── */}
+            <div className="flex items-center gap-2 px-3 pt-3 pb-2">
+
+              {/* Prize ball */}
+              <div className="flex flex-col items-center justify-center shrink-0 relative"
+                style={{
+                  width: 68, height: 68, borderRadius: '50%',
+                  background: 'radial-gradient(circle at 35% 30%, #3b82f6, #1e3a8a)',
+                  boxShadow: '0 0 18px rgba(59,130,246,0.7), inset 0 2px 0 rgba(255,255,255,0.3)',
+                  border: '2px solid rgba(147,197,253,0.9)',
+                }}>
+                <span className="text-blue-100 font-bold leading-none" style={{ fontSize: 8 }}>ደራሽ</span>
+                <span className="font-black tabular-nums text-white leading-none" style={{ fontSize: 20 }}>
                   {Number(game.prizePool).toFixed(0)}
                 </span>
-                <span className="text-yellow-400 font-extrabold" style={{ fontSize: 11 }}>ብር</span>
+                <span className="text-yellow-300 font-extrabold leading-none" style={{ fontSize: 9 }}>ብር</span>
+                <div className="absolute -top-1 -right-1 flex items-center justify-center rounded-full font-black"
+                  style={{ width: 18, height: 18, background: '#fbbf24', color: '#111', fontSize: 9, border: '2px solid #111' }}>
+                  {game.cartelaCount}
+                </div>
+                <div className="absolute inset-0 pointer-events-none"
+                  style={{
+                    background: `conic-gradient(from 0deg, rgba(34,197,94,0.8) 0deg, rgba(34,197,94,0.8) ${(calledNumbers.length / 75) * 360}deg, transparent ${(calledNumbers.length / 75) * 360}deg)`,
+                    borderRadius: '50%',
+                    mask: 'radial-gradient(circle, transparent 85%, white 87%, white 100%)',
+                  }} />
+              </div>
+
+              {/* Centre: buttons + progress */}
+              <div className="flex-1 flex flex-col items-center gap-2">
+                {/* Buttons row */}
+                <div className="flex items-center gap-2 w-full justify-center">
+                  <CtrlBtn
+                    size="lg"
+                    label={autoOn ? '⏸ Pause' : '▶ Auto'}
+                    active={autoOn}
+                    onClick={toggleAuto}
+                    disabled={!isCreator || game.status !== 'active' || calledNumbers.length >= 75}
+                  />
+                  <CtrlBtn
+                    size="lg"
+                    label="➤ Next"
+                    onClick={() => callMutation.mutate()}
+                    disabled={!isCreator || game.status !== 'active' || callMutation.isPending || calledNumbers.length >= 75}
+                  />
+                  <CtrlBtn
+                    size="lg"
+                    label={finishMutation.isPending ? '⌛' : '⏹ End'}
+                    onClick={() => { stopAuto(true); finishMutation.mutate(); }}
+                    disabled={!isCreator || game.status !== 'active' || finishMutation.isPending}
+                    danger
+                  />
+                  <CtrlBtn
+                    size="lg"
+                    label="🔄"
+                    purple
+                    onClick={() => {
+                      playCachedSound('/sounds/shuffle-audio-TfqyAnvz.mp3').catch(() => {});
+                      setTimeout(() => window.location.reload(), 5000);
+                    }}
+                    title="Refresh"
+                  />
+                </div>
+                {/* Progress bar */}
+                <div className="w-full flex items-center gap-2">
+                  <div className="flex-1 rounded-full overflow-hidden" style={{ height: 5, background: 'rgba(255,255,255,0.08)' }}>
+                    <div className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${(calledNumbers.length / 75) * 100}%`, background: 'linear-gradient(90deg,#22c55e,#4ade80)' }} />
+                  </div>
+                  <span className="text-blue-400 font-bold tabular-nums shrink-0" style={{ fontSize: 10 }}>
+                    {calledNumbers.length}<span className="text-gray-600">/75</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Last number ball */}
+              <div className="shrink-0 flex items-center justify-center" style={{ width: 68, height: 68 }}>
+                <div key={lastNumber} className="flex flex-col items-center justify-center relative overflow-hidden ball-container"
+                  style={{
+                    width: '100%', height: '100%', borderRadius: '50%',
+                    background: lastNumber != null
+                      ? `radial-gradient(circle at 35% 30%, ${getBingoColor(lastNumber)}ee, ${getBingoColor(lastNumber)}66)`
+                      : 'radial-gradient(circle at 35% 30%, #4c3fa0, #1e1040)',
+                    border: lastNumber != null ? `2px solid ${getBingoColor(lastNumber)}` : '2px solid rgba(147,51,234,0.6)',
+                    boxShadow: lastNumber != null
+                      ? `0 0 22px ${getBingoColor(lastNumber)}99, inset 0 2px 0 rgba(255,255,255,0.25)`
+                      : '0 0 14px rgba(124,58,237,0.4)',
+                    animation: lastNumber != null ? 'ballPop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards' : undefined,
+                  }}>
+                  {lastNumber != null ? (
+                    <>
+                      <div style={{
+                        position: 'absolute', top: 0, left: 0, width: '40%', height: '100%',
+                        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)',
+                        animation: 'ballShine 0.7s 0.3s ease-out forwards',
+                        transform: 'translateX(-100%) rotate(25deg)', pointerEvents: 'none',
+                      }} />
+                      <span className="font-extrabold leading-none relative z-10"
+                        style={{ fontSize: 8, color: '#fff', letterSpacing: '0.15em', opacity: 0.9 }}>
+                        {getBingoLetter(lastNumber)}
+                      </span>
+                      <span className="font-black tabular-nums leading-none relative z-10"
+                        style={{ fontSize: 22, color: '#fff', textShadow: '0 2px 8px rgba(0,0,0,0.6)' }}>
+                        {String(lastNumber).padStart(2, '0')}
+                      </span>
+                      <div className="absolute inset-0 rounded-full pointer-events-none"
+                        style={{
+                          background: `conic-gradient(from 0deg, ${getBingoColor(lastNumber)}40, transparent, ${getBingoColor(lastNumber)}40)`,
+                          animation: 'spin 2s linear infinite',
+                        }} />
+                    </>
+                  ) : (
+                    <span className="font-black text-white/20" style={{ fontSize: 22 }}>?</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ── Row 2: speed slider | card check ── */}
+            <div className="flex items-center gap-3 px-3 pb-3 pt-0"
+              style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              {/* Speed */}
+              <div className="flex items-center gap-1.5 flex-1">
+                <span className="text-gray-500 shrink-0" style={{ fontSize: 9 }}>SPD</span>
+                <input type="range" min={1} max={10} step={1} value={speed}
+                  onChange={(e) => setSpeed(Number(e.target.value))}
+                  className="flex-1 accent-yellow-400" style={{ height: 16 }} />
+                <span className="text-yellow-400 font-bold shrink-0 w-5 text-center" style={{ fontSize: 10 }}>{speed}s</span>
+              </div>
+              {/* Divider */}
+              <div className="shrink-0 w-px self-stretch" style={{ background: 'rgba(255,255,255,0.08)' }} />
+              {/* Card check */}
+              <div className="flex flex-col gap-1 shrink-0">
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number" inputMode="numeric" placeholder="Card #" value={checkId}
+                    onChange={(e) => { setCheckId(e.target.value); setCheckResult(null); }}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCheck()}
+                    className="rounded-lg px-2 py-1.5 text-xs w-20 focus:outline-none"
+                    style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff' }}
+                  />
+                  <button
+                    onClick={handleCheck}
+                    disabled={checkLoading || !checkId}
+                    className="font-bold px-3 py-1.5 rounded-lg text-xs disabled:opacity-40 active:scale-95"
+                    style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
+                    {checkLoading ? '…' : 'Check'}
+                  </button>
+                </div>
+                {checkResult && (
+                  <div className="text-[10px] font-semibold px-2 py-0.5 rounded"
+                    style={
+                      !checkResult.registered
+                        ? { background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }
+                        : checkResult.isWinner
+                        ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }
+                        : { background: 'rgba(255,255,255,0.06)', color: '#9ca3af', border: '1px solid rgba(255,255,255,0.1)' }
+                    }>
+                    {!checkResult.registered
+                      ? `#${checkId} not found`
+                      : checkResult.isWinner
+                      ? `🎉 BINGO! (${checkResult.winPattern})`
+                      : `#${checkId} — no win`}
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Divider */}
-          <div className="shrink-0 w-px self-stretch" style={{ background: 'rgba(255,255,255,0.1)' }} />
+          {/* ── Tablet layout (md–lg: 768px–1023px) ── */}
+          <div className="hidden md:flex lg:hidden items-center gap-2 px-3 py-2"
+            style={{ minHeight: 120, paddingBottom: 'env(safe-area-inset-bottom)' }}>
 
-          {/* Buttons */}
-          <div className="flex items-center gap-1 shrink-0">
-            <CtrlBtn
-              label={autoOn ? '⏸' : '▶ Play'}
-              active={autoOn}
-              onClick={toggleAuto}
-              disabled={!isCreator || game.status !== 'active' || calledNumbers.length >= 75}
-            />
-            <CtrlBtn
-              label="Next"
-              onClick={() => callMutation.mutate()}
-              disabled={!isCreator || game.status !== 'active' || callMutation.isPending || calledNumbers.length >= 75}
-            />
-            <CtrlBtn
-              label={finishMutation.isPending ? '…' : 'End'}
-              onClick={() => { stopAuto(true); finishMutation.mutate(); }}
-              disabled={!isCreator || game.status !== 'active' || finishMutation.isPending}
-              danger
-            />
-            <CtrlBtn
-              label="🔀"
-              purple
-              onClick={() => {
-                playCachedSound('/sounds/shuffle-audio-TfqyAnvz.mp3').catch(() => {});
-                setTimeout(() => window.location.reload(), 5000);
-              }}
-            />
+            {/* Prize ball */}
+            <div className="flex flex-col items-center justify-center shrink-0 relative"
+              style={{
+                width: 100, height: 100, borderRadius: '50%',
+                background: 'radial-gradient(circle at 35% 30%, #3b82f6, #1e3a8a)',
+                boxShadow: '0 0 24px rgba(59,130,246,0.8), inset 0 2px 0 rgba(255,255,255,0.3)',
+                border: '2px solid rgba(147,197,253,0.9)',
+              }}>
+              <span className="text-blue-100 font-bold leading-none" style={{ fontSize: 11 }}>ደራሽ</span>
+              <span className="font-black tabular-nums text-white leading-none" style={{ fontSize: 28 }}>
+                {Number(game.prizePool).toFixed(0)}
+              </span>
+              <span className="text-yellow-300 font-extrabold leading-none" style={{ fontSize: 12 }}>ብር</span>
+              <div className="absolute -top-1 -right-1 flex items-center justify-center rounded-full font-black"
+                style={{ width: 24, height: 24, background: '#fbbf24', color: '#111', fontSize: 12, border: '2px solid #111', boxShadow: '0 2px 6px rgba(251,191,36,0.4)' }}>
+                {game.cartelaCount}
+              </div>
+              <div className="absolute inset-0 pointer-events-none"
+                style={{
+                  background: `conic-gradient(from 0deg, rgba(34,197,94,0.8) 0deg, rgba(34,197,94,0.8) ${(calledNumbers.length / 75) * 360}deg, transparent ${(calledNumbers.length / 75) * 360}deg)`,
+                  borderRadius: '50%',
+                  mask: 'radial-gradient(circle, transparent 85%, white 87%, white 100%)',
+                }} />
+            </div>
+
+            <div className="shrink-0 w-px self-stretch" style={{ background: 'rgba(255,255,255,0.1)' }} />
+
+            {/* Centre: controls + speed + check */}
+            <div className="flex-1 flex flex-col gap-2 min-w-0">
+              {/* Buttons + speed row */}
+              <div className="flex items-center gap-2">
+                <CtrlBtn size="md" label={autoOn ? '⏸ Pause' : '▶ Auto'} active={autoOn} onClick={toggleAuto}
+                  disabled={!isCreator || game.status !== 'active' || calledNumbers.length >= 75} />
+                <CtrlBtn size="md" label="➤ Next" onClick={() => callMutation.mutate()}
+                  disabled={!isCreator || game.status !== 'active' || callMutation.isPending || calledNumbers.length >= 75} />
+                <CtrlBtn size="md" label={finishMutation.isPending ? '⌛' : '⏹ End'}
+                  onClick={() => { stopAuto(true); finishMutation.mutate(); }}
+                  disabled={!isCreator || game.status !== 'active' || finishMutation.isPending} danger />
+                <CtrlBtn size="md" label="🔄" purple onClick={() => {
+                  playCachedSound('/sounds/shuffle-audio-TfqyAnvz.mp3').catch(() => {});
+                  setTimeout(() => window.location.reload(), 5000);
+                }} title="Refresh" />
+                <div className="flex-1" />
+                {/* Speed inline */}
+                <span className="text-gray-500 text-[10px] uppercase shrink-0">Speed</span>
+                <input type="range" min={1} max={10} step={1} value={speed}
+                  onChange={(e) => setSpeed(Number(e.target.value))}
+                  className="w-24 accent-yellow-400 shrink-0" />
+                <span className="text-yellow-400 font-bold text-[11px] w-5 shrink-0">{speed}s</span>
+              </div>
+              {/* Progress + check row */}
+              <div className="flex items-center gap-3">
+                {/* Progress */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="rounded-full overflow-hidden" style={{ width: 80, height: 5, background: 'rgba(255,255,255,0.08)' }}>
+                    <div className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${(calledNumbers.length / 75) * 100}%`, background: 'linear-gradient(90deg,#22c55e,#4ade80)' }} />
+                  </div>
+                  <span className="text-blue-400 font-bold tabular-nums text-[11px]">
+                    {calledNumbers.length}<span className="text-gray-600">/75</span>
+                  </span>
+                  <span className="text-green-400 font-bold text-[11px]">
+                    {Math.round((calledNumbers.length / 75) * 100)}%
+                  </span>
+                </div>
+                <div className="shrink-0 w-px self-stretch" style={{ background: 'rgba(255,255,255,0.08)' }} />
+                {/* Card check */}
+                <div className="flex flex-col gap-0.5">
+                  <div className="flex items-center gap-1">
+                    <input type="number" inputMode="numeric" placeholder="Card #" value={checkId}
+                      onChange={(e) => { setCheckId(e.target.value); setCheckResult(null); }}
+                      onKeyDown={(e) => e.key === 'Enter' && handleCheck()}
+                      className="rounded-lg px-2 py-1 text-xs w-20 focus:outline-none"
+                      style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff' }} />
+                    <button onClick={handleCheck} disabled={checkLoading || !checkId}
+                      className="font-bold px-3 py-1 rounded-lg text-xs disabled:opacity-40"
+                      style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
+                      {checkLoading ? '…' : 'Check'}
+                    </button>
+                  </div>
+                  {checkResult && (
+                    <div className="text-[10px] font-semibold px-2 py-0.5 rounded whitespace-nowrap"
+                      style={!checkResult.registered
+                        ? { background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }
+                        : checkResult.isWinner
+                        ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }
+                        : { background: 'rgba(255,255,255,0.06)', color: '#9ca3af', border: '1px solid rgba(255,255,255,0.1)' }}>
+                      {!checkResult.registered ? `#${checkId} not registered`
+                        : checkResult.isWinner ? `🎉 BINGO! (${checkResult.winPattern})`
+                        : `#${checkId} — no win yet`}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="shrink-0 w-px self-stretch" style={{ background: 'rgba(255,255,255,0.1)' }} />
+
+            {/* Last number ball */}
+            <div className="shrink-0 flex items-center justify-center" style={{ width: 90, height: 90 }}>
+              <div key={lastNumber} className="flex flex-col items-center justify-center relative overflow-hidden ball-container"
+                style={{
+                  width: '100%', height: '100%', borderRadius: '50%',
+                  background: lastNumber != null
+                    ? `radial-gradient(circle at 35% 30%, ${getBingoColor(lastNumber)}ee, ${getBingoColor(lastNumber)}66)`
+                    : 'radial-gradient(circle at 35% 30%, #4c3fa0, #1e1040)',
+                  border: lastNumber != null ? `2px solid ${getBingoColor(lastNumber)}` : '2px solid rgba(147,51,234,0.6)',
+                  boxShadow: lastNumber != null
+                    ? `0 0 28px ${getBingoColor(lastNumber)}99, inset 0 2px 0 rgba(255,255,255,0.25)`
+                    : '0 0 18px rgba(124,58,237,0.4)',
+                  animation: lastNumber != null ? 'ballPop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards' : undefined,
+                }}>
+                {lastNumber != null ? (
+                  <>
+                    <div style={{
+                      position: 'absolute', top: 0, left: 0, width: '40%', height: '100%',
+                      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)',
+                      animation: 'ballShine 0.7s 0.3s ease-out forwards',
+                      transform: 'translateX(-100%) rotate(25deg)', pointerEvents: 'none',
+                    }} />
+                    <span className="font-extrabold leading-none relative z-10"
+                      style={{ fontSize: 10, color: '#fff', letterSpacing: '0.15em', opacity: 0.9 }}>
+                      {getBingoLetter(lastNumber)}
+                    </span>
+                    <span className="font-black tabular-nums leading-none relative z-10"
+                      style={{ fontSize: 30, color: '#fff', textShadow: '0 2px 10px rgba(0,0,0,0.6)' }}>
+                      {String(lastNumber).padStart(2, '0')}
+                    </span>
+                    <div className="absolute inset-0 rounded-full pointer-events-none"
+                      style={{
+                        background: `conic-gradient(from 0deg, ${getBingoColor(lastNumber)}40, transparent, ${getBingoColor(lastNumber)}40)`,
+                        animation: 'spin 2s linear infinite',
+                      }} />
+                  </>
+                ) : (
+                  <span className="font-black text-white/20" style={{ fontSize: 28 }}>?</span>
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* Divider */}
-          <div className="shrink-0 w-px self-stretch" style={{ background: 'rgba(255,255,255,0.1)' }} />
+          {/* ── Desktop layout (≥ lg: 1024px+) ── */}
+          <div className="hidden lg:flex items-center gap-3 px-3 py-2" style={{ minHeight: 130 }}>
 
-          {/* Speed + called count */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-gray-500 text-[10px] uppercase tracking-wider">Speed</span>
-            <input type="range" min={1} max={10} step={1} value={speed}
-              onChange={(e) => setSpeed(Number(e.target.value))}
-              className="w-20 accent-yellow-400" />
-            <span className="text-yellow-400 font-bold text-[11px] w-5">{speed}s</span>
-            <span className="text-blue-400 font-bold text-[11px] tabular-nums ml-1">
-              {calledNumbers.length}<span className="text-gray-600">/75</span>
-            </span>
-          </div>
+            {/* Derash ball */}
+            <div className="flex flex-col items-center justify-center shrink-0 relative"
+              style={{
+                width: 'clamp(110px,14vw,150px)',
+                height: 'clamp(110px,14vw,150px)',
+                borderRadius: '50%',
+                background: 'radial-gradient(circle at 35% 30%, #3b82f6, #1e3a8a)',
+                boxShadow: '0 0 36px rgba(59,130,246,0.8), inset 0 2px 0 rgba(255,255,255,0.3)',
+                border: '3px solid rgba(147,197,253,0.9)',
+                animation: game.prizePool > 1000 ? 'ballPulse 2s ease-in-out infinite' : undefined,
+              }}>
+              <span className="text-blue-100 font-bold leading-none" style={{ fontSize: 'clamp(11px,1.4vw,16px)' }}>ደራሽ</span>
+              <span className="font-black tabular-nums text-white leading-none" style={{ fontSize: 'clamp(35px,4.95vw,64px)' }}>
+                {Number(game.prizePool).toFixed(0)}
+              </span>
+              <span className="text-yellow-300 font-extrabold leading-none" style={{ fontSize: 'clamp(14px,1.8vw,22px)' }}>ብር</span>
+              <div className="absolute -top-1 -right-1 flex items-center justify-center rounded-full font-black"
+                style={{
+                  width: 'clamp(26px,3.2vw,36px)', height: 'clamp(26px,3.2vw,36px)',
+                  background: '#fbbf24', color: '#111', fontSize: 'clamp(12px,1.5vw,17px)',
+                  border: '2px solid #111',
+                  boxShadow: '0 2px 8px rgba(251,191,36,0.4)',
+                }}>
+                {game.cartelaCount}
+              </div>
+              <div className="absolute inset-0 pointer-events-none"
+                style={{
+                  background: `conic-gradient(from 0deg, rgba(34,197,94,0.8) 0deg, rgba(34,197,94,0.8) ${(calledNumbers.length / 75) * 360}deg, transparent ${(calledNumbers.length / 75) * 360}deg)`,
+                  borderRadius: '50%',
+                  mask: 'radial-gradient(circle, transparent 85%, white 87%, white 100%)',
+                }} />
+            </div>
 
-          {/* Divider */}
-          <div className="shrink-0 w-px self-stretch" style={{ background: 'rgba(255,255,255,0.1)' }} />
+            <div className="shrink-0 w-px self-stretch" style={{ background: 'rgba(255,255,255,0.1)' }} />
 
-          {/* Card check */}
-          <div className="flex flex-col gap-0.5 shrink-0">
-            <div className="flex items-center gap-1">
-              <input
-                type="text" placeholder="Card #" value={checkId}
-                onChange={(e) => { setCheckId(e.target.value); setCheckResult(null); }}
-                onKeyDown={(e) => e.key === 'Enter' && handleCheck()}
-                className="rounded-lg px-2 py-1 text-xs w-16 focus:outline-none"
-                style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff' }}
+            {/* Buttons */}
+            <div className="flex items-center gap-1 shrink-0">
+              <CtrlBtn
+                label={autoOn ? '⏸ Pause' : '▶ Auto'}
+                active={autoOn}
+                onClick={toggleAuto}
+                disabled={!isCreator || game.status !== 'active' || calledNumbers.length >= 75}
               />
-              <button
-                onClick={handleCheck}
-                disabled={checkLoading || !checkId}
-                className="font-bold px-3 py-1 rounded-lg text-xs disabled:opacity-40"
-                style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
-                {checkLoading ? '…' : 'Check'}
-              </button>
+              <CtrlBtn
+                label="➤ Next"
+                onClick={() => callMutation.mutate()}
+                disabled={!isCreator || game.status !== 'active' || callMutation.isPending || calledNumbers.length >= 75}
+              />
+              <CtrlBtn
+                label={finishMutation.isPending ? '⌛' : '⏹ End'}
+                onClick={() => { stopAuto(true); finishMutation.mutate(); }}
+                disabled={!isCreator || game.status !== 'active' || finishMutation.isPending}
+                danger
+              />
+              <CtrlBtn
+                label="🔄"
+                purple
+                onClick={() => {
+                  playCachedSound('/sounds/shuffle-audio-TfqyAnvz.mp3').catch(() => {});
+                  setTimeout(() => window.location.reload(), 5000);
+                }}
+                title="Refresh game"
+              />
             </div>
-            {checkResult && (
-              <div className="text-[10px] font-semibold px-2 py-0.5 rounded whitespace-nowrap"
-                style={
-                  !checkResult.registered
-                    ? { background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }
-                    : checkResult.isWinner
-                    ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }
-                    : { background: 'rgba(255,255,255,0.06)', color: '#9ca3af', border: '1px solid rgba(255,255,255,0.1)' }
-                }>
-                {!checkResult.registered
-                  ? `#${checkId} not registered`
-                  : checkResult.isWinner
-                  ? `🎉 BINGO! (${checkResult.winPattern})`
-                  : `#${checkId} — no win yet`}
+
+            <div className="shrink-0 w-px self-stretch" style={{ background: 'rgba(255,255,255,0.1)' }} />
+
+            {/* Speed + called count */}
+            <div className="flex flex-col items-center gap-1 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-gray-500 text-[10px] uppercase tracking-wider">Speed</span>
+                <input type="range" min={1} max={10} step={1} value={speed}
+                  onChange={(e) => setSpeed(Number(e.target.value))}
+                  className="w-20 accent-yellow-400" />
+                <span className="text-yellow-400 font-bold text-[11px] w-5">{speed}s</span>
               </div>
-            )}
-          </div>
-
-          {/* Spacer */}
-          <div className="flex-1 min-w-[8px]" />
-
-          {/* ── Large current number display (bottom-right) ── */}
-          <div className="shrink-0 flex flex-col items-center justify-center rounded-2xl"
-            style={{
-              width: 'clamp(80px,12vw,120px)',
-              height: 'clamp(58px,8vw,88px)',
-              background: 'linear-gradient(135deg,#4c3fa0,#7c3aed)',
-              border: '2px solid rgba(147,51,234,0.6)',
-              boxShadow: '0 0 24px rgba(124,58,237,0.5)',
-            }}>
-            {lastNumber != null ? (
-              <>
-                <span className="font-extrabold leading-none"
-                  style={{
-                    fontSize: 'clamp(8px,1.4vw,11px)',
-                    color: getBingoColor(lastNumber),
-                    letterSpacing: '0.2em',
-                    textTransform: 'uppercase',
-                  }}>
-                  {getBingoLetter(lastNumber)}
+              <div className="flex items-center gap-2 text-[10px]">
+                <span className="text-blue-400 font-bold tabular-nums">
+                  {calledNumbers.length}<span className="text-gray-600">/75</span>
                 </span>
-                <span className="font-black tabular-nums leading-none"
-                  style={{
-                    fontSize: 'clamp(26px,4.5vw,50px)',
-                    color: '#fff',
-                    textShadow: `0 0 20px ${getBingoColor(lastNumber)}`,
-                    animation: 'ballPop 0.35s cubic-bezier(0.34,1.56,0.64,1)',
-                  }}>
-                  {String(lastNumber).padStart(3, '0')}
+                <span className="text-gray-600">•</span>
+                <span className="text-green-400 font-bold">
+                  {Math.round((calledNumbers.length / 75) * 100)}%
                 </span>
-              </>
-            ) : (
-              <span className="font-black text-white/20" style={{ fontSize: 'clamp(26px,4.5vw,50px)' }}>---</span>
-            )}
-          </div>
+              </div>
+            </div>
 
+            <div className="shrink-0 w-px self-stretch" style={{ background: 'rgba(255,255,255,0.1)' }} />
+
+            {/* Card check */}
+            <div className="flex flex-col gap-0.5 shrink-0">
+              <div className="flex items-center gap-1">
+                <input
+                  type="text" placeholder="Card #" value={checkId}
+                  onChange={(e) => { setCheckId(e.target.value); setCheckResult(null); }}
+                  onKeyDown={(e) => e.key === 'Enter' && handleCheck()}
+                  className="rounded-lg px-2 py-1 text-xs w-16 focus:outline-none"
+                  style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff' }}
+                />
+                <button
+                  onClick={handleCheck}
+                  disabled={checkLoading || !checkId}
+                  className="font-bold px-3 py-1 rounded-lg text-xs disabled:opacity-40"
+                  style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
+                  {checkLoading ? '…' : 'Check'}
+                </button>
+              </div>
+              {checkResult && (
+                <div className="text-[10px] font-semibold px-2 py-0.5 rounded whitespace-nowrap"
+                  style={
+                    !checkResult.registered
+                      ? { background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }
+                      : checkResult.isWinner
+                      ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }
+                      : { background: 'rgba(255,255,255,0.06)', color: '#9ca3af', border: '1px solid rgba(255,255,255,0.1)' }
+                  }>
+                  {!checkResult.registered
+                    ? `#${checkId} not registered`
+                    : checkResult.isWinner
+                    ? `🎉 BINGO! (${checkResult.winPattern})`
+                    : `#${checkId} — no win yet`}
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 min-w-[8px]" />
+
+            {/* Last number ball */}
+            <div className="shrink-0 flex items-center justify-center"
+              style={{ width: 'clamp(110px,14vw,150px)', height: 'clamp(110px,14vw,150px)' }}>
+              <div key={lastNumber} className="flex flex-col items-center justify-center relative overflow-hidden ball-container"
+                style={{
+                  width: '100%', height: '100%',
+                  borderRadius: '50%',
+                  background: lastNumber != null
+                    ? `radial-gradient(circle at 35% 30%, ${getBingoColor(lastNumber)}ee, ${getBingoColor(lastNumber)}66)`
+                    : 'radial-gradient(circle at 35% 30%, #4c3fa0, #1e1040)',
+                  border: lastNumber != null
+                    ? `3px solid ${getBingoColor(lastNumber)}`
+                    : '3px solid rgba(147,51,234,0.6)',
+                  boxShadow: lastNumber != null
+                    ? `0 0 40px ${getBingoColor(lastNumber)}99, inset 0 2px 0 rgba(255,255,255,0.25)`
+                    : '0 0 24px rgba(124,58,237,0.4)',
+                  animation: lastNumber != null
+                    ? 'ballPop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards'
+                    : undefined,
+                }}>
+                {lastNumber != null ? (
+                  <>
+                    <div style={{
+                      position: 'absolute', top: 0, left: 0, width: '40%', height: '100%',
+                      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)',
+                      animation: 'ballShine 0.7s 0.3s ease-out forwards',
+                      transform: 'translateX(-100%) rotate(25deg)',
+                      pointerEvents: 'none',
+                    }} />
+                    <span className="font-extrabold leading-none relative z-10"
+                      style={{ fontSize: 'clamp(11px,1.4vw,16px)', color: '#fff', letterSpacing: '0.15em', opacity: 0.9 }}>
+                      {getBingoLetter(lastNumber)}
+                    </span>
+                    <span className="font-black tabular-nums leading-none relative z-10"
+                      style={{ fontSize: 'clamp(32px,4.8vw,58px)', color: '#fff', textShadow: '0 2px 16px rgba(0,0,0,0.6)' }}>
+                      {String(lastNumber).padStart(2, '0')}
+                    </span>
+                    <div className="absolute inset-0 rounded-full pointer-events-none"
+                      style={{
+                        background: `conic-gradient(from 0deg, ${getBingoColor(lastNumber)}40, transparent, ${getBingoColor(lastNumber)}40)`,
+                        animation: 'spin 2s linear infinite',
+                      }} />
+                  </>
+                ) : (
+                  <span className="font-black text-white/20" style={{ fontSize: 'clamp(28px,4vw,48px)' }}>?</span>
+                )}
+              </div>
+            </div>
+
+          </div>
         </div>
       )}
 
@@ -500,6 +890,20 @@ export const PlayBingo: React.FC = () => {
           lastCalledNumber={lastNumber}
           onClose={() => setCheckResult(null)}
         />
+      )}
+
+      {/* ── Keyboard shortcuts help (only for creators, desktop only) ── */}
+      {game && isCreator && (
+        <div className="hidden md:block shrink-0 px-3 py-1 text-center text-xs text-gray-700"
+          style={{ background: 'rgba(0,0,0,0.3)', borderTop: '1px solid rgba(255,255,255,0.03)' }}>
+          <span className="inline-flex items-center gap-3 flex-wrap justify-center">
+            <span className="font-medium text-gray-600">⌨️</span>
+            <span><kbd className="px-1 py-0.5 rounded text-[10px] bg-gray-800 text-gray-300">Space</kbd> Play/Pause</span>
+            <span><kbd className="px-1 py-0.5 rounded text-[10px] bg-gray-800 text-gray-300">→</kbd> Next</span>
+            <span><kbd className="px-1 py-0.5 rounded text-[10px] bg-gray-800 text-gray-300">N</kbd> Next</span>
+            <span><kbd className="px-1 py-0.5 rounded text-[10px] bg-gray-800 text-gray-300">Esc</kbd> Stop</span>
+          </span>
+        </div>
       )}
 
     </div>
@@ -523,11 +927,34 @@ function getBingoColor(n: number): string {
   return '#c084fc';              // O — purple
 }
 
-// Inject ball pop animation once
+// Inject ball pop animation once with enhanced performance
 if (typeof document !== 'undefined' && !document.getElementById('ball-pop-style')) {
   const s = document.createElement('style');
   s.id = 'ball-pop-style';
-  s.textContent = `@keyframes ballPop { 0%{transform:scale(0.5);opacity:0} 100%{transform:scale(1);opacity:1} }`;
+  s.textContent = `
+    @keyframes ballPop {
+      0%   { transform: scale(0.3) rotate(-15deg); opacity: 0; }
+      60%  { transform: scale(1.0) rotate(2deg); opacity: 1; }
+      80%  { transform: scale(0.95) rotate(-1deg); }
+      100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    }
+    @keyframes ballPulse {
+      0%,100% { box-shadow: 0 0 32px var(--ball-color,#60a5fa), inset 0 2px 0 rgba(255,255,255,0.2); }
+      50%      { box-shadow: 0 0 60px var(--ball-color,#60a5fa), 0 0 100px var(--ball-color,#60a5fa)44, inset 0 2px 0 rgba(255,255,255,0.2); }
+    }
+    @keyframes ballShine {
+      0%   { opacity: 0.6; transform: translateX(-100%) rotate(25deg); }
+      100% { opacity: 0; transform: translateX(200%) rotate(25deg); }
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    /* Performance optimizations */
+    .number-cell { will-change: background, color, box-shadow; }
+    .ball-container { will-change: transform, opacity; }
+    .payout-ball { will-change: box-shadow; }
+  `;
   document.head.appendChild(s);
 }
 
@@ -535,7 +962,8 @@ if (typeof document !== 'undefined' && !document.getElementById('ball-pop-style'
 const CtrlBtn: React.FC<{
   label: string; onClick: () => void;
   disabled?: boolean; active?: boolean; purple?: boolean; danger?: boolean;
-}> = ({ label, onClick, disabled, active, purple, danger }) => {
+  title?: string; size?: 'sm' | 'md' | 'lg';
+}> = ({ label, onClick, disabled, active, purple, danger, title, size = 'md' }) => {
   let bg = 'rgba(251,191,36,0.15)';
   let color = '#fbbf24';
   let border = '1px solid rgba(251,191,36,0.3)';
@@ -543,10 +971,15 @@ const CtrlBtn: React.FC<{
   if (purple) { bg = 'rgba(147,51,234,0.2)'; color = '#c084fc'; border = '1px solid rgba(147,51,234,0.3)'; }
   if (danger) { bg = 'rgba(239,68,68,0.15)'; color = '#f87171'; border = '1px solid rgba(239,68,68,0.3)'; }
 
+  const sizeClass =
+    size === 'lg' ? 'px-5 py-3 text-base rounded-2xl' :
+    size === 'sm' ? 'px-2 py-1.5 text-xs rounded-lg' :
+                   'px-3 py-2.5 text-sm rounded-xl';
+
   return (
-    <button onClick={onClick} disabled={disabled}
-      className="px-2 sm:px-5 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all disabled:opacity-30 hover:brightness-125"
-      style={{ background: bg, color, border }}>
+    <button onClick={onClick} disabled={disabled} title={title}
+      className={`font-bold transition-all disabled:opacity-30 hover:brightness-125 active:scale-95 ${sizeClass}`}
+      style={{ background: bg, color, border, minHeight: size === 'lg' ? 48 : size === 'sm' ? 32 : 40 }}>
       {label}
     </button>
   );
@@ -557,19 +990,19 @@ const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null
   calledNumbers, lastNumber,
 }) => (
   <div className="w-full h-full flex flex-col" role="region" aria-label="Bingo number board"
-    style={{ gap: 'clamp(2px, 0.5vh, 6px)' }}>
+    style={{ gap: 'clamp(1px, 0.4vh, 6px)' }}>
     {ROWS_DEF.map(({ letter, start }) => (
       <div key={letter} className="flex-1 min-h-0 flex"
-        style={{ gap: 'clamp(2px, 0.5vw, 6px)' }}>
+        style={{ gap: 'clamp(1px, 0.4vw, 6px)' }}>
 
         {/* BINGO letter label */}
         <div className="flex items-center justify-center font-black shrink-0"
           style={{
-            width: 'clamp(28px, 4vw, 60px)',
-            borderRadius: 'clamp(4px, 0.6vw, 10px)',
+            width: 'clamp(22px, 5.5vw, 60px)',
+            borderRadius: 'clamp(3px, 0.5vw, 10px)',
             background: 'linear-gradient(180deg, #f5a623, #e08c00)',
             color: '#111',
-            fontSize: 'clamp(14px, 2.2vw, 32px)',
+            fontSize: 'clamp(11px, 3.5vw, 32px)',
             boxShadow: '0 2px 8px rgba(245,166,35,0.4)',
           }}>
           {letter}
@@ -583,10 +1016,10 @@ const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null
           return (
             <div key={num}
               aria-label={`${num}${called ? ' called' : ''}`}
-              className="flex-1 flex items-center justify-center font-bold transition-all duration-200"
+              className="flex-1 flex items-center justify-center font-bold transition-all duration-200 number-cell"
               style={{
-                fontSize: 'clamp(15px, 2.4vw, 38px)',
-                borderRadius: 'clamp(4px, 0.6vw, 10px)',
+                fontSize: 'clamp(9px, 3.2vw, 38px)',
+                borderRadius: 'clamp(3px, 0.5vw, 10px)',
                 background: isLast
                   ? 'linear-gradient(180deg, #f5a623, #e08c00)'
                   : called
@@ -601,10 +1034,12 @@ const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null
                 border: isLast
                   ? '2px solid #f5a623'
                   : called
-                  ? '2px solid #22c55e'
+                  ? '1px solid #22c55e'
                   : '1px solid rgba(255,255,255,0.08)',
                 fontWeight: 800,
                 textShadow: isLast || called ? 'none' : '0 1px 3px rgba(0,0,0,0.8)',
+                transform: isLast ? 'scale(1.02)' : 'scale(1)',
+                lineHeight: 1,
               }}>
               {num}
             </div>

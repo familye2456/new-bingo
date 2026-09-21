@@ -102,20 +102,16 @@ export const NewGame: React.FC = () => {
     queryFn: () => offlineUserApi.myCartelas(),
   });
 
-  // Remove stale selectedIds that no longer exist in the user's cartela list
-  useEffect(() => {
-    if (cartelas.length === 0) return;
-    const validIds = new Set(cartelas.map(c => c.id));
-    setSelectedIds(prev => {
-      const filtered = new Set([...prev].filter(id => validIds.has(id)));
-      return filtered.size === prev.size ? prev : filtered;
-    });
-  }, [cartelas]);
-
-  const visibleCartelas = useMemo(() => {
-    const list = rememberActive ? cartelas.filter((c) => c.isActive) : cartelas;
-    return [...list].sort((a, b) => (a.cardNumber ?? 0) - (b.cardNumber ?? 0));
-  }, [cartelas, rememberActive]);
+  // Calculate derived values 
+  const houseCutValid = typeof houseCut === 'number' && houseCut >= 10 && houseCut <= 45;
+  const totalCost = houseCutValid ? bet * selectedIds.size * (houseCut as number) / 100 : 0;
+  const currentBalance = Number(user?.balance ?? 0);
+  const hasEnoughBalance = user?.paymentType === 'postpaid' || (currentBalance > 0 && currentBalance >= totalCost);
+  
+  // Calculate canStart using useMemo to avoid initialization errors
+  const canStart = useMemo(() => {
+    return selectedIds.size >= MIN_CARTELAS && houseCutValid && voiceCached && !negativeBalance && hasEnoughBalance;
+  }, [selectedIds.size, houseCutValid, voiceCached, negativeBalance, hasEnoughBalance]);
 
   const createMutation = useMutation({
     mutationFn: () => {
@@ -163,6 +159,47 @@ export const NewGame: React.FC = () => {
     },
   });
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle shortcuts when not typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+      
+      if (e.key === 'Enter' && canStart && !createMutation.isPending) {
+        e.preventDefault();
+        createMutation.mutate();
+      }
+      if (e.key === 'Escape' && selectedIds.size > 0) {
+        e.preventDefault();
+        setSelectedIds(new Set());
+      }
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        setQuickAddValue('');
+        setShowQuickAdd(true);
+        setTimeout(() => quickAddRef.current?.focus(), 100);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [canStart, createMutation, selectedIds.size]);
+
+  // Remove stale selectedIds that no longer exist in the user's cartela list
+  useEffect(() => {
+    if (cartelas.length === 0) return;
+    const validIds = new Set(cartelas.map(c => c.id));
+    setSelectedIds(prev => {
+      const filtered = new Set([...prev].filter(id => validIds.has(id)));
+      return filtered.size === prev.size ? prev : filtered;
+    });
+  }, [cartelas]);
+
+  const visibleCartelas = useMemo(() => {
+    const list = rememberActive ? cartelas.filter((c) => c.isActive) : cartelas;
+    return [...list].sort((a, b) => (a.cardNumber ?? 0) - (b.cardNumber ?? 0));
+  }, [cartelas, rememberActive]);
+
   const toggle = (id: string) =>
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -187,11 +224,7 @@ export const NewGame: React.FC = () => {
     setQuickAddValue('');
     setQuickAddError(null);
   };
-  const houseCutValid = typeof houseCut === 'number' && houseCut >= 10 && houseCut <= 45;
-  const totalCost = houseCutValid ? bet * selectedIds.size * (houseCut as number) / 100 : 0;
-  const currentBalance = Number(user?.balance ?? 0);
-  const hasEnoughBalance = user?.paymentType === 'postpaid' || (currentBalance > 0 && currentBalance >= totalCost);
-  const canStart = selectedIds.size >= MIN_CARTELAS && houseCutValid && voiceCached && !negativeBalance && hasEnoughBalance;
+  
   const totalPrize = bet * selectedIds.size;
 
   // Sync indicator — listens for sync-start / sync-end events from sync.ts
@@ -210,177 +243,262 @@ export const NewGame: React.FC = () => {
   return (
     <div className="h-full flex flex-col" style={{ background: '#0a1220', color: '#fff' }}>
 
-      {/* ── Header ── */}
-      <div className="px-4 sm:px-5 pt-4 sm:pt-5 pb-4 shrink-0"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.2)' }}>
+      {/* ── Header — two columns ── */}
+      <div className="px-3 sm:px-5 pt-2 pb-2 shrink-0 grid gap-2 sm:gap-3 lg:grid-cols-[2fr_3fr] grid-cols-1 lg:items-stretch"
+        style={{ 
+          borderBottom: '1px solid rgba(255,255,255,0.06)', 
+          background: 'linear-gradient(180deg, rgba(0,0,0,0.3), rgba(0,0,0,0.2))', 
+          backdropFilter: 'blur(8px)' 
+        }}>
 
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-white font-extrabold text-xl tracking-wide">New Game</h1>
-            <p className="text-gray-500 text-xs mt-0.5">Configure and launch a bingo session</p>
+        {/* ── Column 1: settings ── */}
+        <div className="flex flex-col gap-2 min-w-0 h-full">
+          {/* Title */}
+          <div className="flex items-center justify-between">
+            {/* <h1 className="text-white font-extrabold text-base tracking-wide">New Game</h1> */}
+            {syncing && (
+              <div className="flex items-center gap-1 text-[10px] text-yellow-400 font-medium px-2 py-0.5 rounded-lg"
+                style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.2)' }}>
+                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Syncing…
+              </div>
+            )}
           </div>
-          {syncing && (
-            <div className="flex items-center gap-1.5 text-xs text-yellow-400 font-medium px-2.5 py-1 rounded-lg"
-              style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.2)' }}>
-              <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              Syncing…
+
+          {/* Settings grid */}
+          <div className="rounded-xl p-2.5 sm:p-3" style={{ 
+            background: 'linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))', 
+            border: '1px solid rgba(255,255,255,0.08)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+          }}>
+            {/* Bet row */}
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-gray-400 text-xs font-medium flex items-center gap-1.5">
+                💰 Bet per card
+              </span>
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <button onClick={() => setBet((b) => Math.max(5, b - 5))}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs hover:brightness-125 active:scale-95"
+                  style={{ background: 'rgba(239,68,68,0.2)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>−</button>
+                <span className="w-10 text-center font-black text-yellow-400 text-base">{bet}</span>
+                <button onClick={() => setBet((b) => b + 5)}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs hover:brightness-125 active:scale-95"
+                  style={{ background: 'rgba(34,197,94,0.2)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }}>+</button>
+                <span className="text-gray-500 text-[10px] ml-0.5 font-semibold">BIRR</span>
+              </div>
             </div>
-          )}
-        </div>
 
-        {/* Config row */}
-        <div className="flex items-center gap-2 flex-wrap">
+            {/* House cut row */}
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-gray-400 text-xs font-medium flex items-center gap-1.5">
+                🏠 House cut
+              </span>
+              <HouseCutPicker value={houseCut} onChange={setHouseCut} />
+            </div>
 
-          {/* Bet control */}
-          <div className="flex items-center gap-1.5 rounded-xl px-3 py-2"
-            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1">Bet</span>
-            <button onClick={() => setBet((b) => Math.max(5, b - 5))}
-              className="w-6 h-6 rounded-lg flex items-center justify-center font-bold text-sm transition-all hover:brightness-125"
-              style={{ background: 'rgba(239,68,68,0.2)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>
-              −
-            </button>
-            <span className="w-10 text-center font-extrabold text-yellow-400 text-sm">{bet}</span>
-            <button onClick={() => setBet((b) => b + 5)}
-              className="w-6 h-6 rounded-lg flex items-center justify-center font-bold text-sm transition-all hover:brightness-125"
-              style={{ background: 'rgba(34,197,94,0.2)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }}>
-              +
-            </button>
-            <span className="text-gray-600 text-[10px] ml-1">BIRR</span>
+            {/* Pattern row */}
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400 text-xs font-medium flex items-center gap-1.5">
+                🎯 Win pattern
+              </span>
+              <select value={pattern} onChange={(e) => setPattern(e.target.value)}
+                className="bg-transparent text-xs font-semibold focus:outline-none cursor-pointer px-2 py-1 rounded-lg transition-colors hover:brightness-125"
+                style={{ color: '#fbbf24', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.25)', maxWidth: '140px' }}>
+                {PATTERNS.map((p) => (
+                  <option key={p.value} value={p.value} style={{ background: '#0f1e35' }}>
+                    {p.icon} {p.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          {/* House cut */}
-          <HouseCutPicker value={houseCut} onChange={setHouseCut} />
-
-          {/* Pattern select */}
-          <div className="flex items-center gap-2 rounded-xl px-3 py-2"
-            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <span className="text-[10px] text-gray-500 uppercase tracking-wider">Pattern</span>
-            <select
-              value={pattern}
-              onChange={(e) => setPattern(e.target.value)}
-              className="bg-transparent text-white text-sm font-semibold focus:outline-none cursor-pointer"
-              style={{ color: '#fbbf24' }}>
-              {PATTERNS.map((p) => (
-                <option key={p.value} value={p.value} style={{ background: '#0f1e35' }}>
-                  {p.icon} {p.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Start Game */}
+          {/* Start button */}
           <button
             onClick={() => createMutation.mutate()}
             disabled={!canStart || createMutation.isPending}
-            className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-bold transition-all hover:brightness-125 disabled:opacity-30 disabled:cursor-not-allowed ml-auto"
+            className="flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all hover:brightness-125 disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
             style={canStart ? {
               background: 'linear-gradient(135deg,#fbbf24,#f59e0b)',
               color: '#111',
-              boxShadow: '0 2px 12px rgba(251,191,36,0.3)',
+              boxShadow: '0 4px 16px rgba(251,191,36,0.4), 0 2px 8px rgba(0,0,0,0.2)',
             } : {
               background: 'rgba(255,255,255,0.06)',
               color: '#4b5563',
               border: '1px solid rgba(255,255,255,0.08)',
             }}>
-            {createMutation.isPending ? '...' : canStart ? `▶ Start · ${selectedIds.size}` : negativeBalance ? '🔒 Account Locked' : !hasEnoughBalance ? `⚠ Insufficient Balance` : !houseCutValid ? `Set house %` : !voiceCached ? '⬇ Download sounds first' : `▶ Start (${selectedIds.size}/${MIN_CARTELAS})`}
+            {createMutation.isPending ? (
+              <>
+                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Starting...
+              </>
+            ) : canStart ? (
+              <>
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+                Start Game ({selectedIds.size} cards)
+              </>
+            ) : negativeBalance ? (
+              <>🔒 Account Locked</>
+            ) : !hasEnoughBalance ? (
+              <>⚠ Insufficient Balance</>
+            ) : !houseCutValid ? (
+              <>⚙️ Set house %</>
+            ) : !voiceCached ? (
+              <>⬇ Download sounds first</>
+            ) : (
+              <>Select {MIN_CARTELAS - selectedIds.size} more cards</>
+            )}
           </button>
-        </div>
-        {createMutation.isError && (
-          <div className="mt-2 px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2"
-            style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}>
-            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-            </svg>
-            {(() => {
-              const err = createMutation.error as any;
-              const code = err?.code;
-              if (code === 'NEGATIVE_BALANCE') return 'Account locked: your balance is negative. Contact your admin.';
-              if (code === 'INSUFFICIENT_BALANCE') return 'Insufficient balance to start this game.';
-              return err?.response?.data?.error?.message ?? err?.message ?? 'Failed to start game. Try again.';
-            })()}
-          </div>
-        )}
-        {!createMutation.isError && negativeBalance && (
-          <div className="mt-2 px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2"
-            style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}>
-            🔒 Your balance is negative. Contact your admin to top up.
-          </div>
-        )}
-        {!createMutation.isError && !negativeBalance && !hasEnoughBalance && selectedIds.size >= MIN_CARTELAS && houseCutValid && (
-          <div className="mt-2 px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2"
-            style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)', color: '#fbbf24' }}>
-            ⚠ Balance ({currentBalance.toFixed(2)} Birr) is less than house cut ({totalCost.toFixed(2)} Birr). Top up to play.
-          </div>
-        )}
-      </div>
 
-      {/* ── Selection bar ── */}
-      <div className="px-4 sm:px-5 py-2.5 flex items-center gap-3 shrink-0"
-        style={{ background: 'rgba(0,0,0,0.15)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-
-        <div className="flex items-center gap-2 flex-1">
-          <span className="text-xs text-gray-500">
-            {visibleCartelas.length} cartelas
-          </span>
-          <span className="text-gray-700">·</span>
-          <span className={`text-xs font-semibold ${canStart ? 'text-emerald-400' : 'text-yellow-400'}`}>
-            {selectedIds.size} selected
-            {!canStart && ` (need ${Math.max(0, MIN_CARTELAS - selectedIds.size)} more)`}
-          </span>
+          {/* Error messages */}
+          {createMutation.isError && (
+            <div className="px-3 py-2 rounded-xl text-xs font-medium"
+              style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}>
+              {(() => {
+                const err = createMutation.error as any;
+                const code = err?.code;
+                if (code === 'NEGATIVE_BALANCE') return 'Account locked: negative balance.';
+                if (code === 'INSUFFICIENT_BALANCE') return 'Insufficient balance.';
+                return err?.response?.data?.error?.message ?? err?.message ?? 'Failed. Try again.';
+              })()}
+            </div>
+          )}
+          {!createMutation.isError && negativeBalance && (
+            <div className="px-3 py-2 rounded-xl text-xs font-medium"
+              style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}>
+              🔒 Negative balance. Contact admin.
+            </div>
+          )}
+          {!createMutation.isError && !negativeBalance && !hasEnoughBalance && selectedIds.size >= MIN_CARTELAS && houseCutValid && (
+            <div className="px-3 py-2 rounded-xl text-xs font-medium"
+              style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)', color: '#fbbf24' }}>
+              ⚠ Balance ({currentBalance.toFixed(2)}) &lt; house cut ({totalCost.toFixed(2)}) Birr.
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setRememberActive((v) => !v)}
-            className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg font-medium transition-all"
-            style={rememberActive
-              ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }
-              : { background: 'rgba(255,255,255,0.05)', color: '#6b7280', border: '1px solid rgba(255,255,255,0.08)' }}>
-            {rememberActive ? '✓' : '○'} Active only
-          </button>
-          {showQuickAdd ? (
-            <div className="flex flex-col items-end gap-1">
-              <input
-                ref={quickAddRef}
-                autoFocus
-                type="number"
-                value={quickAddValue}
-                onChange={(e) => {
-                  setQuickAddValue(e.target.value);
-                  setQuickAddError(null);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') { handleQuickAdd(quickAddValue); }
-                  if (e.key === 'Escape') { setShowQuickAdd(false); setQuickAddValue(''); setQuickAddError(null); }
-                }}
-                onBlur={() => { setShowQuickAdd(false); setQuickAddValue(''); setQuickAddError(null); }}
-                placeholder="Card #"
-                className="w-20 text-xs px-2.5 py-1 rounded-lg font-bold focus:outline-none"
-                style={quickAddError
-                  ? { background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.4)' }
-                  : { background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)' }}
-              />
-              {quickAddError && (
-                <span className="text-[10px] text-red-400 whitespace-nowrap">{quickAddError}</span>
+        {/* ── Column 2: selected cartela balls ── */}
+        <div className="flex flex-col gap-1.5 min-w-0 h-full lg:border-l lg:border-t-0 border-t lg:pl-3 lg:pt-0 pt-2"
+          style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+
+          {/* Header row with stats */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className={`text-[10px] font-semibold ${canStart ? 'text-emerald-400' : 'text-yellow-400'}`}>
+                {selectedIds.size} selected
+              </span>
+              {selectedIds.size >= MIN_CARTELAS && (
+                <span className="text-[10px] text-gray-500">
+                  • Total: {(bet * selectedIds.size).toFixed(2)} BIRR
+                </span>
+              )}
+              {!canStart && selectedIds.size < MIN_CARTELAS && (
+                <span className="text-[10px] text-amber-400">
+                  (need {MIN_CARTELAS - selectedIds.size} more)
+                </span>
               )}
             </div>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setRememberActive((v) => !v)}
+                className="text-[9px] px-1.5 py-0.5 rounded font-medium transition-all hover:brightness-125"
+                style={rememberActive
+                  ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }
+                  : { background: 'rgba(255,255,255,0.05)', color: '#6b7280', border: '1px solid rgba(255,255,255,0.08)' }}>
+                {rememberActive ? '✓ Active' : '○ All'}
+              </button>
+              {showQuickAdd ? (
+                <div className="flex flex-col items-end gap-0.5">
+                  <input ref={quickAddRef} autoFocus type="number" value={quickAddValue}
+                    onChange={(e) => { setQuickAddValue(e.target.value); setQuickAddError(null); }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleQuickAdd(quickAddValue);
+                      if (e.key === 'Escape') { setShowQuickAdd(false); setQuickAddValue(''); setQuickAddError(null); }
+                    }}
+                    onBlur={() => { setShowQuickAdd(false); setQuickAddValue(''); setQuickAddError(null); }}
+                    placeholder="Card #"
+                    className="w-14 text-[10px] px-1.5 py-0.5 rounded font-bold focus:outline-none focus:ring-2 focus:ring-blue-400/50"
+                    style={quickAddError
+                      ? { background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.4)' }
+                      : { background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)' }} />
+                  {quickAddError && <span className="text-[8px] text-red-400 whitespace-nowrap">{quickAddError}</span>}
+                </div>
+              ) : (
+                <button onClick={() => setShowQuickAdd(true)}
+                  className="text-[9px] px-1.5 py-0.5 rounded font-bold hover:brightness-125 transition-all"
+                  title="Quick add card by number (or press +)"
+                  style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)' }}>
+                  ＋ Add
+                </button>
+              )}
+              {selectedIds.size > 0 && (
+                <button onClick={() => setSelectedIds(new Set())}
+                  className="text-[9px] text-gray-600 hover:text-red-400 transition-colors px-1">
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Selected balls with enhanced visuals */}
+          {selectedIds.size > 0 ? (
+            <>
+              <style>{`
+                .selected-cartelas-container::-webkit-scrollbar {
+                  display: none;
+                }
+              `}</style>
+              <div className="selected-cartelas-container flex flex-wrap gap-1.5 overflow-y-auto p-1.5 rounded-lg flex-1 min-h-0" 
+                style={{ 
+                  background: 'rgba(245,158,11,0.03)',
+                  border: '1px solid rgba(245,158,11,0.1)',
+                  minHeight: '80px',
+                  maxHeight: '120px',
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none',
+                }}>
+              {Array.from(selectedIds).map((id) => {
+                const c = cartelas.find(x => x.id === id);
+                if (!c) return null;
+                return (
+                  <button key={id} onClick={() => toggle(id)} title={`Card ${c.cardNumber} - Click to remove`}
+                    className="flex items-center justify-center font-black rounded-full transition-all hover:scale-110 active:scale-95 group w-8 h-8 sm:w-9 sm:h-9 lg:w-11 lg:h-11"
+                    style={{
+                      background: 'linear-gradient(145deg,#f59e0b,#d97706)',
+                      color: '#ffffff',
+                      border: '2px solid rgba(255,255,255,0.9)',
+                      boxShadow: '0 2px 8px rgba(245,158,11,0.4)',
+                      fontSize: 'clamp(11px, 2.8vw, 18px)',
+                      fontWeight: 900,
+                      flexShrink: 0,
+                      position: 'relative',
+                    }}>
+                    {c.cardNumber ?? '?'}
+                    {/* Remove indicator */}
+                    <div className="absolute inset-0 rounded-full bg-red-500/0 group-hover:bg-red-500/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                      <span className="text-white text-[8px] lg:text-[10px] font-bold">✕</span>
+                    </div>
+                  </button>
+                );
+              })}
+              </div>
+            </>
           ) : (
-            <button
-              onClick={() => setShowQuickAdd(true)}
-              className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg font-bold transition-all hover:brightness-125"
-              style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)' }}>
-              ＋ Quick Add
-            </button>
-          )}
-          {selectedIds.size > 0 && (
-            <button onClick={() => setSelectedIds(new Set())}
-              className="text-xs text-gray-600 hover:text-red-400 transition-colors px-2 py-1">
-              Clear
-            </button>
+            <div className="flex items-center justify-center flex-1 text-gray-600 text-[10px] py-4 rounded-lg min-h-0"
+              style={{ 
+                background: 'rgba(255,255,255,0.02)', 
+                border: '1px dashed rgba(255,255,255,0.08)',
+                minHeight: '80px'
+              }}>
+              🎴 No cartelas selected
+            </div>
           )}
         </div>
       </div>
@@ -403,24 +521,44 @@ export const NewGame: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))' }}>
+          <div className="grid gap-1.5 px-1 cartela-grid"
+            style={{ 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(42px, 1fr))',
+            }}>
+            <style>{`
+              @media (min-width: 640px) {
+                .cartela-grid {
+                  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)) !important;
+                }
+              }
+              @media (min-width: 1024px) {
+                .cartela-grid {
+                  grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)) !important;
+                }
+              }
+            `}</style>
             {visibleCartelas.map((c) => {
               const sel = selectedIds.has(c.id);
               return (
                 <button
                   key={c.id}
                   onClick={() => toggle(c.id)}
-                  className="rounded-xl font-bold text-xl py-4 transition-all duration-150"
+                  className="flex items-center justify-center font-black transition-all duration-200 aspect-square rounded-full hover:brightness-110 active:scale-95"
                   style={sel ? {
-                    background: 'linear-gradient(180deg,#3b82f6,#2563eb)',
+                    background: 'linear-gradient(145deg,#10b981,#059669)',
                     color: '#fff',
-                    border: '2px solid #60a5fa',
-                    boxShadow: '0 0 12px rgba(59,130,246,0.4)',
-                    transform: 'scale(1.06)',
+                    border: '2px solid rgba(255,255,255,0.9)',
+                    boxShadow: '0 0 10px rgba(16,185,129,0.4), 0 0 15px rgba(16,185,129,0.6), 0 3px 10px rgba(0,0,0,0.3)',
+                    fontSize: 'clamp(11px, 3vw, 22px)',
+                    fontWeight: 900,
+                    transform: 'scale(1.02)',
                   } : {
-                    background: 'rgba(255,255,255,0.07)',
-                    color: '#cbd5e1',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    background: 'linear-gradient(145deg, #8b5cf6, #7c3aed)',
+                    color: '#fff',
+                    border: '1px solid rgba(139,92,246,0.4)',
+                    fontSize: 'clamp(10px, 2.5vw, 20px)',
+                    fontWeight: 700,
+                    boxShadow: '0 2px 8px rgba(139,92,246,0.3), 0 4px 12px rgba(0,0,0,0.2)',
                   }}>
                   {c.cardNumber ?? '?'}
                 </button>
@@ -429,6 +567,7 @@ export const NewGame: React.FC = () => {
           </div>
         )}
       </div>
+
 
 
 
