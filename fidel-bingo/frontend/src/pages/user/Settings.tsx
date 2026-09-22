@@ -38,7 +38,7 @@ export const Settings: React.FC = () => {
   const [form, setForm] = useState({ firstName: user?.firstName ?? '', lastName: user?.lastName ?? '' });
   const [saved, setSaved] = useState(false);
   const [dlProgress, setDlProgress] = useState<{ cached: number; total: number; downloading: boolean }>({
-    cached: 0, total: 78, downloading: false,
+    cached: 0, total: 75, downloading: false,
   });
 
   const checkCache = useCallback(async () => {
