@@ -199,7 +199,16 @@ async function playDecodedAudio(arrayBuffer: ArrayBuffer, volume: number): Promi
       setTimeout(resolve, 15000);
     });
   } catch (err) {
-    console.warn('[audio] decodeAudioData failed:', err);
+    console.warn('[audio] decodeAudioData failed, falling back to HTMLAudio:', err);
+    // Fallback: Use a Blob URL to play the original arrayBuffer via HTMLAudioElement
+    try {
+      const blob = new Blob([arrayBuffer]);
+      const url = URL.createObjectURL(blob);
+      await playHtmlAudio(url, volume);
+      URL.revokeObjectURL(url);
+    } catch (fallbackErr) {
+      console.error('[audio] critical failure: both WebAudio and HTMLAudio failed', fallbackErr);
+    }
   }
 }
 
