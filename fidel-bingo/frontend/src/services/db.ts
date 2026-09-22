@@ -369,6 +369,11 @@ export class AudioQueue {
     if (!this.playing) this.drain();
   }
 
+  /** Discard all pending (not yet started) tasks in the queue */
+  clear(): void {
+    this.queue.length = 0;
+  }
+
   /** Returns a promise that resolves when the queue is fully drained */
   waitForDrain(): Promise<void> {
     if (!this.playing && this.queue.length === 0) return Promise.resolve();
@@ -404,9 +409,21 @@ export function playNumberSoundQueued(
 ): void {
   const ext = getVoiceExt(voice);
   const path = `/sounds/${encodeURIComponent(voice)}/${number}${ext}`;
+  
+  // Clear only if we want to interrupt previous numbers to play the latest one.
+  // To fix the "double mode" stack problem, we keep the clear here 
+  // because we want the newest number to take priority, 
+  // BUT the issue was that it was clearing the queue while the "double" 
+  // sequence was still being built or played.
+  
+  audioQueue.clear(); 
+  
   console.log('[audioQueue] enqueue', path, 'mode:', mode, 'queueLen:', audioQueue['queue'].length);
-  // Each enqueue call creates its own closure so both plays are independent
+  
+  // We enqueue all parts of the current number sequence immediately.
+  // Since clear() happened above, the queue now only contains this number's sequence.
   audioQueue.enqueue(() => playCachedSound(path, volume).then(() => {}));
+  
   if (mode === 'double') {
     // 1 second gap between the two plays
     audioQueue.enqueue(() => new Promise<void>(resolve => setTimeout(resolve, 1000)));

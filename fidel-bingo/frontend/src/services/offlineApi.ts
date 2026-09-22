@@ -63,7 +63,10 @@ async function tryApi<T>(fn: () => Promise<T>): Promise<{ ok: true; data: T } | 
 async function isPrepaid(): Promise<boolean> {
   const user = await dbGet<{ paymentType?: string }>('user', 'me');
   if (!user) return false;
-  return !user.paymentType || user.paymentType === 'prepaid';
+  // FIX: Only return true if paymentType is explicitly 'prepaid'. 
+  // Defaulting to true when paymentType is missing was causing Postpaid users 
+  // to be treated as Prepaid.
+  return user.paymentType === 'prepaid';
 }
 
 /** Fisher-Yates shuffle of numbers 1–75 */

@@ -8,7 +8,8 @@ import { useAuthStore, applyNegativeBalanceCheck, isNegativeBalanceLocked } from
 async function isPrepaid(): Promise<boolean> {
   const user = await dbGet<{ paymentType?: string }>('user', 'me');
   if (!user) return false;
-  return !user.paymentType || user.paymentType === 'prepaid';
+  // FIX: Only return true if paymentType is explicitly 'prepaid'.
+  return user.paymentType === 'prepaid';
 }
 
 // ── Global flush lock — prevents concurrent flushes ───────────────────────────
