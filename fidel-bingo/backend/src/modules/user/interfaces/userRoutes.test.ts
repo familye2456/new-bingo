@@ -223,3 +223,224 @@ describe('Preservation: frontend-only behaviors (Requirements 3.4, 3.5)', () => 
   it.skip('3.4 — modal close resets form state (frontend only — verified manually)', () => {});
   it.skip('3.5 — successful create invalidates users list query (frontend only — verified manually)', () => {});
 });
+
+// ================================================================================
+// PATCH /api/users/:id/cartela-bonus — Cartela Bonus Toggle Tests
+// Validates: Requirements 4.1, 4.2, 4.3, 4.4, 4.5
+// ================================================================================
+
+const AGENT_UUID   = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+const AGENT2_UUID  = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+const PLAYER_UUID  = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+const PLAYER2_UUID = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+
+/** JWT for the seeded agent that owns PLAYER_UUID */
+function ownerAgentToken(id = AGENT_UUID): string {
+  return jwt.sign({ id, role: 'agent' }, JWT_SECRET, { expiresIn: '1h' });
+}
+
+/** JWT for a second agent who does NOT own PLAYER_UUID */
+function otherAgentToken(): string {
+  return jwt.sign({ id: AGENT2_UUID, role: 'agent' }, JWT_SECRET, { expiresIn: '1h' });
+}
+
+// Seed agents and players for the cartela-bonus tests
+beforeAll(async () => {
+  if (!AppDataSource.isInitialized) await AppDataSource.initialize();
+
+  // Seed agent 1 (owns PLAYER_UUID and PLAYER2_UUID)
+  await AppDataSource.query(
+    `INSERT INTO users (id, username, email, password_hash, role, status, balance, payment_type, created_at, updated_at)
+     VALUES ($1, 'cb_agent1', 'cb_agent1@example.com', 'hash', 'agent', 'active', 0, 'prepaid', NOW(), NOW())
+     ON CONFLICT (id) DO NOTHING`,
+    [AGENT_UUID]
+  );
+
+  // Seed agent 2 (does NOT own PLAYER_UUID)
+  await AppDataSource.query(
+    `INSERT INTO users (id, username, email, password_hash, role, status, balance, payment_type, created_at, updated_at)
+     VALUES ($1, 'cb_agent2', 'cb_agent2@example.com', 'hash', 'agent', 'active', 0, 'prepaid', NOW(), NOW())
+     ON CONFLICT (id) DO NOTHING`,
+    [AGENT2_UUID]
+  );
+
+  // Seed player owned by agent 1
+  await AppDataSource.query(
+    `INSERT INTO users (id, username, email, password_hash, role, status, balance, payment_type, created_by, cartela_bonus_enabled, created_at, updated_at)
+     VALUES ($1, 'cb_player1', 'cb_player1@example.com', 'hash', 'player', 'active', 0, 'prepaid', $2, FALSE, NOW(), NOW())
+     ON CONFLICT (id) DO NOTHING`,
+    [PLAYER_UUID, AGENT_UUID]
+  );
+
+  // Seed second player also owned by agent 1
+  await AppDataSource.query(
+    `INSERT INTO users (id, username, email, password_hash, role, status, balance, payment_type, created_by, cartela_bonus_enabled, created_at, updated_at)
+     VALUES ($1, 'cb_player2', 'cb_player2@example.com', 'hash', 'player', 'active', 0, 'prepaid', $2, FALSE, NOW(), NOW())
+     ON CONFLICT (id) DO NOTHING`,
+    [PLAYER2_UUID, AGENT_UUID]
+  );
+});
+
+// Clean up the cartela-bonus test fixtures after all tests in this block
+afterAll(async () => {
+  if (AppDataSource.isInitialized) {
+    await AppDataSource.query(
+      `DELETE FROM users WHERE id IN ($1, $2, $3, $4)`,
+      [AGENT_UUID, AGENT2_UUID, PLAYER_UUID, PLAYER2_UUID]
+    ).catch(() => {});
+  }
+});
+
+// Reset cartelaBonusEnabled to FALSE before each test for a clean, predictable slate
+beforeEach(async () => {
+  if (AppDataSource.isInitialized) {
+    await AppDataSource.query(
+      `UPDATE users SET cartela_bonus_enabled = FALSE WHERE id IN ($1, $2)`,
+      [PLAYER_UUID, PLAYER2_UUID]
+    ).catch(() => {});
+  }
+});
+
+// --- Test: admin can set enabled:true ----------------------------------------
+
+describe('PATCH /api/users/:id/cartela-bonus — admin sets enabled:true (Requirements 4.1, 4.2)', () => {
+  it('returns 200 with updated user showing cartelaBonusEnabled: true', async () => {
+    const res = await supertest(testApp)
+      .patch(`/api/users/${PLAYER_UUID}/cartela-bonus`)
+      .set('Authorization', `Bearer ${adminToken()}`)
+      .send({ enabled: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data).toBeDefined();
+    expect(res.body.data.cartelaBonusEnabled).toBe(true);
+
+    // Verify DB state was actually updated
+    const [row] = await AppDataSource.query(
+      `SELECT cartela_bonus_enabled FROM users WHERE id = $1`,
+      [PLAYER_UUID]
+    );
+    expect(row.cartela_bonus_enabled).toBe(true);
+  });
+});
+
+// --- Test: admin can set enabled:false ----------------------------------------
+
+describe('PATCH /api/users/:id/cartela-bonus — admin sets enabled:false (Requirements 4.1, 4.2)', () => {
+  it('returns 200 with updated user showing cartelaBonusEnabled: false', async () => {
+    // Pre-enable so we can test the toggle back to false
+    await AppDataSource.query(
+      `UPDATE users SET cartela_bonus_enabled = TRUE WHERE id = $1`,
+      [PLAYER_UUID]
+    );
+
+    const res = await supertest(testApp)
+      .patch(`/api/users/${PLAYER_UUID}/cartela-bonus`)
+      .set('Authorization', `Bearer ${adminToken()}`)
+      .send({ enabled: false });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.cartelaBonusEnabled).toBe(false);
+
+    // Verify DB state was actually updated
+    const [row] = await AppDataSource.query(
+      `SELECT cartela_bonus_enabled FROM users WHERE id = $1`,
+      [PLAYER_UUID]
+    );
+    expect(row.cartela_bonus_enabled).toBe(false);
+  });
+});
+
+// --- Test: agent can update their own user ------------------------------------
+
+describe("PATCH /api/users/:id/cartela-bonus — agent updates their own user (Requirements 4.3)", () => {
+  it('returns 200 when agent updates a player they created', async () => {
+    const res = await supertest(testApp)
+      .patch(`/api/users/${PLAYER_UUID}/cartela-bonus`)
+      .set('Authorization', `Bearer ${ownerAgentToken()}`)
+      .send({ enabled: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.cartelaBonusEnabled).toBe(true);
+  });
+});
+
+// --- Test: agent gets 403 for another agent's user ----------------------------
+
+describe("PATCH /api/users/:id/cartela-bonus — agent gets 403 for another agent's user (Requirements 4.3)", () => {
+  it('returns 403 FORBIDDEN and leaves cartelaBonusEnabled unchanged', async () => {
+    // PLAYER_UUID is owned by AGENT_UUID; AGENT2_UUID should be denied
+    const res = await supertest(testApp)
+      .patch(`/api/users/${PLAYER_UUID}/cartela-bonus`)
+      .set('Authorization', `Bearer ${otherAgentToken()}`)
+      .send({ enabled: true });
+
+    expect(res.status).toBe(403);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error?.code).toBe('FORBIDDEN');
+
+    // cartelaBonusEnabled must remain FALSE (unchanged)
+    const [row] = await AppDataSource.query(
+      `SELECT cartela_bonus_enabled FROM users WHERE id = $1`,
+      [PLAYER_UUID]
+    );
+    expect(row.cartela_bonus_enabled).toBe(false);
+  });
+});
+
+// --- Test: non-boolean enabled values return 400 -----------------------------
+
+describe('PATCH /api/users/:id/cartela-bonus — non-boolean enabled returns 400 (Requirements 4.4)', () => {
+  it.each([
+    { label: 'string "true"',  body: { enabled: 'true' } },
+    { label: 'string "false"', body: { enabled: 'false' } },
+    { label: 'number 1',       body: { enabled: 1 } },
+    { label: 'number 0',       body: { enabled: 0 } },
+    { label: 'null',           body: { enabled: null } },
+    { label: 'missing field',  body: {} },
+  ])('returns 400 VALIDATION_ERROR for $label', async ({ body }) => {
+    const res = await supertest(testApp)
+      .patch(`/api/users/${PLAYER_UUID}/cartela-bonus`)
+      .set('Authorization', `Bearer ${adminToken()}`)
+      .send(body);
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error?.code).toBe('VALIDATION_ERROR');
+  });
+});
+
+// --- Test: non-existent user returns 404 --------------------------------------
+
+describe('PATCH /api/users/:id/cartela-bonus — non-existent user returns 404', () => {
+  it('returns 404 NOT_FOUND for an unknown UUID', async () => {
+    const unknownId = '00000000-0000-0000-0000-000000000099';
+
+    const res = await supertest(testApp)
+      .patch(`/api/users/${unknownId}/cartela-bonus`)
+      .set('Authorization', `Bearer ${adminToken()}`)
+      .send({ enabled: true });
+
+    expect(res.status).toBe(404);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error?.code).toBe('NOT_FOUND');
+  });
+});
+
+// --- Test: sanitized user is returned (no passwordHash) -----------------------
+
+describe('PATCH /api/users/:id/cartela-bonus — sanitized user returned on success (Requirements 4.5)', () => {
+  it('does not expose passwordHash and returns the correct user id', async () => {
+    const res = await supertest(testApp)
+      .patch(`/api/users/${PLAYER_UUID}/cartela-bonus`)
+      .set('Authorization', `Bearer ${adminToken()}`)
+      .send({ enabled: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.passwordHash).toBeUndefined();
+    expect(res.body.data.id).toBe(PLAYER_UUID);
+    expect(res.body.data.cartelaBonusEnabled).toBe(true);
+  });
+});

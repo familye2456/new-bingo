@@ -83,6 +83,10 @@ export class User {
   @Column({ name: 'created_by', nullable: true, type: 'uuid' })
   createdBy?: string;
 
+  /** Whether the user receives a free cartela bonus on every game they create */
+  @Column({ name: 'cartela_bonus_enabled', default: false })
+  cartelaBonusEnabled!: boolean;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 

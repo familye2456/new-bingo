@@ -4,8 +4,6 @@ import { createGame, joinGame, startGame, callNumber, markNumber, claimBingo, ge
 import { AppDataSource } from '../../../config/database';
 import { GameCartela } from '../domain/GameCartela';
 import { Game } from '../domain/Game';
-import { UserCartela } from '../domain/UserCartela';
-import { Transaction } from '../../payment/domain/Transaction';
 import { AuthRequest } from '../../../shared/middleware/authMiddleware';
 import { Response } from 'express';
 
@@ -53,43 +51,6 @@ router.get('/mine', async (req: AuthRequest, res: Response) => {
 router.get('/', listGames);
 // Only players (not admins) can create games
 router.post('/', authorize('player', 'operator'), createGame);
-
-// Daily bonus status — must be before /:gameId to avoid conflict
-router.get('/bonus/today', async (req: AuthRequest, res: Response) => {
-  const userId = req.user!.id;
-  const txRepo = AppDataSource.getRepository(Transaction);
-  const gameRepo = AppDataSource.getRepository(Game);
-
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-
-  const [bonusTx, houseCutResult] = await Promise.all([
-    txRepo.createQueryBuilder('t')
-      .where('t.userId = :userId', { userId })
-      .andWhere('t.transactionType = :type', { type: 'bonus' })
-      .andWhere('t.createdAt >= :todayStart', { todayStart })
-      .getOne(),
-    gameRepo.createQueryBuilder('g')
-      .select('SUM(g.houseCut)', 'total')
-      .where('g.creatorId = :userId', { userId })
-      .andWhere('g.status = :status', { status: 'finished' })
-      .andWhere('(g.finishedAt >= :todayStart OR g.createdAt >= :todayStart)', { todayStart })
-      .getRawOne(),
-  ]);
-
-  const dailyHouseCut = parseFloat(houseCutResult?.total ?? '0') || 0;
-  res.json({
-    success: true,
-    data: {
-      bonusApplied: !!bonusTx,
-      bonusAmount: bonusTx ? 200 : 0,
-      bonusAppliedAt: bonusTx?.createdAt ?? null,
-      dailyHouseCut,
-      threshold: 1000,
-      progress: Math.min(100, Math.round((dailyHouseCut / 1000) * 100)),
-    },
-  });
-});
 
 router.get('/:gameId', getGame);
 router.post('/:gameId/join', joinGame);

@@ -19,7 +19,7 @@ const TX_LABEL: Record<string, { label: string; sign: string; color: string }> =
   withdrawal: { label: 'Deduction', sign: '-', color: '#f87171' },
   win:        { label: 'Win',       sign: '+', color: '#4ade80' },
   bet:        { label: 'House Fee', sign: '-', color: '#f87171' },
-  bonus:      { label: 'Bonus',     sign: '+', color: '#fbbf24' },
+  bonus:      { label: 'Free Cartela', sign: '+', color: '#fbbf24' },
   refund:     { label: 'Refund',    sign: '+', color: '#a78bfa' },
   house_cut:  { label: 'House Cut', sign: '-', color: '#f87171' },
 };

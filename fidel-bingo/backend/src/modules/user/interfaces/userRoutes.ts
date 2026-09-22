@@ -270,6 +270,50 @@ router.patch('/:id/deactivate', authorize('admin', 'agent'), async (req: AuthReq
   res.json({ success: true, message: 'User deactivated' });
 });
 
+/**
+ * PATCH /users/:id/cartela-bonus
+ *
+ * Purpose:
+ *   Enable or disable the free cartela bonus for a specific user. When enabled,
+ *   the user automatically receives a balance credit equal to the bet amount
+ *   (one free cartela) each time they start a new game.
+ *
+ * Auth / Required Roles:
+ *   - admin  — may toggle the bonus for ANY user in the system.
+ *   - agent  — may only toggle the bonus for users they own (createdBy === agent.id);
+ *              attempting to manage another agent's user returns 403.
+ *
+ * Request Body:
+ *   { "enabled": true | false }
+ *   The `enabled` field must be a strict boolean; strings, numbers, null, and
+ *   undefined are all rejected.
+ *
+ * Response Codes:
+ *   200 — Success. Returns { success: true, data: <sanitized user object> }.
+ *   400 — VALIDATION_ERROR. `enabled` is not a boolean.
+ *   403 — FORBIDDEN. Caller is an agent who does not own the target user.
+ *   404 — NOT_FOUND. No user exists with the given :id.
+ */
+router.patch('/:id/cartela-bonus', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
+  const { enabled } = req.body;
+
+  // Strict boolean check — reject strings, numbers, null, undefined, objects, etc.
+  if (typeof enabled !== 'boolean') {
+    throw new AppError(400, 'VALIDATION_ERROR', 'enabled must be a boolean');
+  }
+
+  const repo = AppDataSource.getRepository(User);
+  const user = await repo.findOne({ where: { id: req.params.id } });
+  if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
+
+  // Agent ownership check — admins bypass, agents must own the user
+  assertAgentOwns(req.user!, user);
+
+  await repo.update(req.params.id, { cartelaBonusEnabled: enabled });
+  const updated = await repo.findOne({ where: { id: req.params.id } });
+  res.json({ success: true, data: updated!.sanitize() });
+});
+
 // Assign a user to an agent (admin only)
 router.patch('/:id/assign-agent', authorize('admin'), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(User);

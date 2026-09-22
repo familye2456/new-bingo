@@ -9,6 +9,7 @@ interface UserRecord {
   id: string; username: string; email: string;
   status: string; paymentType: 'prepaid' | 'postpaid'; balance: number;
   agentUsername?: string | null;
+  cartelaBonusEnabled: boolean;
 }
 
 const emptyForm = { username: '', email: '', password: '', paymentType: 'prepaid' as 'prepaid' | 'postpaid', voice: 'boy sound' as VoiceCategory, role: 'player' as 'player' | 'agent', agentId: '' };
@@ -183,6 +184,28 @@ export const UserManagement: React.FC = () => {
   const assignAgentMutation = useMutation({
     mutationFn: () => adminApi.assignAgent(assignAgentUser!.id, selectedAgentId || null),
     onSuccess: () => { invalidate(); closeModal(); },
+  });
+
+  const [bonusPendingUserId, setBonusPendingUserId] = useState<string | null>(null);
+  const [bonusError, setBonusError] = useState<{ userId: string; message: string } | null>(null);
+
+  const cartelajBonusMutation = useMutation({
+    mutationFn: ({ userId, enabled }: { userId: string; enabled: boolean }) => {
+      setBonusPendingUserId(userId);
+      setBonusError(null);
+      return adminApi.setCartelaBonus(userId, enabled);
+    },
+    onSuccess: () => {
+      setBonusPendingUserId(null);
+      invalidate();
+    },
+    onError: (e: any, variables) => {
+      setBonusPendingUserId(null);
+      setBonusError({
+        userId: variables.userId,
+        message: e?.response?.data?.error?.message ?? 'Failed to update bonus',
+      });
+    },
   });
 
   const closeModal = () => {
@@ -786,6 +809,24 @@ export const UserManagement: React.FC = () => {
                           className="p-1.5 rounded-lg hover:bg-yellow-50 text-gray-400 hover:text-yellow-600 transition-colors">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
                         </button>
+                        <button
+                          onClick={() => cartelajBonusMutation.mutate({ userId: u.id, enabled: !u.cartelaBonusEnabled })}
+                          disabled={bonusPendingUserId === u.id}
+                          title={u.cartelaBonusEnabled ? 'Disable free cartela bonus' : 'Enable free cartela bonus'}
+                          className={`p-1.5 rounded-lg transition-colors ${u.cartelaBonusEnabled ? 'bg-yellow-100 text-yellow-600' : 'hover:bg-yellow-50 text-gray-400 hover:text-yellow-600'} ${bonusPendingUserId === u.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {bonusPendingUserId === u.id ? (
+                            <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v4m0 8v4M4 12H0m8 0H4m12 0h4m-4 0h-4" />
+                              <circle cx="12" cy="12" r="10" strokeOpacity="0.25" strokeWidth="4" />
+                              <path d="M22 12a10 10 0 00-10-10" strokeWidth="4" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+                            </svg>
+                          )}
+                        </button>
                         {isAdmin && (
                           <button onClick={() => { setAssignAgentUser(u); setSelectedAgentId(''); setModal('assign-agent'); }} title="Assign to agent"
                             className="p-1.5 rounded-lg hover:bg-purple-50 text-gray-400 hover:text-purple-600 transition-colors">
@@ -820,6 +861,13 @@ export const UserManagement: React.FC = () => {
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
                       </div>
+                      {bonusError?.userId === u.id && (
+                        <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                          <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+                          {bonusError.message}
+                          <button onClick={() => setBonusError(null)} className="ml-1 text-red-400 hover:text-red-600">✕</button>
+                        </p>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -879,6 +927,20 @@ export const UserManagement: React.FC = () => {
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
                 Cartelas
               </button>
+              <button
+                onClick={() => cartelajBonusMutation.mutate({ userId: u.id, enabled: !u.cartelaBonusEnabled })}
+                disabled={bonusPendingUserId === u.id}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium ${u.cartelaBonusEnabled ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'} ${bonusPendingUserId === u.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {bonusPendingUserId === u.id ? '⏳ Bonus...' : u.cartelaBonusEnabled ? '🎁 Bonus ON' : '🎁 Bonus'}
+              </button>
+              {bonusError?.userId === u.id && (
+                <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1 w-full">
+                  <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+                  {bonusError.message}
+                  <button onClick={() => setBonusError(null)} className="ml-1 text-red-400 hover:text-red-600">✕</button>
+                </p>
+              )}
               {u.paymentType === 'prepaid' && (
                 <button onClick={() => { setTopUpUser(u); setModal('topup'); }}
                   className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-medium">

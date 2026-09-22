@@ -91,6 +91,8 @@ export const adminApi = {
   listNegativeBalanceAlerts: () => api.get('/users/negative-balance-alerts'),
   resolveNegativeBalance: (userId: string, restoreAmount: number) =>
     api.patch(`/users/${userId}/balance`, { amount: restoreAmount }),
+  setCartelaBonus: (id: string, enabled: boolean) =>
+    api.patch(`/users/${id}/cartela-bonus`, { enabled }),
 };
 
 export const cartelaAdminApi = {

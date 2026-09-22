@@ -348,7 +348,7 @@ export const PlayBingo: React.FC = () => {
         <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-1.5"
           style={{ background: 'rgba(34,197,94,0.15)', borderBottom: '1px solid rgba(34,197,94,0.3)' }}>
           <span className="text-green-400 font-bold text-sm min-w-0 break-words">
-            🎉 Card #{winnerInfo.cardNumber} — BINGO! ({winnerInfo.pattern}) · {Number(winnerInfo.amount).toFixed(2)} BIRR
+            🎉 {user?.cartelaBonusEnabled && winnerInfo.cardNumber === 1 ? '🎁 Bonus Card #1' : `Card #{winnerInfo.cardNumber}`} — BINGO! ({winnerInfo.pattern}) · {Number(winnerInfo.amount).toFixed(2)} BIRR
           </span>
           <button onClick={() => setWinnerInfo(null)}
             className="text-green-400 hover:text-white text-lg leading-none px-1"
@@ -655,7 +655,7 @@ export const PlayBingo: React.FC = () => {
             <div className="shrink-0 w-px self-stretch" style={{ background: 'rgba(255,255,255,0.1)' }} />
 
             {/* Last number ball */}
-            <div className="shrink-0 flex items-center justify-center" style={{ width: 90, height: 90 }}>
+            <div className="shrink-0 flex items-center justify-center" style={{ width: 100, height: 100 }}>
               <div key={lastNumber} className="flex flex-col items-center justify-center relative overflow-hidden ball-container"
                 style={{
                   width: '100%', height: '100%', borderRadius: '50%',
@@ -677,11 +677,11 @@ export const PlayBingo: React.FC = () => {
                       transform: 'translateX(-100%) rotate(25deg)', pointerEvents: 'none',
                     }} />
                     <span className="font-extrabold leading-none relative z-10"
-                      style={{ fontSize: 10, color: '#fff', letterSpacing: '0.15em', opacity: 0.9 }}>
+                      style={{ fontSize: 11, color: '#fff', letterSpacing: '0.15em', opacity: 0.9 }}>
                       {getBingoLetter(lastNumber)}
                     </span>
                     <span className="font-black tabular-nums leading-none relative z-10"
-                      style={{ fontSize: 30, color: '#fff', textShadow: '0 2px 10px rgba(0,0,0,0.6)' }}>
+                      style={{ fontSize: 34, color: '#fff', textShadow: '0 2px 10px rgba(0,0,0,0.6)' }}>
                       {String(lastNumber).padStart(2, '0')}
                     </span>
                     <div className="absolute inset-0 rounded-full pointer-events-none"
@@ -691,7 +691,7 @@ export const PlayBingo: React.FC = () => {
                       }} />
                   </>
                 ) : (
-                  <span className="font-black text-white/20" style={{ fontSize: 28 }}>?</span>
+                  <span className="font-black text-white/20" style={{ fontSize: 32 }}>?</span>
                 )}
               </div>
             </div>

@@ -59,7 +59,7 @@ export class GameService {
 
     // Verify all selected user_cartelas belong to this user
     const [user, ownedUCs, userGameCount] = await Promise.all([
-      this.userRepo.findOne({ where: { id: userId }, select: ['id', 'paymentType', 'balance', 'creditLimit'] }),
+      this.userRepo.findOne({ where: { id: userId }, select: ['id', 'paymentType', 'balance', 'creditLimit', 'cartelaBonusEnabled'] }),
       this.ucRepo.find({ where: dto.cartelaIds.map((id) => ({ id, userId })) }),
       this.gameRepo.count({ where: { creatorId: userId } }),
     ]);
@@ -123,6 +123,24 @@ export class GameService {
           })
         ),
       ]);
+
+      // Apply free cartela bonus if user is eligible and bet > 0
+      if (user.cartelaBonusEnabled && dto.betAmountPerCartela > 0) {
+        await Promise.all([
+          manager.increment(User, { id: userId }, 'balance', dto.betAmountPerCartela),
+          manager.save(
+            manager.create(Transaction, {
+              userId,
+              gameId: savedGame.id,
+              transactionType: 'bonus',
+              amount: dto.betAmountPerCartela,
+              status: 'completed',
+              description: `Free cartela bonus for game ${savedGame.id}`,
+              processedAt: new Date(),
+            })
+          ),
+        ]);
+      }
 
       activeGames.inc();
       logger.info('Game created', { gameId: savedGame.id, userId });
@@ -232,7 +250,6 @@ export class GameService {
 
       activeGames.dec();
       logger.info('Bingo claimed', { gameId, userId, amount: shareAmount });
-      this.applyDailyBonusIfEligible(game.creatorId).catch(() => {});
 
       return { valid: true, amount: shareAmount };
     });
@@ -252,7 +269,6 @@ export class GameService {
     try { await redisClient.del(`game:${gameId}`); } catch {}
     activeGames.dec();
     logger.info('Game finished manually', { gameId, userId });
-    await this.applyDailyBonusIfEligible(userId);
     return game;
   }
 
@@ -365,43 +381,4 @@ export class GameService {
     return this.gameRepo.find({ where, order: { createdAt: 'DESC' }, take: 50 });
   }
 
-  private async applyDailyBonusIfEligible(userId: string): Promise<void> {
-    try {
-      const BONUS_THRESHOLD = 1000;
-      const BONUS_AMOUNT = 200;
-      const txRepo = AppDataSource.getRepository(Transaction);
-      const gameRepo = AppDataSource.getRepository(Game);
-      const user = await this.userRepo.findOne({ where: { id: userId } });
-      if (!user) return;
-
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const alreadyBonused = await txRepo.createQueryBuilder('t')
-        .where('t.userId = :userId', { userId })
-        .andWhere('t.transactionType = :type', { type: 'bonus' })
-        .andWhere('t.createdAt >= :todayStart', { todayStart })
-        .getOne();
-      if (alreadyBonused) return;
-
-      const result = await gameRepo.createQueryBuilder('g')
-        .select('SUM(g.houseCut)', 'total')
-        .where('g.creatorId = :userId', { userId })
-        .andWhere('g.status = :status', { status: 'finished' })
-        .andWhere('(g.finishedAt >= :todayStart OR g.createdAt >= :todayStart)', { todayStart })
-        .getRawOne();
-
-      const dailyHouseCut = parseFloat(result?.total ?? '0') || 0;
-      if (dailyHouseCut < BONUS_THRESHOLD) return;
-
-      await this.userRepo.increment({ id: userId }, 'balance', BONUS_AMOUNT);
-      await txRepo.save(txRepo.create({
-        userId, transactionType: 'bonus', amount: BONUS_AMOUNT, status: 'completed',
-        description: `Daily bonus: reached ${BONUS_THRESHOLD} Birr house profit (${user.paymentType})`,
-        processedAt: new Date(),
-      }));
-      logger.info('Daily bonus applied', { userId, dailyHouseCut, bonus: BONUS_AMOUNT });
-    } catch (err) {
-      logger.warn('Daily bonus check failed', { userId, err });
-    }
-  }
 }
