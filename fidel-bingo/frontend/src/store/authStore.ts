@@ -173,7 +173,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await dbPut('user', user, 'me');
 
       // Apply admin-set default voice
-      const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina'];
+      const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina','hp sound'];
       const defaultVoice = localStorage.getItem(`default_voice_${user.username}`);
       if (defaultVoice && validVoices.includes(defaultVoice)) {
         // Persist admin-assigned voice into the IDB user record so it survives cross-device sessions
@@ -288,7 +288,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
         // Kick off voice sound caching in the background — don't block login
         if (user.role !== 'admin') {
-          const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina'];
+          const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina','hp sound'];
           const currentVoice = (() => {
             try {
               const s = localStorage.getItem('game-settings');
@@ -378,7 +378,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   fetchMe: async (options) => {
-    const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina'];
+    const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina','hp sound'];
 
     /** Apply assignedVoice from user record to gameSettingsStore if not already overridden */
     function applyAssignedVoice(assignedVoice: string | undefined) {

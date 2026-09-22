@@ -11,7 +11,8 @@ export type VoiceCategory =
   | 'girl oro'
   | 'men arada'
   | 'men gold'
-  | 'men tigrina';
+  | 'men tigrina'
+  | 'hp sound';
 
 export type SoundCallMode = 'single' | 'double';
 
@@ -26,6 +27,7 @@ export const ALL_VOICE_CATEGORIES: { value: VoiceCategory; label: string }[] = [
   { value: 'men arada',       label: '🎙 Men Arada' },
   { value: 'men gold',        label: '🎙 Men Gold' },
   { value: 'men tigrina',     label: '🎙 Men Tigrina' },
+  { value: 'hp sound',        label: '🎵 HP' },
 ];
 
 
