@@ -55,6 +55,7 @@ interface User {
   lastName?: string;
   paymentType?: string;
   status?: string;
+  cartelaBonusEnabled?: boolean;
 }
 
 export interface CacheStep {
