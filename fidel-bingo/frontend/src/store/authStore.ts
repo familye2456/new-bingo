@@ -90,6 +90,7 @@ const STEPS: CacheStep[] = [
   { label: 'Games',        status: 'pending' },
   { label: 'Transactions', status: 'pending' },
   { label: 'App & Sounds', status: 'pending' },
+  { label: 'Voice Sounds', status: 'pending' },
 ];
 
 /** Wait for the service worker to finish installing and caching all assets, with progress */
@@ -203,7 +204,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const alreadyCached = localStorage.getItem(cacheKey) === '1';
 
         if (alreadyCached) {
-          set({ user, loading: false, initialized: true });
+          // Even if data was cached before, check if voice sounds still need downloading
+          const { isVoiceFullyCached, downloadVoiceSounds: _dlVoice } = await import('../services/db');
+          const currentVoice = (() => {
+            try {
+              const s = localStorage.getItem('game-settings');
+              const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina','hp sound'];
+              const v = s ? JSON.parse(s)?.state?.voice : null;
+              return validVoices.includes(v) ? v : 'boy sound';
+            } catch { return 'boy sound'; }
+          })();
+          const voiceReady = await isVoiceFullyCached(currentVoice);
+          if (voiceReady) {
+            set({ user, loading: false, initialized: true });
+          } else {
+            // Show blocking download screen just for sounds
+            set({ user, loading: false, initialized: false });
+            const steps: CacheStep[] = [{ label: 'Voice Sounds', status: 'loading', cached: 0, total: 75 }];
+            set({ cacheSteps: steps });
+            await _dlVoice(currentVoice, (cached, total) => {
+              steps[0] = { ...steps[0], cached, total };
+              set({ cacheSteps: [...steps] });
+            });
+            steps[0] = { ...steps[0], status: 'done' };
+            set({ cacheSteps: [...steps], initialized: true });
+          }
         } else {
           // Show download screen — NOT initialized yet, user stays blocked
           set({ user, loading: false, initialized: false });
@@ -258,6 +283,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
           // Let the SW install in the background — don't block the user
           mark(4, 'done');
+
+          // Download voice sounds — block UI until complete
+          {
+            const { downloadVoiceSounds: _dlVoice } = await import('../services/db');
+            const currentVoice = (() => {
+              try {
+                const s = localStorage.getItem('game-settings');
+                const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina','hp sound'];
+                const v = s ? JSON.parse(s)?.state?.voice : null;
+                return validVoices.includes(v) ? v : 'boy sound';
+              } catch { return 'boy sound'; }
+            })();
+            mark(5, 'loading');
+            await _dlVoice(currentVoice, (cached, total) => {
+              steps[5] = { ...steps[5], status: 'loading', cached, total };
+              set({ cacheSteps: [...steps] });
+            });
+            mark(5, 'done');
+          }
+
           set({ initialized: true });
 
           // Kick off SW caching without blocking

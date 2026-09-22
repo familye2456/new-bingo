@@ -17,18 +17,16 @@ if (typeof window !== 'undefined') {
   window.addEventListener('pointerdown', mark, { once: true });
 }
 
-// Always reads latest voice/mode from store — never stale
+// Always reads latest voice from store — never stale
 function playSound(name: string) {
   if (!_userInteracted) {
     console.log('[playSound] blocked — no user interaction yet');
     return;
   }
-  const { voice, volume, soundCallMode } = useGameSettings.getState();
-  console.log('[playSound] name:', name, 'voice:', voice, 'mode:', soundCallMode);
-  // If name is a plain number string, route through the queue so double-sound works
+  const { voice, volume } = useGameSettings.getState();
   const num = parseInt(name, 10);
   if (!isNaN(num) && String(num) === name) {
-    playNumberSoundQueued(num, voice, volume, soundCallMode);
+    playNumberSoundQueued(num, voice, volume);
     return;
   }
   const ext = voice === 'boy sound' ? '.wav' : '.mp3';
@@ -115,6 +113,7 @@ export const PlayBingo: React.FC = () => {
   const resetGameRef = useRef<string | null>(null);
   const [sessionCalledNumbers, setSessionCalledNumbers] = useState<number[]>([]);
   const [winnerInfo, setWinnerInfo] = useState<{ cardNumber: number; amount: number; pattern: string } | null>(null);
+  const [showBonusModal, setShowBonusModal] = useState(false);
   const isOfflineGame = selectedGameId?.startsWith('offline-') ?? false;
 
   const { data: allGames = [], isLoading } = useQuery<Game[]>({
@@ -210,7 +209,11 @@ export const PlayBingo: React.FC = () => {
       stopAuto(true);
       queryClient.invalidateQueries({ queryKey: ['games'] });
       if (!isOfflineGame) refreshBalance();
-      navigate('/new-game');
+      if (user?.cartelaBonusEnabled) {
+        setShowBonusModal(true);
+      } else {
+        navigate('/new-game');
+      }
     },
   });
 
@@ -876,6 +879,59 @@ export const PlayBingo: React.FC = () => {
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* ── Bonus cartela popup — shown after game ends when user has bonus enabled ── */}
+      {showBonusModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ backdropFilter: 'blur(6px)', background: 'rgba(0,0,0,0.75)' }}
+        >
+          <div
+            className="flex flex-col items-center gap-5 rounded-3xl px-10 py-8"
+            style={{
+              background: 'linear-gradient(145deg, #0f1e35, #0a1220)',
+              border: '1px solid rgba(251,191,36,0.35)',
+              boxShadow: '0 0 60px rgba(251,191,36,0.2), 0 16px 48px rgba(0,0,0,0.8)',
+              minWidth: 260,
+            }}
+          >
+            {/* Gift icon */}
+            <div className="flex items-center justify-center rounded-full"
+              style={{ width: 72, height: 72, background: 'rgba(251,191,36,0.12)', border: '2px solid rgba(251,191,36,0.4)' }}>
+              <span style={{ fontSize: 36 }}>🎁</span>
+            </div>
+
+            {/* Title */}
+            <div className="text-center">
+              <p className="text-yellow-400 font-extrabold text-xl tracking-wide">Free Cartela Bonus</p>
+              <p className="text-gray-400 text-sm mt-1">Your bonus card for the next game</p>
+            </div>
+
+            {/* Card number badge */}
+            <div className="flex items-center justify-center rounded-2xl px-8 py-4"
+              style={{
+                background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
+                boxShadow: '0 0 24px rgba(251,191,36,0.5)',
+                minWidth: 140,
+              }}>
+              <span className="font-black text-gray-900 text-4xl tracking-tight">Card #1</span>
+            </div>
+
+            <p className="text-gray-500 text-xs text-center" style={{ maxWidth: 200 }}>
+              One free cartela has been credited to your balance
+            </p>
+
+            {/* Close → new game */}
+            <button
+              onClick={() => { setShowBonusModal(false); navigate('/new-game'); }}
+              className="w-full font-bold rounded-xl py-3 text-base transition-all active:scale-95 hover:brightness-110"
+              style={{ background: 'linear-gradient(135deg, #fbbf24, #f59e0b)', color: '#111' }}
+            >
+              Close
+            </button>
           </div>
         </div>
       )}

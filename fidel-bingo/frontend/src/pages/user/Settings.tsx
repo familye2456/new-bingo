@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { userApi } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
-import { useGameSettings, VoiceCategory, ALL_VOICE_CATEGORIES, SoundCallMode } from '../../store/gameSettingsStore';
-import { getVoiceCacheStatus, downloadVoiceSounds, getVoiceExt } from '../../services/db';
+import { useGameSettings } from '../../store/gameSettingsStore';
 
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <div>
@@ -34,27 +33,9 @@ const Card: React.FC<{ title: string; subtitle?: string; icon: React.ReactNode; 
 
 export const Settings: React.FC = () => {
   const { user, fetchMe } = useAuthStore();
-  const { voice, autoCallInterval, soundCallMode, setVoice, setAutoCallInterval, setSoundCallMode } = useGameSettings();
+  const { autoCallInterval, setAutoCallInterval } = useGameSettings();
   const [form, setForm] = useState({ firstName: user?.firstName ?? '', lastName: user?.lastName ?? '' });
   const [saved, setSaved] = useState(false);
-  const [dlProgress, setDlProgress] = useState<{ cached: number; total: number; downloading: boolean }>({
-    cached: 0, total: 75, downloading: false,
-  });
-
-  const checkCache = useCallback(async () => {
-    const status = await getVoiceCacheStatus(voice);
-    setDlProgress(p => ({ ...p, ...status }));
-  }, [voice]);
-
-  useEffect(() => { checkCache(); }, [checkCache]);
-
-  const startDownload = async () => {
-    setDlProgress(p => ({ ...p, downloading: true }));
-    await downloadVoiceSounds(voice, (cached, total) => {
-      setDlProgress({ cached, total, downloading: cached < total });
-    });
-    setDlProgress(p => ({ ...p, downloading: false }));
-  };
 
   const updateMutation = useMutation({
     mutationFn: () => userApi.updateMe(form),
@@ -66,8 +47,6 @@ export const Settings: React.FC = () => {
 
   const paymentType = (user as any)?.paymentType ?? 'prepaid';
   const status = (user as any)?.status ?? 'active';
-  const pct = Math.round((dlProgress.cached / Math.max(dlProgress.total, 1)) * 100);
-  const fullyDownloaded = dlProgress.cached >= dlProgress.total && dlProgress.total > 0;
 
   return (
     <div className="h-full overflow-auto" style={{ background: '#0e1a35' }}>
@@ -96,69 +75,7 @@ export const Settings: React.FC = () => {
           </div>
         </div>
 
-        {/* Offline ready banner */}
-        {fullyDownloaded && (
-          <div className="rounded-2xl px-4 py-3 flex items-center gap-3"
-            style={{ background: 'linear-gradient(135deg,rgba(52,211,153,0.12),rgba(52,211,153,0.04))', border: '1px solid rgba(52,211,153,0.25)' }}>
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-              style={{ background: 'rgba(52,211,153,0.15)' }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth={2.5} className="w-4 h-4">
-                <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <div>
-              <div className="text-sm font-bold text-emerald-400">Ready for Offline Use</div>
-              <div className="text-xs mt-0.5" style={{ color: 'rgba(52,211,153,0.6)' }}>
-                All {voice} sounds downloaded · you can play without internet
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Offline Download */}
-        <Card
-          title="Offline Sounds"
-          subtitle={`Download ${voice} for offline play`}
-          icon={
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
-              <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M16 12l-4 4m0 0l-4-4m4 4V4" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          }
-        >
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium capitalize" style={{ color: '#9ca3af' }}>{voice}</span>
-              <span className="text-xs font-bold" style={{ color: fullyDownloaded ? '#34d399' : '#fbbf24' }}>
-                {fullyDownloaded ? '✓ Ready offline' : `${dlProgress.cached} / ${dlProgress.total} files`}
-              </span>
-            </div>
-            <div className="h-2.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
-              <div className="h-full rounded-full transition-all duration-300"
-                style={{
-                  width: `${pct}%`,
-                  background: fullyDownloaded
-                    ? 'linear-gradient(90deg,#34d399,#10b981)'
-                    : dlProgress.downloading
-                    ? 'linear-gradient(90deg,#fbbf24,#f59e0b)'
-                    : 'linear-gradient(90deg,#60a5fa,#3b82f6)',
-                }} />
-            </div>
-            {!fullyDownloaded && (
-              <button
-                onClick={startDownload}
-                disabled={dlProgress.downloading}
-                className="w-full py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-60"
-                style={{ background: 'linear-gradient(135deg,#fbbf24,#f59e0b)', color: '#111' }}>
-                {dlProgress.downloading ? `Downloading... ${pct}%` : 'Download Now'}
-              </button>
-            )}
-            {!fullyDownloaded && !dlProgress.downloading && (
-              <p className="text-xs text-center" style={{ color: '#f87171' }}>
-                ⚠ Download required before starting a game offline
-              </p>
-            )}
-          </div>
-        </Card>
+        {/* Offline ready banner removed — sounds auto-download on login */}
 
         {/* Profile */}
         <Card
@@ -209,7 +126,7 @@ export const Settings: React.FC = () => {
         {/* Game Settings */}
         <Card
           title="Game Settings"
-          subtitle="Caller voice and auto-call speed"
+          subtitle="Auto-call speed"
           icon={
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
               <polygon points="5,3 19,12 5,21" strokeLinejoin="round" />
@@ -217,34 +134,6 @@ export const Settings: React.FC = () => {
           }
         >
           <div className="space-y-5">
-            <div>
-              <div className="text-xs font-medium mb-2.5" style={{ color: '#6b7280' }}>Caller Voice</div>
-              <div className="grid grid-cols-2 gap-2">
-                {ALL_VOICE_CATEGORIES.map(({ value, label }) => (
-                  <button key={value} onClick={() => setVoice(value)}
-                    className="py-3 rounded-xl text-sm font-medium transition-all"
-                    style={voice === value
-                      ? { background: 'rgba(251,191,36,0.15)', border: '1.5px solid rgba(251,191,36,0.5)', color: '#fbbf24' }
-                      : { background: '#0e1a35', border: '1px solid rgba(255,255,255,0.07)', color: '#6b7280' }}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs font-medium mb-2.5" style={{ color: '#6b7280' }}>Sound Call Mode</div>
-              <div className="grid grid-cols-2 gap-2">
-                {(['single', 'double'] as SoundCallMode[]).map((mode) => (
-                  <button key={mode} onClick={() => setSoundCallMode(mode)}
-                    className="py-3 rounded-xl text-sm font-medium transition-all"
-                    style={soundCallMode === mode
-                      ? { background: 'rgba(251,191,36,0.15)', border: '1.5px solid rgba(251,191,36,0.5)', color: '#fbbf24' }
-                      : { background: '#0e1a35', border: '1px solid rgba(255,255,255,0.07)', color: '#6b7280' }}>
-                    {mode === 'single' ? '🔔 Single Sound' : '🔔🔔 Double Sound'}
-                  </button>
-                ))}
-              </div>
-            </div>
             <div>
               <div className="flex justify-between items-center mb-2.5">
                 <span className="text-xs font-medium" style={{ color: '#6b7280' }}>Auto Call Interval</span>
@@ -258,16 +147,6 @@ export const Settings: React.FC = () => {
                 <span>2s (fast)</span><span>15s (slow)</span>
               </div>
             </div>
-            <button
-              onClick={() => {
-                const n = Math.floor(Math.random() * 75) + 1;
-                const ext = getVoiceExt(voice);
-                new Audio(`/sounds/${encodeURIComponent(voice)}/${n}${ext}`).play().catch(() => {});
-              }}
-              className="w-full py-2.5 rounded-xl text-sm font-medium transition-all"
-              style={{ background: '#0e1a35', border: '1px solid rgba(255,255,255,0.07)', color: '#9ca3af' }}>
-              🔊 Preview Voice
-            </button>
           </div>
         </Card>
 

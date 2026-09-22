@@ -14,8 +14,6 @@ export type VoiceCategory =
   | 'men tigrina'
   | 'hp sound';
 
-export type SoundCallMode = 'single' | 'double';
-
 export const ALL_VOICE_CATEGORIES: { value: VoiceCategory; label: string }[] = [
   { value: 'boy sound',       label: '👦 Boy' },
   { value: 'boy simpol',      label: '👦 Boy Simpol' },
@@ -30,16 +28,13 @@ export const ALL_VOICE_CATEGORIES: { value: VoiceCategory; label: string }[] = [
   { value: 'hp sound',        label: '🎵 HP' },
 ];
 
-
 interface GameSettingsState {
   voice: VoiceCategory;
   autoCallInterval: number;
   volume: number;
-  soundCallMode: SoundCallMode;
   setVoice: (v: VoiceCategory) => void;
   setAutoCallInterval: (s: number) => void;
   setVolume: (v: number) => void;
-  setSoundCallMode: (m: SoundCallMode) => void;
 }
 
 export const useGameSettings = create<GameSettingsState>()(
@@ -48,11 +43,9 @@ export const useGameSettings = create<GameSettingsState>()(
       voice: 'boy sound',
       autoCallInterval: 5,
       volume: 1,
-      soundCallMode: 'single',
       setVoice: (voice) => set({ voice }),
       setAutoCallInterval: (autoCallInterval) => set({ autoCallInterval }),
       setVolume: (volume) => set({ volume }),
-      setSoundCallMode: (soundCallMode) => set({ soundCallMode }),
     }),
     { name: 'game-settings' }
   )
