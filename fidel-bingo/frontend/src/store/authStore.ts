@@ -175,7 +175,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await dbPut('user', user, 'me');
 
       // Apply admin-set default voice
-      const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina','hp sound'];
+      const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina','hp sound','double sound'];
       const defaultVoice = localStorage.getItem(`default_voice_${user.username}`);
       if (defaultVoice && validVoices.includes(defaultVoice)) {
         // Persist admin-assigned voice into the IDB user record so it survives cross-device sessions
@@ -209,7 +209,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           const currentVoice = (() => {
             try {
               const s = localStorage.getItem('game-settings');
-              const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina','hp sound'];
+              const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina','hp sound','double sound'];
               const v = s ? JSON.parse(s)?.state?.voice : null;
               return validVoices.includes(v) ? v : 'boy sound';
             } catch { return 'boy sound'; }
@@ -290,7 +290,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             const currentVoice = (() => {
               try {
                 const s = localStorage.getItem('game-settings');
-                const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina','hp sound'];
+                const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina','hp sound','double sound'];
                 const v = s ? JSON.parse(s)?.state?.voice : null;
                 return validVoices.includes(v) ? v : 'boy sound';
               } catch { return 'boy sound'; }
@@ -334,7 +334,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
         // Kick off voice sound caching in the background — don't block login
         if (user.role !== 'admin') {
-          const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina','hp sound'];
+          const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina','hp sound','double sound'];
           const currentVoice = (() => {
             try {
               const s = localStorage.getItem('game-settings');
@@ -382,36 +382,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const isLocked = localStorage.getItem('neg_balance_locked') === '1';
         if (isLocked) { set({ negativeBalance: true }); return; }
 
-        const { getAllQueued } = await import('../services/db');
-        const idbUser = await dbGet<any>('user', 'me');
+        // Server balance is authoritative — no delta math, no pending-cuts projection
         const serverBalance = Number(fresh.balance);
-        const idbBalance = Number(idbUser?.balance ?? 0);
+        console.log(`[balance] refreshBalance server=${serverBalance}`);
 
-        // Only subtract pending house cuts from the server balance when the server
-        // has NOT yet been charged (i.e. the server balance is still the pre-game value).
-        // We detect this by comparing: if idbBalance < serverBalance, the server hasn't
-        // billed yet so we project the deduction. If idbBalance >= serverBalance (or equal),
-        // the server has already charged the user — use it directly to avoid double-deduction.
-        const pending = await getAllQueued();
-        const pendingCreateGames = pending.filter((item: any) => item.type === 'createGame');
-        const pendingHouseCuts = pendingCreateGames.reduce((sum: number, item: any) => {
-          const p = item.payload as any;
-          return sum + (p.betAmountPerCartela ?? 0) * (p.cartelaIds?.length ?? 0) * ((p.housePercentage ?? 10) / 100);
-        }, 0);
-
-        // If server balance already reflects billing (server <= idb), use server directly.
-        // Only project deduction when server is still showing the pre-billing balance.
-        const serverAlreadyCharged = pendingCreateGames.length === 0 || serverBalance <= idbBalance;
-        const effectiveBalance = serverAlreadyCharged
-          ? serverBalance
-          : serverBalance - pendingHouseCuts;
-
-        console.log(`[balance] refreshBalance server=${serverBalance} idb=${idbBalance} pending=${pendingCreateGames.length} cuts=${pendingHouseCuts} alreadyCharged=${serverAlreadyCharged} effective=${effectiveBalance}`);
-
-        const normalized = { ...fresh, balance: effectiveBalance };
+        const normalized = { ...fresh, balance: serverBalance };
         await dbPut('user', normalized, 'me');
-        set((state) => ({ user: state.user ? { ...state.user, balance: effectiveBalance } : normalized }));
-        applyNegativeBalanceCheck(effectiveBalance, fresh.paymentType, fresh.role ?? '', get, (p) => set(p as any));
+        set((state) => ({ user: state.user ? { ...state.user, balance: serverBalance } : normalized }));
+        applyNegativeBalanceCheck(serverBalance, fresh.paymentType, fresh.role ?? '', get, (p) => set(p as any));
       }
     } catch {}
   },
@@ -424,7 +402,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   fetchMe: async (options) => {
-    const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina','hp sound'];
+    const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina','hp sound','double sound'];
 
     /** Apply assignedVoice from user record to gameSettingsStore if not already overridden */
     function applyAssignedVoice(assignedVoice: string | undefined) {
@@ -464,32 +442,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
         const idbUser = await dbGet<any>('user', 'me');
 
-        // If there are pending offline games in the queue, keep the local IDB balance.
-        // Don't let the server's stale pre-sync value overwrite what the user sees.
-        const { getAllQueued } = await import('../services/db');
-        const pending = await getAllQueued();
-
+        // Server balance is authoritative — no pending-cuts projection
         const serverBalance = Number(fresh.balance);
-        const idbBalance = idbUser ? Number(idbUser.balance ?? 0) : serverBalance;
-        const pendingCreateGames = pending.filter((item: any) => item.type === 'createGame');
-        const pendingHouseCuts = pendingCreateGames.reduce((sum: number, item: any) => {
-          const p = item.payload as any;
-          return sum + (p.betAmountPerCartela ?? 0) * (p.cartelaIds?.length ?? 0) * ((p.housePercentage ?? 10) / 100);
-        }, 0);
+        console.log(`[balance] fetchMe server=${serverBalance}`);
 
-        // Only project deduction when server hasn't billed yet.
-        // If server balance is already <= idb, the server has processed the charges.
-        const serverAlreadyCharged = pendingCreateGames.length === 0 || serverBalance <= idbBalance;
-        const effectiveBalance = serverAlreadyCharged
-          ? serverBalance
-          : serverBalance - pendingHouseCuts;
-
-        console.log(`[balance] fetchMe server=${serverBalance} idb=${idbBalance} pending=${pendingCreateGames.length} alreadyCharged=${serverAlreadyCharged} effective=${effectiveBalance}`);
-
-        const normalized = { ...fresh, balance: effectiveBalance };
+        const normalized = { ...fresh, balance: serverBalance };
         await dbPut('user', normalized, 'me');
         set({ user: normalized, initialized: true });
-        applyNegativeBalanceCheck(effectiveBalance, fresh.paymentType, fresh.role, get, (p) => set(p as any));
+        applyNegativeBalanceCheck(serverBalance, fresh.paymentType, fresh.role, get, (p) => set(p as any));
         applyAssignedVoice((idbUser as any)?.assignedVoice ?? (fresh as any).assignedVoice);
         return;
       }
@@ -527,3 +487,4 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 }));
+

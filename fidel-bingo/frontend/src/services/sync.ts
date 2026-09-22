@@ -49,41 +49,25 @@ export async function refreshCache() {
 
     const meData = meRes.data?.data ?? meRes.data;
 
-    // ⭐ Balance preservation logic
-    // If account is LOCKED → preserve local negative balance (keeps player blocked)
-    // If there are PENDING offline games → server hasn't billed yet, keep local deducted balance
-    // Otherwise → server balance is authoritative
-    const pendingQueue = await getAllQueued();
-    const pendingCreateGames = pendingQueue.filter((item: any) => item.type === 'createGame');
+    // ⭐ Balance sync: after queue flush all games are on the server — use server balance directly.
+    // For prepaid players, push local IDB balance ONLY if there are no queued games left
+    // (i.e. this is a periodic refresh, not a post-flush refresh).
+    // Post-flush: server already has the authoritative balance from processing every game.
     if (meData) {
       const localUser = await dbGet<any>('user', 'me');
       const isLocked = localStorage.getItem('neg_balance_locked') === '1';
-      
+
       if (isLocked && localUser) {
-        // Account is locked due to negative balance — preserve it to keep player blocked
+        // Account locked due to negative balance — preserve local negative so player stays blocked
         console.log(`[balance] refreshCache: locked, preserving local balance=${localUser.balance}`);
         meData.balance = localUser.balance;
-      } else if (pendingCreateGames.length > 0 && localUser) {
-        // Pending games not yet synced — server balance is stale (pre-billing).
-        // Keep the locally-deducted IDB balance to avoid showing inflated balance.
-        const localBalance = Number(localUser.balance ?? 0);
-        const serverBalance = Number(meData.balance ?? 0);
-        // Only keep local if it's lower (i.e. the local deduction happened)
-        if (localBalance < serverBalance) {
-          console.log(`[balance] refreshCache: pending games, keeping local balance=${localBalance} (server=${serverBalance})`);
-          meData.balance = localBalance;
-        } else {
-          console.log(`[balance] refreshCache: pending games but server already lower, using server balance=${serverBalance}`);
-        }
       } else {
-        // No pending games, not locked — server balance is authoritative
+        // Use server balance as-is — it reflects all processed games.
+        // No push, no delta math. Server is the source of truth after sync.
         const serverBalance = Number(meData.balance ?? 0);
-        console.log(`[balance] refreshCache: using server balance=${serverBalance} (pending=${pendingCreateGames.length})`);
+        console.log(`[balance] refreshCache: using server balance=${serverBalance}`);
         meData.balance = serverBalance;
-        // Track last positive balance for recovery UI
-        if (serverBalance > 0 && localUser?.paymentType !== 'postpaid') {
-          localStorage.setItem(NEG_BAL_KEY, String(serverBalance));
-        }
+        if (serverBalance > 0) localStorage.setItem(NEG_BAL_KEY, String(serverBalance));
       }
     }
     await dbPut('user', meData, 'me');
@@ -344,13 +328,8 @@ async function _doFlush() {
             await dequeue(current.id!);
             break;
           }
-          const res = await api.post(`/games/${p.gameId}/bingo`, { cartelaId: p.cartelaId });
-          const amount = Number(res.data?.data?.data?.amount ?? 0);
-          if (amount > 0) {
-            const { adjustBalance } = await import('./db');
-            await adjustBalance(amount);
-            useAuthStore.getState().adjustUserBalance(amount);
-          }
+          await api.post(`/games/${p.gameId}/bingo`, { cartelaId: p.cartelaId });
+          // Balance updated by refreshCache reading server balance — no local delta needed
           await dequeue(current.id!);
           break;
         }
@@ -443,7 +422,10 @@ function startRecoveryPolling() {
         _recoveryInterval = null;
         const user = await dbGet<any>('user', 'me');
         if (user) await dbPut('user', { ...user, balance }, 'me');
-        useAuthStore.getState().adjustUserBalance(balance - (Number(useAuthStore.getState().user?.balance) || 0));
+        // Update Zustand directly with server balance — no delta math
+        useAuthStore.setState((state) => ({
+          user: state.user ? { ...state.user, balance } : state.user,
+        }));
         applyNegativeBalanceCheck(balance, fresh.paymentType, fresh.role, useAuthStore.getState, (p) => useAuthStore.setState(p as any));
         // Full cache refresh now that the account is healthy
         await refreshCache();

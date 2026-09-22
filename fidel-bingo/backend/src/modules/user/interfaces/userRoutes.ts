@@ -386,6 +386,27 @@ router.get('/:id/cartelas', authorize('admin', 'agent'), async (req: AuthRequest
   res.json({ success: true, data: cartelas });
 });
 
+// ─── Offline balance sync — called when offline user comes back online ───────────
+// Sets the user's balance directly to the provided value (no add/subtract).
+// This is the authoritative local balance after offline play — server accepts it as-is.
+router.post('/me/sync-balance', async (req: AuthRequest, res: Response) => {
+  const repo = AppDataSource.getRepository(User);
+  const user = await repo.findOne({ where: { id: req.user!.id } });
+  if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
+  if (user.role === 'admin' || user.role === 'agent') {
+    return res.json({ success: true, data: user.sanitize() });
+  }
+
+  const balance = parseFloat(req.body.balance);
+  if (isNaN(balance)) throw new AppError(400, 'INVALID_AMOUNT', 'balance must be a number');
+
+  await repo.update(req.user!.id, { balance });
+  const updated = await repo.findOne({ where: { id: req.user!.id } });
+
+  notifyBalanceUpdate(req, req.user!.id, Number(updated?.balance ?? balance));
+  return res.json({ success: true, data: updated?.sanitize() });
+});
+
 // ─── Negative balance alert — called by frontend when sync reveals negative balance ───
 router.post('/me/alert-negative-balance', async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(User);

@@ -12,7 +12,8 @@ export type VoiceCategory =
   | 'men arada'
   | 'men gold'
   | 'men tigrina'
-  | 'hp sound';
+  | 'hp sound'
+  | 'double sound';
 
 export const ALL_VOICE_CATEGORIES: { value: VoiceCategory; label: string }[] = [
   { value: 'boy sound',       label: '👦 Boy' },
@@ -26,6 +27,7 @@ export const ALL_VOICE_CATEGORIES: { value: VoiceCategory; label: string }[] = [
   { value: 'men gold',        label: '🎙 Men Gold' },
   { value: 'men tigrina',     label: '🎙 Men Tigrina' },
   { value: 'hp sound',        label: '🎵 HP' },
+  { value: 'double sound',    label: '🎵 Double' },
 ];
 
 interface GameSettingsState {
