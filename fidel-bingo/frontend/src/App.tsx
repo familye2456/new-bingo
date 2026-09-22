@@ -458,6 +458,20 @@ const AppRoutes: React.FC = () => {
       const offlineGameSession = new URLSearchParams(window.location.search).get('gameId')?.startsWith('offline-');
       const needsUpdate = await checkVersion();
       
+    // Auto-download sounds for the current voice setting upon login/initialization
+    const user = useAuthStore.getState().user;
+    if (user) {
+      import('./services/db').then(({ downloadVoiceSounds }) => {
+        // We use a default voice if not set, or the user's preferred voice
+        const voice = (import('./store/gameSettingsStore').then(m => m.useGameSettingsStore.getState().voice))
+          .then(v => v || 'boy sound')
+          .then(v => {
+            console.log('[audio] Auto-downloading sounds for voice:', v);
+            downloadVoiceSounds(v);
+          });
+      });
+    }
+
       if (!needsUpdate) {
         fetchMe({ localOnly: offlineGameSession });
         const token = localStorage.getItem('access_token');
@@ -467,6 +481,17 @@ const AppRoutes: React.FC = () => {
           import('./services/sync').then(({ syncWhenOnline }) => setTimeout(syncWhenOnline, 2000));
         }
       }
+    // Auto-download sounds for the current voice setting upon login/initialization
+    const user = useAuthStore.getState().user;
+    if (user) {
+      import('./services/db').then(async ({ downloadVoiceSounds }) => {
+        const { useGameSettingsStore } = await import('./store/gameSettingsStore');
+        const voice = useGameSettingsStore.getState().voice || 'boy sound';
+        console.log('[audio] Auto-downloading sounds for voice:', voice);
+        downloadVoiceSounds(voice);
+      });
+    }
+
       
       setVersionChecked(true);
     };
