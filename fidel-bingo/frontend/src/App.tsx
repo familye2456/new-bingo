@@ -482,15 +482,16 @@ const AppRoutes: React.FC = () => {
         }
       }
     // Auto-download sounds for the current voice setting upon login/initialization
-    const user = useAuthStore.getState().user;
-    if (user) {
+    const currentUser = useAuthStore.getState().user;
+    if (currentUser) {
       import('./services/db').then(async ({ downloadVoiceSounds }) => {
-        const { useGameSettingsStore } = await import('./store/gameSettingsStore');
-        const voice = useGameSettingsStore.getState().voice || 'boy sound';
+        const { useGameSettings } = await import('./store/gameSettingsStore');
+        const voice = useGameSettings.getState().voice || 'boy sound';
         console.log('[audio] Auto-downloading sounds for voice:', voice);
         downloadVoiceSounds(voice);
       });
     }
+
 
       
       setVersionChecked(true);
