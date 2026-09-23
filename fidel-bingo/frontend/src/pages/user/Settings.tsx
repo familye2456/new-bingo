@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { userApi } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import { useGameSettings } from '../../store/gameSettingsStore';
+import { downloadVoiceSounds, getVoiceCacheStatus } from '../../services/db';
+import { ALL_VOICE_CATEGORIES } from '../../store/gameSettingsStore';
 
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <div>
@@ -33,9 +35,38 @@ const Card: React.FC<{ title: string; subtitle?: string; icon: React.ReactNode; 
 
 export const Settings: React.FC = () => {
   const { user, fetchMe } = useAuthStore();
-  const { autoCallInterval, setAutoCallInterval } = useGameSettings();
+  const { voice, autoCallInterval, setAutoCallInterval } = useGameSettings();
   const [form, setForm] = useState({ firstName: user?.firstName ?? '', lastName: user?.lastName ?? '' });
   const [saved, setSaved] = useState(false);
+
+  // Voice cache state
+  const [cacheStatus, setCacheStatus] = useState<{ cached: number; total: number } | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [dlProgress, setDlProgress] = useState({ cached: 0, total: 0 });
+  const [dlDone, setDlDone] = useState(false);
+
+  const voiceLabel = ALL_VOICE_CATEGORIES.find(v => v.value === voice)?.label ?? voice;
+
+  const checkCache = useCallback(async () => {
+    const status = await getVoiceCacheStatus(voice);
+    setCacheStatus(status);
+  }, [voice]);
+
+  useEffect(() => { checkCache(); }, [checkCache]);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    setDlDone(false);
+    setDlProgress({ cached: 0, total: 0 });
+    try {
+      await downloadVoiceSounds(voice, (cached, total) => setDlProgress({ cached, total }));
+      setDlDone(true);
+      await checkCache();
+      setTimeout(() => setDlDone(false), 3000);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const updateMutation = useMutation({
     mutationFn: () => userApi.updateMe(form),
@@ -147,6 +178,96 @@ export const Settings: React.FC = () => {
                 <span>2s (fast)</span><span>15s (slow)</span>
               </div>
             </div>
+          </div>
+        </Card>
+
+        {/* Voice Sounds */}
+        <Card
+          title="Voice Sounds"
+          subtitle="Download audio for offline play"
+          icon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+              <path d="M9 18V5l12-2v13" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
+            </svg>
+          }
+        >
+          <div className="space-y-4">
+            {/* Current voice */}
+            <div className="flex items-center justify-between py-2.5 px-3 rounded-xl"
+              style={{ background: '#0e1a35', border: '1px solid rgba(255,255,255,0.05)' }}>
+              <span className="text-sm" style={{ color: '#9ca3af' }}>Active Voice</span>
+              <span className="text-sm font-semibold text-yellow-400">{voiceLabel}</span>
+            </div>
+
+            {/* Cache status */}
+            {cacheStatus && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs" style={{ color: '#6b7280' }}>
+                  <span>Cached files</span>
+                  <span className={cacheStatus.cached >= cacheStatus.total ? 'text-emerald-400 font-semibold' : 'text-yellow-400 font-semibold'}>
+                    {cacheStatus.cached} / {cacheStatus.total}
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
+                  <div className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: cacheStatus.total > 0 ? `${Math.round((cacheStatus.cached / cacheStatus.total) * 100)}%` : '0%',
+                      background: cacheStatus.cached >= cacheStatus.total
+                        ? 'linear-gradient(90deg,#34d399,#10b981)'
+                        : 'linear-gradient(90deg,#f59e0b,#fbbf24)',
+                    }} />
+                </div>
+              </div>
+            )}
+
+            {/* Download progress bar */}
+            {downloading && dlProgress.total > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs" style={{ color: '#6b7280' }}>
+                  <span>Downloading…</span>
+                  <span className="text-yellow-400 font-semibold">{dlProgress.cached} / {dlProgress.total}</span>
+                </div>
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
+                  <div className="h-full rounded-full transition-all duration-300"
+                    style={{
+                      width: `${Math.round((dlProgress.cached / dlProgress.total) * 100)}%`,
+                      background: 'linear-gradient(90deg,#f59e0b,#fbbf24)',
+                      boxShadow: '0 0 6px rgba(251,191,36,0.4)',
+                    }} />
+                </div>
+              </div>
+            )}
+
+            {/* Button */}
+            <button
+              onClick={handleDownload}
+              disabled={downloading}
+              className="w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-60"
+              style={dlDone
+                ? { background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399' }
+                : { background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.25)', color: '#fbbf24' }}>
+              {downloading ? (
+                <>
+                  <div className="w-4 h-4 rounded-full border-2 border-yellow-400/30 border-t-yellow-400 animate-spin" />
+                  Downloading…
+                </>
+              ) : dlDone ? (
+                <>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-4 h-4">
+                    <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Up to date
+                </>
+              ) : (
+                <>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+                    <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M7 10l5 5 5-5M12 15V3" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Update Audio
+                </>
+              )}
+            </button>
           </div>
         </Card>
 
