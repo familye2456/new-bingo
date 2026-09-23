@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { offlineGameApi } from '../../services/offlineApi';
+import { offlineGameApi, offlineUserApi } from '../../services/offlineApi';
 import { useAuthStore } from '../../store/authStore';
 import { useGameSettings } from '../../store/gameSettingsStore';
 import { dbGet, playCachedSound, playNumberSoundQueued, unlockAudioContext, audioQueue } from '../../services/db';
@@ -129,6 +129,21 @@ export const PlayBingo: React.FC = () => {
     refetchInterval: isOfflineGame ? false : 10000,
   });
 
+  // Fetch user's registered cartelas to pick the correct bonus card number
+  const { data: userCartelas = [] } = useQuery<{ id: string; cardNumber?: number }[]>({
+    queryKey: ['my-cartelas', user?.id],
+    queryFn: () => offlineUserApi.myCartelas(),
+    enabled: Boolean(user?.cartelaBonusEnabled),
+  });
+
+  // Pick the lowest registered card number for the bonus popup (card #1 if owned, else first)
+  const bonusCardNumber = userCartelas.length > 0
+    ? userCartelas
+        .map((c) => c.cardNumber ?? 0)
+        .filter((n) => n > 0)
+        .sort((a, b) => a - b)[0] ?? 1
+    : 1;
+
   // Only show games belonging to the current user that are active
   const games = allGames.filter((g) => g.creatorId === user?.id && g.status === 'active');
   const activeGames = games;
@@ -138,11 +153,13 @@ export const PlayBingo: React.FC = () => {
 
   useEffect(() => {
     if (isLoading) return;
+    // Don't redirect while the bonus modal is open — it will navigate on close
+    if (showBonusModal) return;
     // Redirect to new-game if no active game
     if (activeGames.length === 0 && !selectedGameId) {
       navigate('/new-game', { replace: true });
     }
-  }, [isLoading, activeGames.length, selectedGameId, navigate]);
+  }, [isLoading, activeGames.length, selectedGameId, navigate, showBonusModal]);
 
   useEffect(() => {
     if (!game || game.status !== 'active') return;
@@ -209,7 +226,9 @@ export const PlayBingo: React.FC = () => {
       stopAuto(true);
       queryClient.invalidateQueries({ queryKey: ['games'] });
       if (!isOfflineGame) refreshBalance();
-      if (user?.cartelaBonusEnabled) {
+      // Read fresh user state from store to avoid stale closure
+      const freshUser = useAuthStore.getState().user;
+      if (freshUser?.cartelaBonusEnabled) {
         setShowBonusModal(true);
       } else {
         navigate('/new-game');
@@ -351,7 +370,7 @@ export const PlayBingo: React.FC = () => {
         <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-1.5"
           style={{ background: 'rgba(34,197,94,0.15)', borderBottom: '1px solid rgba(34,197,94,0.3)' }}>
           <span className="text-green-400 font-bold text-sm min-w-0 break-words">
-            🎉 {user?.cartelaBonusEnabled && winnerInfo.cardNumber === 1 ? '🎁 Bonus Card #1' : `Card #{winnerInfo.cardNumber}`} — BINGO! ({winnerInfo.pattern}) · {Number(winnerInfo.amount).toFixed(2)} BIRR
+            🎉 {user?.cartelaBonusEnabled && winnerInfo.cardNumber === bonusCardNumber ? `🎁 Bonus Card #${bonusCardNumber}` : `Card #${winnerInfo.cardNumber}`} — BINGO! ({winnerInfo.pattern}) · {Number(winnerInfo.amount).toFixed(2)} BIRR
           </span>
           <button onClick={() => setWinnerInfo(null)}
             className="text-green-400 hover:text-white text-lg leading-none px-1"
@@ -917,7 +936,7 @@ export const PlayBingo: React.FC = () => {
                 boxShadow: '0 0 24px rgba(251,191,36,0.5)',
                 minWidth: 140,
               }}>
-              <span className="font-black text-gray-900 text-4xl tracking-tight">Card #1</span>
+              <span className="font-black text-gray-900 text-4xl tracking-tight">Card #{bonusCardNumber}</span>
             </div>
 
             <p className="text-gray-500 text-xs text-center" style={{ maxWidth: 200 }}>

@@ -151,6 +151,8 @@ export const NewGame: React.FC = () => {
         queryClient.setQueryData(['my-games'], (old: any[] = []) =>
           old.some((g) => g.id === newGame.id) ? old : [newGame, ...old]
         );
+        // Refresh balance so bonus credit (if enabled) is reflected immediately
+        refreshBalance();
         navigate(`/play?gameId=${id}`);
       }
     },
