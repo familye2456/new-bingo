@@ -166,7 +166,7 @@ router.patch('/:id', authorize('admin', 'agent'), async (req: AuthRequest, res: 
 
 // Top up balance
 const notifyBalanceUpdate = (req: AuthRequest, userId: string, balance: number) => {
-  const io = (req.app as any).get('io') as Server | undefined;
+  const io = (req.app as any).locals?.io as Server | undefined;
   if (!io) return;
   io.to(`user:${userId}`).emit('balance_updated', {
     userId,
@@ -331,7 +331,7 @@ router.patch('/:id/voice', authorize('admin', 'agent'), async (req: AuthRequest,
   const updated = await repo.findOne({ where: { id: req.params.id } });
 
   // Push the change to the user's browser immediately via socket
-  const io = (req.app as any).get('io') as Server | undefined;
+  const io = (req.app as any).locals?.io as Server | undefined;
   if (io) {
     io.to(`user:${req.params.id}`).emit('voice_updated', {
       userId: req.params.id,

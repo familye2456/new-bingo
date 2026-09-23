@@ -78,20 +78,17 @@ export const UserLayout: React.FC = () => {
     setDlState('downloading');
     setDlProgress({ cached: 0, total: 0 });
     try {
-      const { downloadVoiceSounds } = await import('../services/db');
-      // Delete old cached voice sounds first
-      if ('caches' in window) {
-        const VOICE_CACHE = 'fidel-voice-sounds-v1';
-        const cache = await caches.open(VOICE_CACHE);
-        const keys = await cache.keys();
-        await Promise.all(keys.map(k => cache.delete(k)));
-      }
+      const { downloadVoiceSounds, clearVoiceCache } = await import('../services/db');
+      // Clear old cached voice sounds first
+      await clearVoiceCache();
+      // Download the new voice pack with progress
       await downloadVoiceSounds(voicePrompt.voice, (cached, total) => {
         setDlProgress({ cached, total });
       });
       setDlState('done');
       setTimeout(() => { setVoicePrompt(null); setDlState('idle'); }, 2000);
-    } catch {
+    } catch (err) {
+      console.error('[voice-prompt] download failed', err);
       setDlState('idle');
     }
   };

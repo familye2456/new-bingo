@@ -325,6 +325,21 @@ export async function getVoiceCacheStatus(voice: string): Promise<{ cached: numb
   }
 }
 
+/** Clear all cached sounds for a specific voice (or all voice sounds) */
+export async function clearVoiceCache(voice?: string): Promise<void> {
+  if (!('caches' in window)) return;
+  const cache = await caches.open(VOICE_CACHE);
+  if (!voice) {
+    // Clear everything in the voice cache
+    const keys = await cache.keys();
+    await Promise.all(keys.map(k => cache.delete(k)));
+  } else {
+    // Clear only the urls for this specific voice
+    const urls = getVoiceSoundUrls(voice);
+    await Promise.all(urls.map(url => cache.delete(url)));
+  }
+}
+
 /** Download all sounds for the given voice category into Cache Storage */
 export async function downloadVoiceSounds(
   voice: string,
