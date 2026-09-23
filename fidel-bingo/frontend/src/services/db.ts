@@ -52,7 +52,8 @@ export async function dbPut(store: string, value: unknown, key?: IDBValidKey) {
     return;
   }
   try { 
-    console.log('[dbPut] Putting to store:', store, 'key:', key);
+    const logKey = INLINE_KEY_PATH_STORES.has(store) ? (value as any)?.id : key;
+    console.log('[dbPut] Putting to store:', store, 'key:', logKey);
     
     // Add a timeout to prevent hanging indefinitely
     const db = await getDB();

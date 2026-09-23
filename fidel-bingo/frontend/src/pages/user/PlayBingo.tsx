@@ -110,6 +110,10 @@ export const PlayBingo: React.FC = () => {
   } | null>(null);
   const [checkLoading, setCheckLoading] = useState(false);
   const autoRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Tracks whether auto-call is active as a ref so the interval callback
+  // always sees the latest value synchronously — prevents a final number
+  // being called after the user presses pause/stop
+  const autoActiveRef = useRef(false);
   const resetGameRef = useRef<string | null>(null);
   const [sessionCalledNumbers, setSessionCalledNumbers] = useState<number[]>([]);
   const [winnerInfo, setWinnerInfo] = useState<{ cardNumber: number; amount: number; pattern: string } | null>(null);
@@ -172,9 +176,16 @@ export const PlayBingo: React.FC = () => {
 
   const stopAuto = useCallback((silent = false) => {
     if (autoRef.current) { clearInterval(autoRef.current); autoRef.current = null; }
+    autoActiveRef.current = false;
+    soundPendingRef.current = false;
     setAutoOn(false);
     if (!silent) playRootSound('aac_ended.mp3');
   }, []);
+
+  // Sound-playing guard — set true the moment a number is called, cleared only when
+  // the audio queue fully drains. Prevents the next call firing before the sound starts,
+  // which happens because audioQueue.playing is briefly false between enqueue and decode.
+  const soundPendingRef = useRef(false);
 
   const callMutation = useMutation({
     mutationFn: async () => {
@@ -264,9 +275,12 @@ export const PlayBingo: React.FC = () => {
   const startAuto = useCallback(() => {
     if (!game || game.status !== 'active') return;
     playRootSound('aac_resumed.mp3');
+    autoActiveRef.current = true;
     setAutoOn(true);
     let elapsed = 0;
     autoRef.current = setInterval(() => {
+      // If auto was stopped (pause/end), bail immediately — don't call next number
+      if (!autoActiveRef.current) return;
       // Guard against game becoming null during auto-call
       if (!gameRef.current || gameRef.current.status !== 'active') {
         stopAuto(true);
@@ -274,14 +288,17 @@ export const PlayBingo: React.FC = () => {
       }
       elapsed += 0.5;
       if (elapsed < speedRef.current) return;
-      // Also wait for audio queue to finish — don't call next number while sound is playing
-      if (audioQueue.playing) return;
+      // Wait for audio queue to finish — covers both the playing state and the brief
+      // gap between a number being called and the sound actually starting (soundPendingRef)
+      if (audioQueue.playing || soundPendingRef.current) return;
       elapsed = 0;
       if (sessionCalledRef.current.length >= 75) { stopAuto(); return; }
       if (isMutationPendingRef.current) {
         checkMutationTimeout(); // Check if mutation is stuck
         return; // don't fire if previous call still in flight
       }
+      // Mark sound as pending immediately — cleared when audio queue drains
+      soundPendingRef.current = true;
       mutationStartTimeRef.current = Date.now();
       mutateRef.current();
     }, 500);
@@ -358,7 +375,11 @@ export const PlayBingo: React.FC = () => {
   const prevCalledRef = useRef<number[]>([]);
   useEffect(() => {
     const newNums = sessionCalledNumbers.filter((n) => !prevCalledRef.current.includes(n));
-    if (newNums.length > 0) playSound(`${newNums[newNums.length - 1]}`);
+    if (newNums.length > 0) {
+      playSound(`${newNums[newNums.length - 1]}`);
+      // Clear the sound-pending guard once the queue actually drains
+      audioQueue.waitForDrain().then(() => { soundPendingRef.current = false; });
+    }
     prevCalledRef.current = sessionCalledNumbers;
   }, [sessionCalledNumbers]);
 
