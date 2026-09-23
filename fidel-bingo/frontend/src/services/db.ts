@@ -55,21 +55,15 @@ export async function dbPut(store: string, value: unknown, key?: IDBValidKey) {
     const logKey = INLINE_KEY_PATH_STORES.has(store) ? (value as any)?.id : key;
     console.log('[dbPut] Putting to store:', store, 'key:', logKey);
     
-    // Add a timeout to prevent hanging indefinitely
     const db = await getDB();
-    const putPromise = key === undefined || INLINE_KEY_PATH_STORES.has(store)
-      ? db.put(store, value)
-      : db.put(store, value, key);
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('dbPut timeout after 5s')), 5000)
-    );
-    
-    const result = await Promise.race([putPromise, timeoutPromise]);
+    const result = key === undefined || INLINE_KEY_PATH_STORES.has(store)
+      ? await db.put(store, value)
+      : await db.put(store, value, key);
     console.log('[dbPut] Success');
     return result;
   } catch (err) { 
     console.error('[dbPut] Error:', err);
-    throw err; // Re-throw so caller knows it failed
+    throw err;
   }
 }
 

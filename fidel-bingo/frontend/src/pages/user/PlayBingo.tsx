@@ -5,6 +5,7 @@ import { offlineGameApi, offlineUserApi } from '../../services/offlineApi';
 import { useAuthStore } from '../../store/authStore';
 import { useGameSettings } from '../../store/gameSettingsStore';
 import { dbGet, playCachedSound, playNumberSoundQueued, unlockAudioContext, audioQueue } from '../../services/db';
+import { setGameSessionActive } from '../../services/sync';
 
 let _userInteracted = false;
 if (typeof window !== 'undefined') {
@@ -178,6 +179,7 @@ export const PlayBingo: React.FC = () => {
     if (autoRef.current) { clearInterval(autoRef.current); autoRef.current = null; }
     autoActiveRef.current = false;
     soundPendingRef.current = false;
+    setGameSessionActive(false);
     setAutoOn(false);
     if (!silent) playRootSound('aac_ended.mp3');
   }, []);
@@ -276,6 +278,7 @@ export const PlayBingo: React.FC = () => {
     if (!game || game.status !== 'active') return;
     playRootSound('aac_resumed.mp3');
     autoActiveRef.current = true;
+    setGameSessionActive(true);
     setAutoOn(true);
     let elapsed = 0;
     autoRef.current = setInterval(() => {
@@ -304,7 +307,7 @@ export const PlayBingo: React.FC = () => {
     }, 500);
   }, [game, stopAuto, checkMutationTimeout]);
 
-  useEffect(() => () => stopAuto(true), [stopAuto]);
+  useEffect(() => () => { stopAuto(true); setGameSessionActive(false); }, [stopAuto]);
   useEffect(() => { if (sessionCalledNumbers.length >= 75 && autoOn) stopAuto(true); }, [sessionCalledNumbers.length, autoOn, stopAuto]);
 
   const toggleAuto = () => autoOn ? stopAuto() : startAuto();

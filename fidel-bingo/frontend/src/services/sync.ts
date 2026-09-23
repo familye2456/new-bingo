@@ -32,6 +32,12 @@ function addSyncedId(id: string) {
 }
 function isSynced(id: string): boolean { return getSyncedIds().has(id); }
 
+// ── Active game session flag ──────────────────────────────────────────────────
+// Set to true while auto-call is running to prevent refreshCache from flooding
+// IDB with bulk cartela writes that compete with game-critical dbPut calls.
+let _gameSessionActive = false;
+export function setGameSessionActive(active: boolean) { _gameSessionActive = active; }
+
 // ── Cache refresh ─────────────────────────────────────────────────────────────
 
 export async function refreshCache() {
@@ -83,7 +89,8 @@ export async function refreshCache() {
     const toList = (d: any) => Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : Array.isArray(d?.data?.data) ? d.data.data : [];
 
     // Always clear and repopulate cartelas — ensures no stale data from another user
-    {
+    // Skip during active game sessions to avoid flooding IDB and causing timeouts
+    if (!_gameSessionActive) {
       const userId = meData?.id;
       await dbClear('cartelas');
       await dbPutMany('cartelas', toList(cartelasRes.data).map((c: any) => ({ ...c, userId })).filter((c: any) => c.id));
