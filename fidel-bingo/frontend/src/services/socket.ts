@@ -28,7 +28,7 @@ const bindSocketListeners = (socketInstance: Socket) => {
     }
   });
 
-  // When admin changes the user's voice, apply it and start downloading immediately
+  // When admin changes the user's voice, apply settings and prompt user to update sounds
   socketInstance.off('voice_updated');
   socketInstance.on('voice_updated', async ({ userId, voice }: { userId?: string; voice?: string }) => {
     if (!voice || !userId) return;
@@ -56,11 +56,8 @@ const bindSocketListeners = (socketInstance: Socket) => {
       const merged = { state: { ...(parsed?.state ?? {}), voice }, version: parsed?.version ?? 0 };
       localStorage.setItem('game-settings', JSON.stringify(merged));
 
-      // Start downloading the new voice sounds immediately in the background
-      const { downloadVoiceSounds } = await import('./db');
-      downloadVoiceSounds(voice).catch(() => {});
-
-      window.dispatchEvent(new CustomEvent('voice-updated', { detail: { userId, voice } }));
+      // Ask the user to update their sounds instead of silently downloading
+      window.dispatchEvent(new CustomEvent('voice-change-prompt', { detail: { userId, voice } }));
     } catch (err) {
       console.error('[socket] Failed to apply voice update from server push:', err);
     }

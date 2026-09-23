@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { isServerReachable } from '../services/offlineApi';
+import { ALL_VOICE_CATEGORIES } from '../store/gameSettingsStore';
 
 function useOnlineStatus() {
   const [online, setOnline] = useState(isServerReachable());
@@ -53,6 +54,52 @@ export const UserLayout: React.FC = () => {
   const online = useOnlineStatus();
   const offlineGameSession = new URLSearchParams(window.location.search).get('gameId')?.startsWith('offline-');
   const initials = (user?.username ?? 'U').slice(0, 2).toUpperCase();
+
+  // Voice change prompt state
+  const [voicePrompt, setVoicePrompt] = useState<{ voice: string; label: string } | null>(null);
+  const [dlState, setDlState] = useState<'idle' | 'downloading' | 'done'>('idle');
+  const [dlProgress, setDlProgress] = useState({ cached: 0, total: 0 });
+
+  // Listen for admin-triggered voice change
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { voice } = (e as CustomEvent).detail ?? {};
+      if (!voice) return;
+      const label = ALL_VOICE_CATEGORIES.find(v => v.value === voice)?.label ?? voice;
+      setVoicePrompt({ voice, label });
+      setDlState('idle');
+    };
+    window.addEventListener('voice-change-prompt', handler);
+    return () => window.removeEventListener('voice-change-prompt', handler);
+  }, []);
+
+  const handleUpdateSounds = async () => {
+    if (!voicePrompt) return;
+    setDlState('downloading');
+    setDlProgress({ cached: 0, total: 0 });
+    try {
+      const { downloadVoiceSounds } = await import('../services/db');
+      // Delete old cached voice sounds first
+      if ('caches' in window) {
+        const VOICE_CACHE = 'fidel-voice-sounds-v1';
+        const cache = await caches.open(VOICE_CACHE);
+        const keys = await cache.keys();
+        await Promise.all(keys.map(k => cache.delete(k)));
+      }
+      await downloadVoiceSounds(voicePrompt.voice, (cached, total) => {
+        setDlProgress({ cached, total });
+      });
+      setDlState('done');
+      setTimeout(() => { setVoicePrompt(null); setDlState('idle'); }, 2000);
+    } catch {
+      setDlState('idle');
+    }
+  };
+
+  const handleDismissVoicePrompt = () => {
+    setVoicePrompt(null);
+    setDlState('idle');
+  };
 
   // Keep balance fresh on entry and when returning to the tab.
   // Always fetch from server when online — prepaid users must not rely on stale IDB balance.
@@ -227,6 +274,98 @@ export const UserLayout: React.FC = () => {
 
       {/* ── Main content ── */}
       <main className="flex-1 overflow-hidden h-full" style={{ background: '#0e1a35' }}>
+
+        {/* Voice change prompt — shown when admin assigns a new voice */}
+        {voicePrompt && (
+          <div className="fixed inset-0 z-[60] flex items-end justify-center pb-6 px-4"
+            style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}>
+            <div className="w-full max-w-sm rounded-3xl p-5 shadow-2xl"
+              style={{ background: '#1a2540', border: '1px solid rgba(251,191,36,0.25)' }}>
+
+              {/* Icon + title */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
+                  style={{ background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.25)' }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth={2} className="w-5 h-5">
+                    <path d="M9 18V5l12-2v13" strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-white font-bold text-base">New Sound Available</div>
+                  <div className="text-xs mt-0.5" style={{ color: '#9ca3af' }}>Admin updated your voice</div>
+                </div>
+              </div>
+
+              {/* Voice name */}
+              <div className="rounded-xl px-4 py-3 mb-4 flex items-center justify-between"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                <span className="text-sm" style={{ color: '#9ca3af' }}>New voice</span>
+                <span className="text-sm font-bold text-yellow-400">{voicePrompt.label}</span>
+              </div>
+
+              <p className="text-xs mb-5" style={{ color: '#6b7280' }}>
+                Your old sounds will be removed and replaced with the new voice pack. This requires a download.
+              </p>
+
+              {/* Download progress */}
+              {dlState === 'downloading' && (
+                <div className="mb-4 space-y-2">
+                  <div className="flex justify-between text-xs" style={{ color: '#6b7280' }}>
+                    <span>Downloading…</span>
+                    <span className="text-yellow-400 font-semibold">{dlProgress.cached} / {dlProgress.total}</span>
+                  </div>
+                  <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
+                    <div className="h-full rounded-full transition-all duration-300"
+                      style={{
+                        width: dlProgress.total > 0 ? `${Math.round((dlProgress.cached / dlProgress.total) * 100)}%` : '5%',
+                        background: 'linear-gradient(90deg,#f59e0b,#fbbf24)',
+                        boxShadow: '0 0 6px rgba(251,191,36,0.4)',
+                      }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={handleDismissVoicePrompt}
+                  disabled={dlState === 'downloading'}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-40"
+                  style={{ background: 'rgba(255,255,255,0.06)', color: '#9ca3af', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  Later
+                </button>
+                <button
+                  onClick={handleUpdateSounds}
+                  disabled={dlState === 'downloading' || dlState === 'done'}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-70"
+                  style={{ background: 'linear-gradient(90deg,#fbbf24,#f59e0b)', color: '#111' }}>
+                  {dlState === 'downloading' ? (
+                    <>
+                      <div className="w-4 h-4 rounded-full border-2 border-gray-800/30 border-t-gray-800 animate-spin" />
+                      Downloading…
+                    </>
+                  ) : dlState === 'done' ? (
+                    <>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-4 h-4">
+                        <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      Done!
+                    </>
+                  ) : (
+                    <>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+                        <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M7 10l5 5 5-5M12 15V3" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      Update Now
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* SW ready toast */}
         {swReady && (
           <div
@@ -240,7 +379,6 @@ export const UserLayout: React.FC = () => {
               minWidth: 260,
             }}
           >
-            {/* Wifi-off icon */}
             <span className="shrink-0 text-emerald-400">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
                 <path d="M5 12.55a11 11 0 0114.08 0" strokeLinecap="round" />
