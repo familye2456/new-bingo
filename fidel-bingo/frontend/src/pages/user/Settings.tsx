@@ -35,7 +35,7 @@ const Card: React.FC<{ title: string; subtitle?: string; icon: React.ReactNode; 
 
 export const Settings: React.FC = () => {
   const { user, fetchMe } = useAuthStore();
-  const { voice, autoCallInterval, setAutoCallInterval } = useGameSettings();
+  const { voice, autoCallInterval, setAutoCallInterval, setVoice } = useGameSettings();
   const [form, setForm] = useState({ firstName: user?.firstName ?? '', lastName: user?.lastName ?? '' });
   const [saved, setSaved] = useState(false);
 
@@ -184,7 +184,7 @@ export const Settings: React.FC = () => {
         {/* Voice Sounds */}
         <Card
           title="Voice Sounds"
-          subtitle="Download audio for offline play"
+          subtitle="Select a voice and download for offline play"
           icon={
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
               <path d="M9 18V5l12-2v13" strokeLinecap="round" strokeLinejoin="round" />
@@ -193,7 +193,33 @@ export const Settings: React.FC = () => {
           }
         >
           <div className="space-y-4">
-            {/* Current voice */}
+            {/* Voice selector grid */}
+            <div className="grid grid-cols-2 gap-2">
+              {ALL_VOICE_CATEGORIES.map((v) => {
+                const isActive = voice === v.value;
+                return (
+                  <button
+                    key={v.value}
+                    onClick={() => setVoice(v.value)}
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left"
+                    style={isActive
+                      ? { background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.4)', color: '#fbbf24' }
+                      : { background: '#0e1a35', border: '1px solid rgba(255,255,255,0.06)', color: '#9ca3af' }
+                    }
+                  >
+                    <span className="text-base leading-none">{v.label.split(' ')[0]}</span>
+                    <span className="truncate">{v.label.split(' ').slice(1).join(' ')}</span>
+                    {isActive && (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3.5 h-3.5 ml-auto shrink-0 text-yellow-400">
+                        <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Active voice indicator */}
             <div className="flex items-center justify-between py-2.5 px-3 rounded-xl"
               style={{ background: '#0e1a35', border: '1px solid rgba(255,255,255,0.05)' }}>
               <span className="text-sm" style={{ color: '#9ca3af' }}>Active Voice</span>
