@@ -6,8 +6,6 @@ import { registerSW } from 'virtual:pwa-register';
 
 const root = ReactDOM.createRoot(document.getElementById('root')!);
 
-// Show a splash screen while the SW downloads and caches all assets.
-// Once the SW is installed (or if there's no SW support), render the app.
 function renderApp() {
   root.render(<App />);
 }
@@ -54,29 +52,39 @@ function renderSplash() {
 }
 
 if (!('serviceWorker' in navigator)) {
-  // No SW support — just render immediately
   renderApp();
 } else {
   renderSplash();
 
-  // Absolute fallback — if SW registration never calls back, render anyway
   const absoluteFallback = setTimeout(renderApp, 4000);
 
-  registerSW({
+  // updateSW is the function vite-plugin-pwa gives us to apply the waiting SW
+  let updateSW: ((reloadPage?: boolean) => Promise<void>) | undefined;
+
+  updateSW = registerSW({
     immediate: true,
+
+    // Called when a new SW is installed and waiting — show the update UI
+    onNeedRefresh() {
+      clearTimeout(absoluteFallback);
+      renderApp();
+      // Signal App.tsx to block the UI with the update screen
+      window.dispatchEvent(new CustomEvent('sw-update-available'));
+    },
+
+    onOfflineReady() {
+      renderApp();
+    },
+
     onRegisteredSW(_swUrl, registration) {
       clearTimeout(absoluteFallback);
       if (!registration) { renderApp(); return; }
 
-      const sw = registration.installing ?? registration.waiting ?? registration.active;
-
       if (registration.active && !registration.installing && !registration.waiting) {
-        // SW already active from a previous install — app is ready
         renderApp();
         return;
       }
 
-      // Wait for the installing SW to reach 'activated' state (max 2s)
       const target = registration.installing ?? registration.waiting;
       if (target) {
         let rendered = false;
@@ -93,9 +101,8 @@ if (!('serviceWorker' in navigator)) {
         renderApp();
       }
     },
-    onOfflineReady() {
-      // All assets cached — render if not already rendered
-      renderApp();
-    },
   });
+
+  // Expose updateSW globally so App.tsx UpdateRequired can call it
+  (window as any).__pwaUpdateSW = () => updateSW?.(true);
 }

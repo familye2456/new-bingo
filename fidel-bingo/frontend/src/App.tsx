@@ -75,30 +75,36 @@ const UpdateRequired: React.FC = () => {
 
   const updateClient = async () => {
     setUpdating(true);
-    setProgress(10);
-    
+    setProgress(20);
+
     try {
-      // Step 1: Update service worker
+      // If a waiting SW is available, tell it to skip waiting (fastest path)
+      const pwaUpdate = (window as any).__pwaUpdateSW;
+      if (typeof pwaUpdate === 'function') {
+        setProgress(50);
+        // Clear caches so the new SW fetches fresh assets
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map((name) => caches.delete(name)));
+        setProgress(80);
+        await pwaUpdate();
+        // pwaUpdate triggers reload; keep progress visible until it happens
+        setProgress(100);
+        return;
+      }
+
+      // Fallback: manual cache-clear + unregister + reload
       setProgress(30);
       const registration = await navigator.serviceWorker?.getRegistration();
       await registration?.update();
-      
-      // Step 2: Clear all caches
       setProgress(60);
       const cacheNames = await caches.keys();
       await Promise.all(cacheNames.map((name) => caches.delete(name)));
-      
-      // Step 3: Unregister service worker
       setProgress(80);
       await registration?.unregister();
-      
-      // Step 4: Clear local storage flags
       setProgress(90);
       localStorage.removeItem('neg_balance_locked');
-      
       setProgress(100);
     } finally {
-      // Always reload after cleanup, even if some steps failed
       setTimeout(() => window.location.reload(), 500);
     }
   };
@@ -448,6 +454,13 @@ const AppRoutes: React.FC = () => {
       console.warn('[version] Check failed:', err);
     }
     return false;
+  }, []);
+
+  // Also trigger update screen when SW detects a waiting update
+  useEffect(() => {
+    const handler = () => setUpdateRequired(true);
+    window.addEventListener('sw-update-available', handler);
+    return () => window.removeEventListener('sw-update-available', handler);
   }, []);
 
   useEffect(() => {
