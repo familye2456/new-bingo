@@ -68,8 +68,10 @@ export async function refreshCache() {
         console.log(`[balance] refreshCache: locked, preserving local balance=${localUser.balance}`);
         meData.balance = localUser.balance;
       } else {
-        // Use server balance as-is — it reflects all processed games.
-        // No push, no delta math. Server is the source of truth after sync.
+        // Server balance is always authoritative after sync.
+        // Do NOT subtract pending queue items here — local balance was already reduced
+        // by offlineApi at the time each offline game was created. Subtracting again
+        // causes double-deduction and shows the wrong (too low) balance.
         const serverBalance = Number(meData.balance ?? 0);
         console.log(`[balance] refreshCache: using server balance=${serverBalance}`);
         meData.balance = serverBalance;
@@ -559,18 +561,16 @@ export function startPeriodicSync() {
       return;
     }
 
-    // Skip if there are queued offline games — let the next flush handle it.
-    // Running refreshCache now would overwrite the local-deducted IDB balance with the
-    // pre-billing server balance, making the user appear to have more money than they do.
+    // Skip if there are queued offline games — refreshCache would overwrite the locally-
+    // deducted IDB balance with the server's pre-billing balance, giving the user fake money.
     try {
       const pending = await getAllQueued();
-      const hasPendingGames = pending.some((item: any) => item.type === 'createGame');
-      if (hasPendingGames) {
+      if (pending.some((item: any) => item.type === 'createGame')) {
         console.log('[sync] Skipping periodic sync (pending offline games in queue)');
         return;
       }
     } catch { /* proceed if queue read fails */ }
-    
+
     try {
       console.log('[sync] Running periodic refresh cache');
       await refreshCache();
