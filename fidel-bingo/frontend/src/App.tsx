@@ -83,6 +83,8 @@ const UpdateRequired: React.FC = () => {
       setProgress(80);
       const registration = await navigator.serviceWorker?.getRegistration();
       await registration?.unregister();
+      // Mark that we've updated so the version check passes after reload
+      localStorage.setItem('app_version_ack', CLIENT_VERSION);
       setProgress(100);
     } finally {
       setTimeout(() => window.location.reload(), 400);
@@ -422,6 +424,10 @@ const AppRoutes: React.FC = () => {
       if (response.ok) {
         const { version } = await response.json();
         console.log('[version] Client:', CLIENT_VERSION, 'Server:', version);
+
+        // Already acknowledged this version after an update — don't block
+        const acked = localStorage.getItem('app_version_ack');
+        if (acked === version) return false;
         
         if (version && version !== CLIENT_VERSION) {
           console.log('[version] Update required!');
@@ -444,7 +450,6 @@ const AppRoutes: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (fetchedRef.current) return; // prevent double-invoke in React dev mode
     fetchedRef.current = true;
     
     const initialize = async () => {
@@ -478,15 +483,15 @@ const AppRoutes: React.FC = () => {
     initialize();
   }, [checkVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Continuous version checking every 30 seconds
+  // Continuous version checking every 30 seconds — stops once update is triggered
   useEffect(() => {
+    if (updateRequired) return;
     if (new URLSearchParams(window.location.search).get('gameId')?.startsWith('offline-')) return;
     const interval = setInterval(() => {
       checkVersion();
-    }, 30_000); // 30 seconds
-    
+    }, 30_000);
     return () => clearInterval(interval);
-  }, [checkVersion]);
+  }, [checkVersion, updateRequired]);
 
   // Keep Render backend alive — ping /health every 10 min to prevent cold starts
   useEffect(() => {

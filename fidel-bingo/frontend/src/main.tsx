@@ -91,24 +91,4 @@ if (!('serviceWorker' in navigator)) {
       renderApp();
     },
   });
-
-  // Listen for the SW 'activated' event with isUpdate=true — show update screen
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.ready.then((reg) => {
-      // Watch for a new SW becoming active (autoUpdate fires skipWaiting automatically)
-      const checkForUpdate = (sw: ServiceWorker) => {
-        sw.addEventListener('statechange', function handler() {
-          if (this.state === 'activated') {
-            sw.removeEventListener('statechange', handler);
-            window.dispatchEvent(new CustomEvent('sw-update-available'));
-          }
-        });
-      };
-
-      if (reg.waiting) checkForUpdate(reg.waiting);
-      reg.addEventListener('updatefound', () => {
-        if (reg.installing) checkForUpdate(reg.installing);
-      });
-    }).catch(() => {});
-  }
 }
