@@ -66,7 +66,7 @@ const queryClient = new QueryClient({
   },
 });
 
-const CLIENT_VERSION = import.meta.env.VITE_APP_VERSION || '2.0.1';
+const CLIENT_VERSION = import.meta.env.VITE_APP_VERSION || '2.0.2';
 let versionRetryAfter = 0;
 
 const UpdateRequired: React.FC = () => {
@@ -76,36 +76,16 @@ const UpdateRequired: React.FC = () => {
   const updateClient = async () => {
     setUpdating(true);
     setProgress(20);
-
     try {
-      // If a waiting SW is available, tell it to skip waiting (fastest path)
-      const pwaUpdate = (window as any).__pwaUpdateSW;
-      if (typeof pwaUpdate === 'function') {
-        setProgress(50);
-        // Clear caches so the new SW fetches fresh assets
-        const cacheNames = await caches.keys();
-        await Promise.all(cacheNames.map((name) => caches.delete(name)));
-        setProgress(80);
-        await pwaUpdate();
-        // pwaUpdate triggers reload; keep progress visible until it happens
-        setProgress(100);
-        return;
-      }
-
-      // Fallback: manual cache-clear + unregister + reload
-      setProgress(30);
-      const registration = await navigator.serviceWorker?.getRegistration();
-      await registration?.update();
-      setProgress(60);
+      setProgress(50);
       const cacheNames = await caches.keys();
       await Promise.all(cacheNames.map((name) => caches.delete(name)));
       setProgress(80);
+      const registration = await navigator.serviceWorker?.getRegistration();
       await registration?.unregister();
-      setProgress(90);
-      localStorage.removeItem('neg_balance_locked');
       setProgress(100);
     } finally {
-      setTimeout(() => window.location.reload(), 500);
+      setTimeout(() => window.location.reload(), 400);
     }
   };
 

@@ -58,23 +58,8 @@ if (!('serviceWorker' in navigator)) {
 
   const absoluteFallback = setTimeout(renderApp, 4000);
 
-  // updateSW is the function vite-plugin-pwa gives us to apply the waiting SW
-  let updateSW: ((reloadPage?: boolean) => Promise<void>) | undefined;
-
-  updateSW = registerSW({
+  registerSW({
     immediate: true,
-
-    // Called when a new SW is installed and waiting — show the update UI
-    onNeedRefresh() {
-      clearTimeout(absoluteFallback);
-      renderApp();
-      // Signal App.tsx to block the UI with the update screen
-      window.dispatchEvent(new CustomEvent('sw-update-available'));
-    },
-
-    onOfflineReady() {
-      renderApp();
-    },
 
     onRegisteredSW(_swUrl, registration) {
       clearTimeout(absoluteFallback);
@@ -101,8 +86,29 @@ if (!('serviceWorker' in navigator)) {
         renderApp();
       }
     },
+
+    onOfflineReady() {
+      renderApp();
+    },
   });
 
-  // Expose updateSW globally so App.tsx UpdateRequired can call it
-  (window as any).__pwaUpdateSW = () => updateSW?.(true);
+  // Listen for the SW 'activated' event with isUpdate=true — show update screen
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.ready.then((reg) => {
+      // Watch for a new SW becoming active (autoUpdate fires skipWaiting automatically)
+      const checkForUpdate = (sw: ServiceWorker) => {
+        sw.addEventListener('statechange', function handler() {
+          if (this.state === 'activated') {
+            sw.removeEventListener('statechange', handler);
+            window.dispatchEvent(new CustomEvent('sw-update-available'));
+          }
+        });
+      };
+
+      if (reg.waiting) checkForUpdate(reg.waiting);
+      reg.addEventListener('updatefound', () => {
+        if (reg.installing) checkForUpdate(reg.installing);
+      });
+    }).catch(() => {});
+  }
 }
