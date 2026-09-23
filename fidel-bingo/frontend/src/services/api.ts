@@ -79,6 +79,7 @@ export const adminApi = {
     api.post('/users', data),
   updateUser: (id: string, data: { firstName?: string; lastName?: string; email?: string; username?: string; phone?: string; paymentType?: string }) =>
     api.patch(`/users/${id}`, data),
+  setUserVoice: (id: string, voice: string) => api.patch(`/users/${id}/voice`, { voice }),
   activateUser: (id: string) => api.patch(`/users/${id}/activate`),
   deactivateUser: (id: string) => api.patch(`/users/${id}/deactivate`),
   deleteUser: (id: string) => api.delete(`/users/${id}`),

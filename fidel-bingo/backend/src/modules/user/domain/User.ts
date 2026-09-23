@@ -87,6 +87,10 @@ export class User {
   @Column({ name: 'cartela_bonus_enabled', default: false })
   cartelaBonusEnabled!: boolean;
 
+  /** Admin-assigned voice/sound pack for this user */
+  @Column({ name: 'assigned_voice', nullable: true, length: 50 })
+  assignedVoice?: string;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 

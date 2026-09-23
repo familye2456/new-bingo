@@ -314,6 +314,34 @@ router.patch('/:id/cartela-bonus', authorize('admin', 'agent'), async (req: Auth
   res.json({ success: true, data: updated!.sanitize() });
 });
 
+// Assign voice/sound to a user and notify them in real-time
+router.patch('/:id/voice', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
+  const validVoices = ['boy sound','boy simpol','boy with symbol','boy1 sound','girl sound','girl 1','girl oro','men arada','men gold','men tigrina','hp sound','double sound'];
+  const { voice } = req.body;
+  if (!voice || !validVoices.includes(voice)) {
+    throw new AppError(400, 'VALIDATION_ERROR', `voice must be one of: ${validVoices.join(', ')}`);
+  }
+
+  const repo = AppDataSource.getRepository(User);
+  const user = await repo.findOne({ where: { id: req.params.id } });
+  if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
+  assertAgentOwns(req.user!, user);
+
+  await repo.update(req.params.id, { assignedVoice: voice });
+  const updated = await repo.findOne({ where: { id: req.params.id } });
+
+  // Push the change to the user's browser immediately via socket
+  const io = (req.app as any).get('io') as Server | undefined;
+  if (io) {
+    io.to(`user:${req.params.id}`).emit('voice_updated', {
+      userId: req.params.id,
+      voice,
+    });
+  }
+
+  res.json({ success: true, data: updated?.sanitize() });
+});
+
 // Assign a user to an agent (admin only)
 router.patch('/:id/assign-agent', authorize('admin'), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(User);

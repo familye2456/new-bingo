@@ -145,6 +145,11 @@ const start = async () => {
         `ALTER TABLE users ADD COLUMN IF NOT EXISTS created_by uuid REFERENCES users(id) ON DELETE SET NULL`
       ).catch(() => {});
 
+      // Add assigned_voice column to users table
+      await migDs.query(
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_voice varchar(50)`
+      ).catch(() => {});
+
       // user_cartelas — add each column individually so one failure doesn't block others
       const ucCols = [
         `ALTER TABLE user_cartelas ADD COLUMN IF NOT EXISTS card_number integer`,

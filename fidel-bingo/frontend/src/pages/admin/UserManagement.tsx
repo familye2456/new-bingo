@@ -87,9 +87,12 @@ export const UserManagement: React.FC = () => {
 
   const createMutation = useMutation({
     mutationFn: () => adminApi.createUser({ ...form, role: form.role, ...(isAdmin && form.agentId ? { agentId: form.agentId } : {}) }),
-    onSuccess: (res) => {
-      const username = res.data?.data?.username ?? form.username;
-      if (username) localStorage.setItem(`default_voice_${username}`, form.voice);
+    onSuccess: async (res) => {
+      const userId = res.data?.data?.id;
+      if (userId && form.voice) {
+        // Set voice via API so the user gets a real-time socket push when they log in
+        adminApi.setUserVoice(userId, form.voice).catch(() => {});
+      }
       invalidate(); closeModal();
     },
   });
@@ -99,13 +102,11 @@ export const UserManagement: React.FC = () => {
     onSuccess: () => { invalidate(); closeModal(); },
   });
   const updateMutation = useMutation({
-    mutationFn: () => adminApi.updateUser(editUser!.id, { email: form.email, username: form.username, paymentType: form.paymentType }),
-    onSuccess: () => {
-      // Store the voice assignment so it applies on the user's next login
-      const username = form.username;
-      if (username && form.voice) localStorage.setItem(`default_voice_${username}`, form.voice);
-      invalidate(); closeModal();
-    },
+    mutationFn: () => Promise.all([
+      adminApi.updateUser(editUser!.id, { email: form.email, username: form.username, paymentType: form.paymentType }),
+      adminApi.setUserVoice(editUser!.id, form.voice),
+    ]),
+    onSuccess: () => { invalidate(); closeModal(); },
   });
   const activateMutation = useMutation({ mutationFn: (id: string) => adminApi.activateUser(id), onSuccess: invalidate });
   const deactivateMutation = useMutation({ mutationFn: (id: string) => adminApi.deactivateUser(id), onSuccess: invalidate });
