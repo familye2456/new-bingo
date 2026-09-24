@@ -5,7 +5,7 @@
 import { api } from './api';
 import { dbGet, dbGetAll, dbPut, dbDelete, enqueue, adjustBalance } from './db';
 import { useAuthStore, isNegativeBalanceLocked } from '../store/authStore';
-import { _justFinishedIds } from './sync';
+import { _justFinishedIds, isFlushInProgress } from './sync';
 
 /** Update both IndexedDB and Zustand store atomically */
 async function applyBalanceDelta(delta: number) {
@@ -304,7 +304,9 @@ export const offlineGameApi = {
           await dbPut('games', { ...game, cartelaIds: data.cartelaIds });
           await dbPut('gameCartelas', data.cartelaIds, game.id);
           await _writeBetTransactions(game.id, data.cartelaIds, data.betAmountPerCartela, Number(game.housePercentage ?? HOUSE_PCT));
-          useAuthStore.getState().refreshBalance();
+          // Skip balance refresh during sync flush — refreshCache() will set the
+          // correct server balance after all queued games are billed.
+          if (!isFlushInProgress()) useAuthStore.getState().refreshBalance();
         }).catch(() => {});
         return result.data;
       }
@@ -335,7 +337,9 @@ export const offlineGameApi = {
           await dbPut('games', { ...game, cartelaIds: data.cartelaIds });
           await dbPut('gameCartelas', data.cartelaIds, game.id);
           await _writeBetTransactions(game.id, data.cartelaIds, data.betAmountPerCartela, Number(game.housePercentage ?? HOUSE_PCT));
-          useAuthStore.getState().refreshBalance();
+          // Skip balance refresh during sync flush — refreshCache() will set the
+          // correct server balance after all queued games are billed.
+          if (!isFlushInProgress()) useAuthStore.getState().refreshBalance();
         }).catch(() => {});
         return result.data;
       }

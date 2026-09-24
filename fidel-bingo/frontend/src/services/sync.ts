@@ -449,6 +449,13 @@ function startRecoveryPolling() {
 /** Returns true while a flush is in progress — used by UI to show sync indicator */
 export function isSyncing() { return _flushing; }
 
+/**
+ * Returns true while a queue flush is in progress.
+ * Used by offlineApi to skip mid-sync refreshBalance() calls that would
+ * temporarily restore the old server balance before all games are billed.
+ */
+export function isFlushInProgress() { return _flushing; }
+
 /** Flush queue only — no cache refresh. Used before individual fetches. */
 export async function flushQueueOnly() {
   if (_flushing) return;
@@ -467,19 +474,29 @@ export async function flushQueue() {
   _flushing = true;
   window.dispatchEvent(new CustomEvent('sync-start'));
   try {
-    // Capture balance BEFORE flush — flush may refund rejected games and make IDB positive again,
-    // but we still need to know if the user was genuinely in negative territory
     const preFlushUser = await dbGet<any>('user', 'me');
-    const preFlushBalance = Number(preFlushUser?.balance ?? 0);
+    const localBalance = Number(preFlushUser?.balance ?? 0);
     const isPrepaidPlayer = preFlushUser &&
       preFlushUser.paymentType !== 'postpaid' &&
       preFlushUser.role !== 'admin' &&
       preFlushUser.role !== 'agent';
 
-    await _doFlush();
+    // ── Step 1: push the local balance to the server BEFORE syncing games ──
+    // The local IDB balance already reflects all offline deductions (e.g. 5000 → 1300).
+    // Writing it to the server first means game sync never causes a balance fluctuation —
+    // the server balance is correct from the start of the flush.
+    if (isPrepaidPlayer) {
+      try {
+        console.log(`[sync] pushing local balance=${localBalance} to server before game flush`);
+        await api.post('/users/me/sync-balance', { balance: localBalance });
+        console.log(`[sync] balance pushed successfully`);
+      } catch (err) {
+        console.log(`[sync] balance push failed, continuing anyway`, err);
+      }
+    }
 
-    // If balance was negative before flush, lock regardless of post-refund IDB value
-    if (isPrepaidPlayer && preFlushBalance < 0) {
+    // ── Step 2: lock immediately if local balance is negative ──────────────
+    if (isPrepaidPlayer && localBalance < 0) {
       localStorage.setItem('neg_balance_locked', '1');
       const stored = parseFloat(localStorage.getItem(NEG_BAL_KEY) ?? '');
       useAuthStore.setState({
@@ -491,12 +508,13 @@ export async function flushQueue() {
       return;
     }
 
+    // ── Step 3: sync game records (game data only — balance already correct) ─
+    await _doFlush();
+
+    // ── Step 4: pull server state back into local cache ─────────────────────
     const balanceOk = await checkNegativeBalanceAfterSync();
     console.log(`[sync] balanceOk=${balanceOk}`);
     if (balanceOk) {
-      // refreshCache() does the authoritative GET /users/me → IDB → Zustand write.
-      // Do NOT make another fetch after this — it causes a race where a stale response
-      // can overwrite the correct balance that refreshCache just set.
       await refreshCache();
     } else {
       startRecoveryPolling();
