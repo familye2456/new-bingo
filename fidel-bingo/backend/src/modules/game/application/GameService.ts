@@ -217,7 +217,9 @@ export class GameService {
 
     return AppDataSource.transaction(async (manager) => {
       const existingWinners = game.winnerIds.length;
-      const shareAmount = existingWinners === 0 ? game.prizePool : game.prizePool / (existingWinners + 1);
+      const rawShareAmount = existingWinners === 0 ? game.prizePool : game.prizePool / (existingWinners + 1);
+      // Round down to nearest 10 (e.g. 253 → 250)
+      const shareAmount = Math.floor(rawShareAmount / 10) * 10;
 
       uc.isWinner = true;
       uc.winPattern = pattern;

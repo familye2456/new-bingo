@@ -560,7 +560,8 @@ export const offlineGameApi = {
       await dbPut('games', game, gameId);
 
       // prizePool is already correctly calculated (totalBets - houseCut)
-      const prize = Number(game.prizePool ?? 0);
+      // Round down to nearest 10 (e.g. 253 → 250)
+      const prize = Math.floor(Number(game.prizePool ?? 0) / 10) * 10;
       if (prize > 0) {
         await dbPut('transactions', {
           id: `tx-win-${gameId}-${cartelaId}`,
