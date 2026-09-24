@@ -203,6 +203,7 @@ export const PlayBingo: React.FC = () => {
     onError: (err: any) => {
       console.log('[callMutation] onError triggered:', err);
       mutationStartTimeRef.current = 0;
+      soundPendingRef.current = false; // always clear on error so game doesn't freeze
       const status = err?.response?.status;
       const code = err?.response?.data?.error?.code;
       if (status === 429) return; // rate limited — skip this tick, keep going
@@ -305,6 +306,9 @@ export const PlayBingo: React.FC = () => {
       }
       // Mark sound as pending immediately — cleared when audio queue drains
       soundPendingRef.current = true;
+      // Safety net: if sound never starts (e.g. audio error), clear the guard after
+      // the max possible sound duration so the game doesn't get permanently stuck.
+      setTimeout(() => { soundPendingRef.current = false; }, 16000);
       mutationStartTimeRef.current = Date.now();
       mutateRef.current();
     }, 500);
@@ -383,8 +387,13 @@ export const PlayBingo: React.FC = () => {
     const newNums = sessionCalledNumbers.filter((n) => !prevCalledRef.current.includes(n));
     if (newNums.length > 0) {
       playSound(`${newNums[newNums.length - 1]}`);
-      // Clear the sound-pending guard once the queue actually drains
-      audioQueue.waitForDrain().then(() => { soundPendingRef.current = false; });
+      // Wait one microtask tick so the enqueue() call in playNumberSoundQueued
+      // has a chance to set audioQueue.playing = true before we call waitForDrain().
+      // Without this, waitForDrain() sees an idle queue and resolves immediately,
+      // clearing soundPendingRef too early and causing the auto-caller to get stuck.
+      Promise.resolve().then(() => {
+        audioQueue.waitForDrain().then(() => { soundPendingRef.current = false; });
+      });
     }
     prevCalledRef.current = sessionCalledNumbers;
   }, [sessionCalledNumbers]);
