@@ -256,6 +256,8 @@ export class GameService {
       where: { id: userId },
       select: ['id', 'cartelaBonusEnabled'],
     });
+    
+    logger.info('Finishing game - user bonus check', { userId, cartelaBonusEnabled: user?.cartelaBonusEnabled, betAmount: game.betAmount });
 
     // Find the cartelas used in this game (to pick bonus from)
     let bonusCardNumber: number | null = null;
@@ -271,11 +273,14 @@ export class GameService {
         .filter((gc) => gc.userCartela?.cardNumber != null)
         .map((gc) => gc.userCartela!);
 
+      logger.info('Eligible cartelas for bonus', { gameId, eligibleCount: eligible.length });
+
       if (eligible.length > 0) {
         // Pick one at random from the game's cartelas
         const picked = eligible[Math.floor(Math.random() * eligible.length)];
         bonusCardNumber = picked.cardNumber ?? null;
         bonusAmount = Number(game.betAmount);
+        logger.info('Bonus cartela picked', { bonusCardNumber, bonusAmount });
       }
     }
 

@@ -230,16 +230,23 @@ export const PlayBingo: React.FC = () => {
       if (!isOfflineGame) refreshBalance();
 
       // Extract bonus info from server response
+      console.log('[finishGame] Full response:', response);
       const payload = response?.data?.data;
+      console.log('[finishGame] Payload:', payload);
       const cardNum: number | null = payload?.bonusCardNumber ?? null;
       const amount: number | null = payload?.bonusAmount ?? null;
+      console.log('[finishGame] Bonus info:', { cardNum, amount });
 
       const freshUser = useAuthStore.getState().user;
+      console.log('[finishGame] User bonus enabled:', freshUser?.cartelaBonusEnabled);
+      
       if (freshUser?.cartelaBonusEnabled && cardNum != null) {
+        console.log('[finishGame] Showing bonus modal');
         setBonusCardNumber(cardNum);
         setBonusAmount(amount);
         setShowBonusModal(true);
       } else {
+        console.log('[finishGame] Navigating to new-game');
         navigate('/new-game');
       }
     },
