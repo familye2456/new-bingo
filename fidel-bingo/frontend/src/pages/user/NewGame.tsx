@@ -523,17 +523,17 @@ export const NewGame: React.FC = () => {
         ) : (
           <div className="grid gap-1.5 px-1 cartela-grid"
             style={{ 
-              gridTemplateColumns: 'repeat(auto-fill, minmax(42px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(48px, 1fr))',
             }}>
             <style>{`
               @media (min-width: 640px) {
                 .cartela-grid {
-                  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)) !important;
+                  grid-template-columns: repeat(auto-fill, minmax(55px, 1fr)) !important;
                 }
               }
               @media (min-width: 1024px) {
                 .cartela-grid {
-                  grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)) !important;
+                  grid-template-columns: repeat(auto-fill, minmax(69px, 1fr)) !important;
                 }
               }
             `}</style>
@@ -543,22 +543,30 @@ export const NewGame: React.FC = () => {
                 <button
                   key={c.id}
                   onClick={() => toggle(c.id)}
-                  className="flex items-center justify-center font-black transition-all duration-200 aspect-square rounded-full hover:brightness-110 active:scale-95"
+                  className="flex items-center justify-center font-black transition-all duration-200 hover:brightness-110 active:scale-95"
                   style={sel ? {
-                    background: 'linear-gradient(145deg,#10b981,#059669)',
+                    background: 'linear-gradient(135deg, #6366f1, #a855f7)',
                     color: '#fff',
-                    border: '2px solid rgba(255,255,255,0.9)',
-                    boxShadow: '0 0 10px rgba(16,185,129,0.4), 0 0 15px rgba(16,185,129,0.6), 0 3px 10px rgba(0,0,0,0.3)',
-                    fontSize: 'clamp(11px, 3vw, 22px)',
+                    border: '2px solid rgba(255,255,255,0.85)',
+                    boxShadow: '0 0 12px rgba(168,85,247,0.6), 0 0 20px rgba(99,102,241,0.3), 0 4px 12px rgba(0,0,0,0.3)',
+                    fontSize: 'clamp(13px, 3vw, 25px)',
                     fontWeight: 900,
+                    fontFamily: "'Bebas Neue', 'Black Han Sans', 'Arial Black', sans-serif",
+                    letterSpacing: '0.04em',
                     transform: 'scale(1.02)',
+                    borderRadius: '8px',
+                    height: '46px',
                   } : {
-                    background: 'linear-gradient(145deg, #8b5cf6, #7c3aed)',
-                    color: '#fff',
-                    border: '1px solid rgba(139,92,246,0.4)',
-                    fontSize: 'clamp(10px, 2.5vw, 20px)',
-                    fontWeight: 700,
-                    boxShadow: '0 2px 8px rgba(139,92,246,0.3), 0 4px 12px rgba(0,0,0,0.2)',
+                    background: 'linear-gradient(135deg, #1e293b, #334155)',
+                    color: '#ffffff',
+                    border: '1px solid rgba(148,163,184,0.25)',
+                    fontSize: 'clamp(12px, 2.5vw, 23px)',
+                    fontWeight: 900,
+                    fontFamily: "'Bebas Neue', 'Black Han Sans', 'Arial Black', sans-serif",
+                    letterSpacing: '0.04em',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06)',
+                    borderRadius: '8px',
+                    height: '46px',
                   }}>
                   {c.cardNumber ?? '?'}
                 </button>

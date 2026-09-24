@@ -408,16 +408,19 @@ export const PlayBingo: React.FC = () => {
       {/* ── Number board — compact on mobile, fills rest on desktop ── */}
       <style>{`
         @media (max-width: 767px) {
-          .number-board-wrap { flex: 0 0 auto !important; height: 42vh !important; }
+          .number-board-wrap { flex: 0 0 auto !important; height: 42vh !important; padding-top: 30% !important; }
         }
         @media (min-width: 768px) and (max-width: 1023px) {
-          .number-board-wrap { flex: 0 0 auto !important; height: 48vh !important; }
+          .number-board-wrap { flex: 0 0 auto !important; height: 48vh !important; padding-top: 1rem !important; }
         }
         @media (min-width: 1024px) {
-          .number-board-wrap { flex: 1 1 0% !important; min-height: 0 !important; }
+          .number-board-wrap { flex: 1 1 0% !important; min-height: 0 !important; padding-top: 0.5rem !important; }
+        }
+        @media (max-width: 1023px) {
+          .ctrl-bar { padding-bottom: 5% !important; }
         }
       `}</style>
-      <div className="number-board-wrap min-h-0 px-3 sm:px-3 pt-1.5 sm:pt-2 pb-1">
+      <div className="number-board-wrap min-h-0 px-3 sm:px-3 pb-1">
         {game
           ? <NumberBoard calledNumbers={calledNumbers} lastNumber={lastNumber} />
           : <div className="flex items-center justify-center h-full text-gray-900 text-sm">Loading…</div>
@@ -426,30 +429,30 @@ export const PlayBingo: React.FC = () => {
 
       {/* ── Bottom control bar ── */}
       {game && (
-        <div className="shrink-0 lg:shrink-0 mt-auto lg:mt-0"
+        <div className="shrink-0 mt-auto lg:mt-0 ctrl-bar"
           style={{ background: 'rgba(0,0,0,0.7)', borderTop: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(8px)' }}>
 
           {/* ── Mobile layout (< md) — fixed bottom bar ── */}
-          <div className="md:hidden flex flex-col" style={{ minHeight: 180, paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <div className="md:hidden flex flex-col" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
 
             {/* ── Row 1: prize ball | buttons | last-number ball ── */}
-            <div className="flex items-center gap-2 px-3 pt-3 pb-2">
+            <div className="flex items-center gap-1.5 px-2 pt-2 pb-1.5">
 
               {/* Prize ball */}
               <div className="flex flex-col items-center justify-center shrink-0 relative"
                 style={{
-                  width: 68, height: 68, borderRadius: '50%',
+                  width: 58, height: 58, borderRadius: '50%',
                   background: 'radial-gradient(circle at 35% 30%, #3b82f6, #1e3a8a)',
                   boxShadow: '0 0 18px rgba(59,130,246,0.7), inset 0 2px 0 rgba(255,255,255,0.3)',
                   border: '2px solid rgba(147,197,253,0.9)',
                 }}>
-                <span className="text-blue-100 font-bold leading-none" style={{ fontSize: 8 }}>ደራሽ</span>
-                <span className="font-black tabular-nums text-white leading-none" style={{ fontSize: 20 }}>
+                <span className="text-blue-100 font-bold leading-none" style={{ fontSize: 7 }}>ደራሽ</span>
+                <span className="font-black tabular-nums text-white leading-none" style={{ fontSize: 16 }}>
                   {Number(game.prizePool).toFixed(0)}
                 </span>
-                <span className="text-yellow-300 font-extrabold leading-none" style={{ fontSize: 9 }}>ብር</span>
+                <span className="text-yellow-300 font-extrabold leading-none" style={{ fontSize: 8 }}>ብር</span>
                 <div className="absolute -top-1 -right-1 flex items-center justify-center rounded-full font-black"
-                  style={{ width: 18, height: 18, background: '#fbbf24', color: '#111', fontSize: 9, border: '2px solid #111' }}>
+                  style={{ width: 16, height: 16, background: '#fbbf24', color: '#111', fontSize: 8, border: '2px solid #111' }}>
                   {game.cartelaCount}
                 </div>
                 <div className="absolute inset-0 pointer-events-none"
@@ -461,31 +464,31 @@ export const PlayBingo: React.FC = () => {
               </div>
 
               {/* Centre: buttons + progress */}
-              <div className="flex-1 flex flex-col items-center gap-2">
+              <div className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
                 {/* Buttons row */}
-                <div className="flex items-center gap-2 w-full justify-center">
+                <div className="flex items-center gap-1 w-full justify-center">
                   <CtrlBtn
-                    size="lg"
-                    label={autoOn ? '⏸ Pause' : '▶ Auto'}
+                    size="sm"
+                    label={autoOn ? '⏸ Auto' : '▶ Auto'}
                     active={autoOn}
                     onClick={toggleAuto}
                     disabled={!isCreator || game.status !== 'active' || calledNumbers.length >= 75}
                   />
                   <CtrlBtn
-                    size="lg"
+                    size="sm"
                     label="➤ Next"
                     onClick={() => callMutation.mutate()}
                     disabled={!isCreator || game.status !== 'active' || callMutation.isPending || calledNumbers.length >= 75}
                   />
                   <CtrlBtn
-                    size="lg"
+                    size="sm"
                     label={finishMutation.isPending ? '⌛' : '⏹ End'}
                     onClick={() => { stopAuto(true); finishMutation.mutate(); }}
                     disabled={!isCreator || game.status !== 'active' || finishMutation.isPending}
                     danger
                   />
                   <CtrlBtn
-                    size="lg"
+                    size="sm"
                     label="🔄"
                     purple
                     onClick={() => {
@@ -497,18 +500,18 @@ export const PlayBingo: React.FC = () => {
                 </div>
                 {/* Progress bar */}
                 <div className="w-full flex items-center gap-2">
-                  <div className="flex-1 rounded-full overflow-hidden" style={{ height: 5, background: 'rgba(255,255,255,0.08)' }}>
+                  <div className="flex-1 rounded-full overflow-hidden" style={{ height: 4, background: 'rgba(255,255,255,0.08)' }}>
                     <div className="h-full rounded-full transition-all duration-500"
                       style={{ width: `${(calledNumbers.length / 75) * 100}%`, background: 'linear-gradient(90deg,#22c55e,#4ade80)' }} />
                   </div>
-                  <span className="text-blue-400 font-bold tabular-nums shrink-0" style={{ fontSize: 10 }}>
+                  <span className="text-blue-400 font-bold tabular-nums shrink-0" style={{ fontSize: 9 }}>
                     {calledNumbers.length}<span className="text-gray-600">/75</span>
                   </span>
                 </div>
               </div>
 
               {/* Last number ball */}
-              <div className="shrink-0 flex items-center justify-center" style={{ width: 68, height: 68 }}>
+              <div className="shrink-0 flex items-center justify-center" style={{ width: 58, height: 58 }}>
                 <div key={lastNumber} className="flex flex-col items-center justify-center relative overflow-hidden ball-container"
                   style={{
                     width: '100%', height: '100%', borderRadius: '50%',
@@ -530,11 +533,11 @@ export const PlayBingo: React.FC = () => {
                         transform: 'translateX(-100%) rotate(25deg)', pointerEvents: 'none',
                       }} />
                       <span className="font-extrabold leading-none relative z-10"
-                        style={{ fontSize: 8, color: '#fff', letterSpacing: '0.15em', opacity: 0.9 }}>
+                        style={{ fontSize: 7, color: '#fff', letterSpacing: '0.15em', opacity: 0.9 }}>
                         {getBingoLetter(lastNumber)}
                       </span>
                       <span className="font-black tabular-nums leading-none relative z-10"
-                        style={{ fontSize: 22, color: '#fff', textShadow: '0 2px 8px rgba(0,0,0,0.6)' }}>
+                        style={{ fontSize: 18, color: '#fff', textShadow: '0 2px 8px rgba(0,0,0,0.6)' }}>
                         {String(lastNumber).padStart(2, '0')}
                       </span>
                       <div className="absolute inset-0 rounded-full pointer-events-none"
@@ -544,7 +547,7 @@ export const PlayBingo: React.FC = () => {
                         }} />
                     </>
                   ) : (
-                    <span className="font-black text-white/20" style={{ fontSize: 22 }}>?</span>
+                    <span className="font-black text-white/20" style={{ fontSize: 18 }}>?</span>
                   )}
                 </div>
               </div>
@@ -636,14 +639,14 @@ export const PlayBingo: React.FC = () => {
             <div className="flex-1 flex flex-col gap-2 min-w-0">
               {/* Buttons + speed row */}
               <div className="flex items-center gap-2">
-                <CtrlBtn size="md" label={autoOn ? '⏸ Pause' : '▶ Auto'} active={autoOn} onClick={toggleAuto}
+                <CtrlBtn size="lg" label={autoOn ? '⏸ Pause' : '▶ Auto'} active={autoOn} onClick={toggleAuto}
                   disabled={!isCreator || game.status !== 'active' || calledNumbers.length >= 75} />
-                <CtrlBtn size="md" label="➤ Next" onClick={() => callMutation.mutate()}
+                <CtrlBtn size="lg" label="➤ Next" onClick={() => callMutation.mutate()}
                   disabled={!isCreator || game.status !== 'active' || callMutation.isPending || calledNumbers.length >= 75} />
-                <CtrlBtn size="md" label={finishMutation.isPending ? '⌛' : '⏹ End'}
+                <CtrlBtn size="lg" label={finishMutation.isPending ? '⌛' : '⏹ End'}
                   onClick={() => { stopAuto(true); finishMutation.mutate(); }}
                   disabled={!isCreator || game.status !== 'active' || finishMutation.isPending} danger />
-                <CtrlBtn size="md" label="🔄" purple onClick={() => {
+                <CtrlBtn size="lg" label="🔄" purple onClick={() => {
                   playCachedSound('/sounds/shuffle-audio-TfqyAnvz.mp3').catch(() => {});
                   setTimeout(() => window.location.reload(), 5000);
                 }} title="Refresh" />
@@ -998,7 +1001,7 @@ export const PlayBingo: React.FC = () => {
 
       {/* ── Keyboard shortcuts help (only for creators, desktop only) ── */}
       {game && isCreator && (
-        <div className="hidden md:block shrink-0 px-3 py-1 text-center text-xs text-gray-700"
+        <div className="hidden shrink-0 px-3 py-1 text-center text-xs text-gray-700"
           style={{ background: 'rgba(0,0,0,0.3)', borderTop: '1px solid rgba(255,255,255,0.03)' }}>
           <span className="inline-flex items-center gap-3 flex-wrap justify-center">
             <span className="font-medium text-gray-600">⌨️</span>
