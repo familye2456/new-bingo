@@ -131,7 +131,10 @@ export const PlayBingo: React.FC = () => {
       return offlineGameApi.list('active');
     },
     enabled: !isOfflineGame || Boolean(selectedGameId),
-    refetchInterval: isOfflineGame ? false : 10000,
+    // Don't poll during a game — server polling mid-game overwrites IDB calledNumbers
+    // and can cause state mismatches that disrupt the audio/call loop online.
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
   });
 
   // Bonus state — set when finishGame returns a bonus result
@@ -164,18 +167,20 @@ export const PlayBingo: React.FC = () => {
     offlineGameApi.getCartelas(game.id).catch(() => {});
   }, [game?.id]);
 
+  // Timestamp of the last number call — used to enforce a minimum gap between calls
+  // so the audio queue has time to start playing before the next interval tick checks it.
+  const lastCallTimeRef = useRef<number>(0);
+
   const stopAuto = useCallback((silent = false) => {
     if (autoRef.current) { clearInterval(autoRef.current); autoRef.current = null; }
     autoActiveRef.current = false;
-    soundPendingRef.current = false;
+    lastCallTimeRef.current = 0;
     setGameSessionActive(false);
     setAutoOn(false);
     if (!silent) playRootSound('aac_ended.mp3');
   }, []);
 
-  // Sound-playing guard — set true the moment a number is called, cleared only when
-  // the audio queue fully drains. Prevents the next call firing before the sound starts,
-  // which happens because audioQueue.playing is briefly false between enqueue and decode.
+  // Legacy ref kept so onError can still reference it without breaking
   const soundPendingRef = useRef(false);
 
   const callMutation = useMutation({
@@ -194,11 +199,12 @@ export const PlayBingo: React.FC = () => {
     onSuccess: (response: any) => {
       console.log('[callMutation] onSuccess triggered');
       mutationStartTimeRef.current = 0;
+      // If auto was paused/stopped before this response arrived, discard it
+      if (!autoActiveRef.current && autoRef.current === null) return;
       const num: number | null = response?.data?.data?.number ?? response?.data?.number ?? null;
       if (num != null) setSessionCalledNumbers((prev) => prev.includes(num) ? prev : [...prev, num]);
-      if (!isOfflineGame) {
-        queryClient.invalidateQueries({ queryKey: ['games'] });
-      }
+      // Do NOT invalidate games here — it triggers a server refetch mid-game
+      // which can overwrite local IDB state and disrupt audio/call flow online.
     },
     onError: (err: any) => {
       console.log('[callMutation] onError triggered:', err);
@@ -295,20 +301,18 @@ export const PlayBingo: React.FC = () => {
       }
       elapsed += 0.5;
       if (elapsed < speedRef.current) return;
-      // Wait for audio queue to finish — covers both the playing state and the brief
-      // gap between a number being called and the sound actually starting (soundPendingRef)
-      if (audioQueue.playing || soundPendingRef.current) return;
+      // Wait for audio queue to finish playing the current number sound.
+      // Also enforce a 300ms minimum gap after each call so the queue has
+      // time to start before the next tick checks audioQueue.playing.
+      const timeSinceLastCall = Date.now() - lastCallTimeRef.current;
+      if (audioQueue.playing || (lastCallTimeRef.current > 0 && timeSinceLastCall < 300)) return;
       elapsed = 0;
       if (sessionCalledRef.current.length >= 75) { stopAuto(); return; }
       if (isMutationPendingRef.current) {
         checkMutationTimeout(); // Check if mutation is stuck
         return; // don't fire if previous call still in flight
       }
-      // Mark sound as pending immediately — cleared when audio queue drains
-      soundPendingRef.current = true;
-      // Safety net: if sound never starts (e.g. audio error), clear the guard after
-      // the max possible sound duration so the game doesn't get permanently stuck.
-      setTimeout(() => { soundPendingRef.current = false; }, 16000);
+      lastCallTimeRef.current = Date.now();
       mutationStartTimeRef.current = Date.now();
       mutateRef.current();
     }, 500);
@@ -387,13 +391,6 @@ export const PlayBingo: React.FC = () => {
     const newNums = sessionCalledNumbers.filter((n) => !prevCalledRef.current.includes(n));
     if (newNums.length > 0) {
       playSound(`${newNums[newNums.length - 1]}`);
-      // Wait one microtask tick so the enqueue() call in playNumberSoundQueued
-      // has a chance to set audioQueue.playing = true before we call waitForDrain().
-      // Without this, waitForDrain() sees an idle queue and resolves immediately,
-      // clearing soundPendingRef too early and causing the auto-caller to get stuck.
-      Promise.resolve().then(() => {
-        audioQueue.waitForDrain().then(() => { soundPendingRef.current = false; });
-      });
     }
     prevCalledRef.current = sessionCalledNumbers;
   }, [sessionCalledNumbers]);
