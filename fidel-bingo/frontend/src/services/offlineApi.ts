@@ -298,7 +298,7 @@ export const offlineGameApi = {
     if (!isPrepaidUser) {
       const result = await tryApi(() => api.post('/games', data));
       if (result.ok) {
-        const game = result.data.data.data;
+        const game = result.data.data.data ?? result.data.data ?? result.data;
         // Cache in background — don't block navigation
         Promise.resolve().then(async () => {
           await dbPut('games', { ...game, cartelaIds: data.cartelaIds });
@@ -511,9 +511,10 @@ export const offlineGameApi = {
    * Finish a game.
    * Online  → POST to server, update cached game status.
    * Offline → mark finished locally, enqueue for sync.
+   * Returns { data: { data: { game, bonusCardNumber, bonusAmount } } } when online.
    */
   finish: async (gameId: string) => {
-    // If offline game, skip server call — just mark locally and enqueue
+    // If online and not an offline-id game, call server to get bonus result
     if (!String(gameId).startsWith('offline-')) {
       const result = await tryApi(() => api.post(`/games/${gameId}/finish`));
       if (result.ok) {

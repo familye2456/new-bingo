@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { offlineGameApi, offlineUserApi } from '../../services/offlineApi';
+import { offlineGameApi } from '../../services/offlineApi';
 import { useAuthStore } from '../../store/authStore';
 import { useGameSettings } from '../../store/gameSettingsStore';
 import { dbGet, playCachedSound, playNumberSoundQueued, unlockAudioContext, audioQueue } from '../../services/db';
@@ -134,20 +134,9 @@ export const PlayBingo: React.FC = () => {
     refetchInterval: isOfflineGame ? false : 10000,
   });
 
-  // Fetch user's registered cartelas to pick the correct bonus card number
-  const { data: userCartelas = [] } = useQuery<{ id: string; cardNumber?: number }[]>({
-    queryKey: ['my-cartelas', user?.id],
-    queryFn: () => offlineUserApi.myCartelas(),
-    enabled: Boolean(user?.cartelaBonusEnabled),
-  });
-
-  // Pick the lowest registered card number for the bonus popup (card #1 if owned, else first)
-  const bonusCardNumber = userCartelas.length > 0
-    ? userCartelas
-        .map((c) => c.cardNumber ?? 0)
-        .filter((n) => n > 0)
-        .sort((a, b) => a - b)[0] ?? 1
-    : 1;
+  // Bonus state — set when finishGame returns a bonus result
+  const [bonusCardNumber, setBonusCardNumber] = useState<number | null>(null);
+  const [bonusAmount, setBonusAmount] = useState<number | null>(null);
 
   // Only show games belonging to the current user that are active
   const games = allGames.filter((g) => g.creatorId === user?.id && g.status === 'active');
@@ -235,13 +224,20 @@ export const PlayBingo: React.FC = () => {
       if (!gameRef.current) throw new Error('Game is null');
       return offlineGameApi.finish(gameRef.current.id);
     },
-    onSuccess: () => {
+    onSuccess: (response: any) => {
       stopAuto(true);
       queryClient.invalidateQueries({ queryKey: ['games'] });
       if (!isOfflineGame) refreshBalance();
-      // Read fresh user state from store to avoid stale closure
+
+      // Extract bonus info from server response
+      const payload = response?.data?.data;
+      const cardNum: number | null = payload?.bonusCardNumber ?? null;
+      const amount: number | null = payload?.bonusAmount ?? null;
+
       const freshUser = useAuthStore.getState().user;
-      if (freshUser?.cartelaBonusEnabled) {
+      if (freshUser?.cartelaBonusEnabled && cardNum != null) {
+        setBonusCardNumber(cardNum);
+        setBonusAmount(amount);
         setShowBonusModal(true);
       } else {
         navigate('/new-game');
@@ -927,7 +923,7 @@ export const PlayBingo: React.FC = () => {
       )}
 
       {/* ── Bonus cartela popup — shown after game ends when user has bonus enabled ── */}
-      {showBonusModal && (
+      {showBonusModal && bonusCardNumber != null && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center"
           style={{ backdropFilter: 'blur(6px)', background: 'rgba(0,0,0,0.75)' }}
@@ -949,8 +945,8 @@ export const PlayBingo: React.FC = () => {
 
             {/* Title */}
             <div className="text-center">
-              <p className="text-yellow-400 font-extrabold text-xl tracking-wide">Free Cartela Bonus</p>
-              <p className="text-gray-400 text-sm mt-1">Your bonus card for the next game</p>
+              <p className="text-yellow-400 font-extrabold text-xl tracking-wide">Free Cartela Bonus!</p>
+              <p className="text-gray-400 text-sm mt-1">Randomly selected from your game cartelas</p>
             </div>
 
             {/* Card number badge */}
@@ -963,13 +959,15 @@ export const PlayBingo: React.FC = () => {
               <span className="font-black text-gray-900 text-4xl tracking-tight">Card #{bonusCardNumber}</span>
             </div>
 
-            <p className="text-gray-500 text-xs text-center" style={{ maxWidth: 200 }}>
-              One free cartela has been credited to your balance
-            </p>
+            {bonusAmount != null && (
+              <p className="text-green-400 font-bold text-base text-center">
+                +{Number(bonusAmount).toFixed(2)} BIRR credited to your balance
+              </p>
+            )}
 
             {/* Close → new game */}
             <button
-              onClick={() => { setShowBonusModal(false); navigate('/new-game'); }}
+              onClick={() => { setShowBonusModal(false); setBonusCardNumber(null); setBonusAmount(null); navigate('/new-game'); }}
               className="w-full font-bold rounded-xl py-3 text-base transition-all active:scale-95 hover:brightness-110"
               style={{ background: 'linear-gradient(135deg, #fbbf24, #f59e0b)', color: '#111' }}
             >

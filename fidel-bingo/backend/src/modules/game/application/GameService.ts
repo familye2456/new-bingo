@@ -22,6 +22,14 @@ export interface CreateGameDTO {
   createdAt?: string; // Optional: preserve original offline creation timestamp
 }
 
+export interface FinishGameResult {
+  game: Game;
+  /** Card number of the randomly selected bonus cartela (null if no bonus) */
+  bonusCardNumber: number | null;
+  /** Bet amount credited as bonus (null if no bonus) */
+  bonusAmount: number | null;
+}
+
 export class GameService {
   private gameRepo = AppDataSource.getRepository(Game);
   private ucRepo = AppDataSource.getRepository(UserCartela);
@@ -94,7 +102,6 @@ export class GameService {
         totalBets: totalCost,
         prizePool: totalCost - houseCut,
         houseCut,
-        // Preserve original offline timestamp if provided, otherwise use current time
         ...(dto.createdAt && { createdAt: new Date(dto.createdAt) }),
       });
 
@@ -123,24 +130,6 @@ export class GameService {
           })
         ),
       ]);
-
-      // Apply free cartela bonus if user is eligible and bet > 0
-      if (user.cartelaBonusEnabled && dto.betAmountPerCartela > 0) {
-        await Promise.all([
-          manager.increment(User, { id: userId }, 'balance', dto.betAmountPerCartela),
-          manager.save(
-            manager.create(Transaction, {
-              userId,
-              gameId: savedGame.id,
-              transactionType: 'bonus',
-              amount: dto.betAmountPerCartela,
-              status: 'completed',
-              description: `Free cartela bonus for game ${savedGame.id}`,
-              processedAt: new Date(),
-            })
-          ),
-        ]);
-      }
 
       activeGames.inc();
       logger.info('Game created', { gameId: savedGame.id, userId });
@@ -255,21 +244,70 @@ export class GameService {
     });
   }
 
-  async finishGame(gameId: string, userId: string): Promise<Game> {
+  async finishGame(gameId: string, userId: string): Promise<FinishGameResult> {
     const game = await this.gameRepo.findOne({ where: { id: gameId } });
     if (!game) throw new AppError(404, 'GAME_NOT_FOUND', 'Game not found');
     if (game.creatorId !== userId) throw new AppError(403, 'FORBIDDEN', 'Only creator can finish the game');
     if (game.status === 'finished' || game.status === 'cancelled')
       throw new AppError(400, 'INVALID_STATE', 'Game is already ended');
 
-    game.status = 'finished';
-    game.finishedAt = new Date();
-    await this.gameRepo.save(game);
+    // Check if user is eligible for bonus cartela
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      select: ['id', 'cartelaBonusEnabled'],
+    });
 
-    try { await redisClient.del(`game:${gameId}`); } catch {}
-    activeGames.dec();
-    logger.info('Game finished manually', { gameId, userId });
-    return game;
+    // Find the cartelas used in this game (to pick bonus from)
+    let bonusCardNumber: number | null = null;
+    let bonusAmount: number | null = null;
+
+    if (user?.cartelaBonusEnabled && game.betAmount > 0) {
+      // Get the cartelas registered in this game for this user
+      const gameCartelas = await this.gcRepo.find({
+        where: { gameId, userId },
+        relations: ['userCartela'],
+      });
+      const eligible = gameCartelas
+        .filter((gc) => gc.userCartela?.cardNumber != null)
+        .map((gc) => gc.userCartela!);
+
+      if (eligible.length > 0) {
+        // Pick one at random from the game's cartelas
+        const picked = eligible[Math.floor(Math.random() * eligible.length)];
+        bonusCardNumber = picked.cardNumber ?? null;
+        bonusAmount = Number(game.betAmount);
+      }
+    }
+
+    return AppDataSource.transaction(async (manager) => {
+      game.status = 'finished';
+      game.finishedAt = new Date();
+      await manager.save(game);
+
+      // Credit bonus balance and record transaction
+      if (bonusCardNumber != null && bonusAmount != null) {
+        await Promise.all([
+          manager.increment(User, { id: userId }, 'balance', bonusAmount),
+          manager.save(
+            manager.create(Transaction, {
+              userId,
+              gameId,
+              transactionType: 'bonus',
+              amount: bonusAmount,
+              status: 'completed',
+              description: `Bonus cartela #${bonusCardNumber} for game ${gameId}`,
+              processedAt: new Date(),
+            })
+          ),
+        ]);
+        logger.info('Bonus cartela credited on finish', { gameId, userId, bonusCardNumber, bonusAmount });
+      }
+
+      try { await redisClient.del(`game:${gameId}`); } catch {}
+      activeGames.dec();
+      logger.info('Game finished manually', { gameId, userId });
+      return { game, bonusCardNumber, bonusAmount };
+    });
   }
 
   async resetGame(gameId: string, userId: string): Promise<void> {

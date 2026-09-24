@@ -50,8 +50,8 @@ export const listGames = async (req: AuthRequest, res: Response) => {
 };
 
 export const finishGame = async (req: AuthRequest, res: Response) => {
-  const game = await gameService.finishGame(req.params.gameId, req.user!.id);
-  res.json({ success: true, data: game });
+  const result = await gameService.finishGame(req.params.gameId, req.user!.id);
+  res.json({ success: true, data: result });
 };
 
 export const resetGame = async (req: AuthRequest, res: Response) => {
