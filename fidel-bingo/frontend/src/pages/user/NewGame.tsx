@@ -523,17 +523,20 @@ export const NewGame: React.FC = () => {
         ) : (
           <div className="grid gap-1.5 px-1 cartela-grid"
             style={{ 
-              gridTemplateColumns: 'repeat(auto-fill, minmax(48px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(50px, 1fr))',
             }}>
             <style>{`
               @media (min-width: 640px) {
                 .cartela-grid {
-                  grid-template-columns: repeat(auto-fill, minmax(55px, 1fr)) !important;
+                  grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)) !important;
                 }
               }
               @media (min-width: 1024px) {
                 .cartela-grid {
                   grid-template-columns: repeat(auto-fill, minmax(69px, 1fr)) !important;
+                }
+                .cartela-grid button {
+                  font-size: 33px !important;
                 }
               }
             `}</style>
