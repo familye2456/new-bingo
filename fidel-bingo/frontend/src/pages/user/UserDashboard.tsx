@@ -213,7 +213,7 @@ export const UserDashboard: React.FC = () => {
               <div>
                 <div className="text-xs font-medium" style={{ color: 'rgba(251,191,36,0.45)' }}>Balance</div>
                 <div className="font-black text-yellow-400 text-base leading-none">
-                  {Number(user?.balance ?? 0).toFixed(2)}<span className="text-xs ml-1 opacity-50 font-semibold">Birr</span>
+                  {Number(user?.balance ?? 0).toFixed(0)}<span className="text-xs ml-1 opacity-50 font-semibold">Birr</span>
                 </div>
               </div>
             </div>

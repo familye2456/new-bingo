@@ -397,7 +397,7 @@ export const PlayBingo: React.FC = () => {
         <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-1.5"
           style={{ background: 'rgba(34,197,94,0.15)', borderBottom: '1px solid rgba(34,197,94,0.3)' }}>
           <span className="text-green-400 font-bold text-sm min-w-0 break-words">
-            🎉 {user?.cartelaBonusEnabled && winnerInfo.cardNumber === bonusCardNumber ? `🎁 Bonus Card #${bonusCardNumber}` : `Card #${winnerInfo.cardNumber}`} — BINGO! ({winnerInfo.pattern}) · {Number(winnerInfo.amount).toFixed(2)} BIRR
+            🎉 {user?.cartelaBonusEnabled && winnerInfo.cardNumber === bonusCardNumber ? `🎁 Bonus Card #${bonusCardNumber}` : `Card #${winnerInfo.cardNumber}`} — BINGO! ({winnerInfo.pattern}) · {Number(winnerInfo.amount).toFixed(0)} BIRR
           </span>
           <button onClick={() => setWinnerInfo(null)}
             className="text-green-400 hover:text-white text-lg leading-none px-1"
@@ -968,7 +968,7 @@ export const PlayBingo: React.FC = () => {
 
             {bonusAmount != null && (
               <p className="text-green-400 font-bold text-base text-center">
-                +{Number(bonusAmount).toFixed(2)} BIRR credited to your balance
+                +{Number(bonusAmount).toFixed(0)} BIRR credited to your balance
               </p>
             )}
 

@@ -104,7 +104,7 @@ export const NewGame: React.FC = () => {
 
   // Calculate derived values 
   const houseCutValid = typeof houseCut === 'number' && houseCut >= 10 && houseCut <= 45;
-  const totalCost = houseCutValid ? bet * selectedIds.size * (houseCut as number) / 100 : 0;
+  const totalCost = houseCutValid ? Math.ceil(bet * selectedIds.size * (houseCut as number) / 100) : 0;
   const currentBalance = Number(user?.balance ?? 0);
   const hasEnoughBalance = user?.paymentType === 'postpaid' || (currentBalance > 0 && currentBalance >= totalCost);
   
@@ -131,7 +131,7 @@ export const NewGame: React.FC = () => {
       if (id) {
         const hc = typeof houseCut === 'number' ? houseCut : 10;
         const totalBets = bet * selectedIds.size;
-        const houseCutAmt = totalBets * hc / 100;
+        const houseCutAmt = Math.ceil(totalBets * hc / 100);
         const newGame = {
           ...game,
           betAmount: bet,
@@ -380,7 +380,7 @@ export const NewGame: React.FC = () => {
           {!createMutation.isError && !negativeBalance && !hasEnoughBalance && selectedIds.size >= MIN_CARTELAS && houseCutValid && (
             <div className="px-3 py-2 rounded-xl text-xs font-medium"
               style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)', color: '#fbbf24' }}>
-              ⚠ Balance ({currentBalance.toFixed(2)}) &lt; house cut ({totalCost.toFixed(2)}) Birr.
+              ⚠ Balance ({currentBalance.toFixed(0)}) &lt; house cut ({totalCost.toFixed(0)}) Birr.
             </div>
           )}
         </div>
@@ -397,7 +397,7 @@ export const NewGame: React.FC = () => {
               </span>
               {selectedIds.size >= MIN_CARTELAS && (
                 <span className="text-[10px] text-gray-500">
-                  • Total: {(bet * selectedIds.size).toFixed(2)} BIRR
+                  • Total: {(bet * selectedIds.size).toFixed(0)} BIRR
                 </span>
               )}
               {!canStart && selectedIds.size < MIN_CARTELAS && (

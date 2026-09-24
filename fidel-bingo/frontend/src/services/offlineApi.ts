@@ -314,7 +314,7 @@ export const offlineGameApi = {
 
     // Prepaid users → try server first when online; fall back to offline if unreachable
     const totalBet = data.betAmountPerCartela * data.cartelaIds.length;
-    const houseCut = totalBet * (HOUSE_PCT / 100);
+    const houseCut = Math.ceil(totalBet * (HOUSE_PCT / 100));
 
     // Block prepaid users from creating games when balance is insufficient
     if (useAuthStore.getState().negativeBalance || isNegativeBalanceLocked()) {
@@ -844,7 +844,7 @@ export const offlineGameApi = {
 async function _writeBetTransactions(gameId: string, cartelaIds: string[], betPerCartela: number, housePct: number) {
   const user = await dbGet<any>('user', 'me');
   const totalBet = betPerCartela * cartelaIds.length;
-  const houseCut = totalBet * (housePct / 100);
+  const houseCut = Math.ceil(totalBet * (housePct / 100));
   await dbPut('transactions', {
     id: `tx-bet-${gameId}`,
     transactionType: 'bet',

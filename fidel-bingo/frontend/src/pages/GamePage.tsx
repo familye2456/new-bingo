@@ -239,7 +239,7 @@ export const GamePage: React.FC = () => {
           </div>
           <div className="text-right">
             <div className="text-sm text-gray-500">Prize Pool</div>
-            <div className="text-2xl font-bold text-green-600">${Number(currentGame.prizePool).toFixed(2)}</div>
+            <div className="text-2xl font-bold text-green-600">${Number(currentGame.prizePool).toFixed(0)}</div>
           </div>
         </div>
 

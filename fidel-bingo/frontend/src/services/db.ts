@@ -181,7 +181,7 @@ async function playDecodedAudio(arrayBuffer: ArrayBuffer, volume: number): Promi
   }
   try {
     const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-    console.log('[audio] decoded duration:', audioBuffer.duration.toFixed(2) + 's');
+    console.log('[audio] decoded duration:', audioBuffer.duration.toFixed(0) + 's');
     await new Promise<void>((resolve) => {
       const src = ctx.createBufferSource();
       const gainNode = ctx.createGain();

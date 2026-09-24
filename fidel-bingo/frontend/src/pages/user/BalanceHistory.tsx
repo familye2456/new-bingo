@@ -96,7 +96,7 @@ export const BalanceHistory: React.FC = () => {
             )}
             <div className="font-bold px-4 py-1.5 rounded-xl text-sm"
               style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.25)' }}>
-              {Number(user?.balance ?? 0).toFixed(2)} Birr
+              {Number(user?.balance ?? 0).toFixed(0)} Birr
             </div>
           </div>
         </div>
@@ -166,7 +166,7 @@ export const BalanceHistory: React.FC = () => {
                             </span>
                           </td>
                           <td className="px-4 py-3 font-bold text-sm" style={{ color: meta.color }}>
-                            {meta.sign}{Number(tx.amount).toFixed(2)}
+                            {meta.sign}{Number(tx.amount).toFixed(0)}
                           </td>
                           <td className="px-4 py-3 text-xs max-w-xs truncate" style={{ color: '#6b7280' }}>
                             {tx.description ?? '—'}
@@ -204,7 +204,7 @@ export const BalanceHistory: React.FC = () => {
                       </div>
                       <div className="text-right shrink-0">
                         <div className="font-bold text-base" style={{ color: meta.color }}>
-                          {meta.sign}{Number(tx.amount).toFixed(2)}
+                          {meta.sign}{Number(tx.amount).toFixed(0)}
                         </div>
                         <div className="text-xs" style={{ color: '#374151' }}>Birr</div>
                       </div>
@@ -249,14 +249,14 @@ export const BalanceHistory: React.FC = () => {
                           </td>
                           <td className="px-4 py-3 text-sm" style={{ color: '#9ca3af' }}>{g.cartelaCount}</td>
                           <td className="px-4 py-3 font-semibold text-sm" style={{ color: '#34d399' }}>
-                            {Number(g.totalBets).toFixed(2)}
+                            {Number(g.totalBets).toFixed(0)}
                           </td>
                           <td className="px-4 py-3 text-sm" style={{ color: '#f87171' }}>
-                            {Number(g.houseCut).toFixed(2)}
+                            {Number(g.houseCut).toFixed(0)}
                           </td>
                           <td className="px-4 py-3 font-semibold text-sm">
                             {won
-                              ? <span style={{ color: '#60a5fa' }}>+{prize.toFixed(2)}</span>
+                              ? <span style={{ color: '#60a5fa' }}>+{prize.toFixed(0)}</span>
                               : <span style={{ color: '#374151' }}>—</span>}
                           </td>
                           <td className="px-4 py-3">
@@ -298,16 +298,16 @@ export const BalanceHistory: React.FC = () => {
                       <div className="grid grid-cols-3 gap-2 text-xs">
                         <div>
                           <div style={{ color: '#374151' }}>Total Bet</div>
-                          <div className="font-bold" style={{ color: '#34d399' }}>{Number(g.totalBets).toFixed(2)}</div>
+                          <div className="font-bold" style={{ color: '#34d399' }}>{Number(g.totalBets).toFixed(0)}</div>
                         </div>
                         <div>
                           <div style={{ color: '#374151' }}>House Fee</div>
-                          <div className="font-bold" style={{ color: '#f87171' }}>{Number(g.houseCut).toFixed(2)}</div>
+                          <div className="font-bold" style={{ color: '#f87171' }}>{Number(g.houseCut).toFixed(0)}</div>
                         </div>
                         <div>
                           <div style={{ color: '#374151' }}>Result</div>
                           <div className="font-bold" style={{ color: won ? '#60a5fa' : '#374151' }}>
-                            {won ? `+${prize.toFixed(2)}` : 'Loss'}
+                            {won ? `+${prize.toFixed(0)}` : 'Loss'}
                           </div>
                         </div>
                       </div>

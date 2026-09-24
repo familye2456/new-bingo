@@ -157,8 +157,8 @@ export const AdminOverview: React.FC = () => {
                       <tr key={row.uid} className="hover:bg-gray-50/50 transition-colors">
                         <td className="px-6 py-3.5 font-medium text-gray-800">{row.username}</td>
                         <td className="px-6 py-3.5 text-gray-700">{row.games}</td>
-                        <td className="px-6 py-3.5 text-blue-600 font-medium">{row.totalBet.toFixed(2)}</td>
-                        <td className="px-6 py-3.5 text-emerald-600 font-medium">{row.totalProfit.toFixed(2)}</td>
+                        <td className="px-6 py-3.5 text-blue-600 font-medium">{row.totalBet.toFixed(0)}</td>
+                        <td className="px-6 py-3.5 text-emerald-600 font-medium">{row.totalProfit.toFixed(0)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -224,7 +224,7 @@ export const AdminOverview: React.FC = () => {
                       </button>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xs font-bold text-red-500">
-                          {alert.balance !== null ? `${Number(alert.balance).toFixed(2)} Birr` : 'Unknown'}
+                          {alert.balance !== null ? `${Number(alert.balance).toFixed(0)} Birr` : 'Unknown'}
                         </span>
                         <span className="text-xs text-gray-400">
                           · {new Date(alert.alertedAt).toLocaleString()}

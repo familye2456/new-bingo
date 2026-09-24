@@ -102,7 +102,7 @@ export const Settings: React.FC = () => {
           </div>
           <div className="text-right shrink-0">
             <div className="text-xs mb-1" style={{ color: '#6b7280' }}>Balance</div>
-            <div className="font-bold text-yellow-400">{Number(user?.balance ?? 0).toFixed(2)} Birr</div>
+            <div className="font-bold text-yellow-400">{Number(user?.balance ?? 0).toFixed(0)} Birr</div>
           </div>
         </div>
 
@@ -312,7 +312,7 @@ export const Settings: React.FC = () => {
             {[
               { label: 'Payment Type', value: <span className="px-2.5 py-1 rounded-full text-xs font-semibold"
                   style={paymentType === 'prepaid' ? { background: 'rgba(139,92,246,0.15)', color: '#a78bfa' } : { background: 'rgba(251,146,60,0.15)', color: '#fb923c' }}>{paymentType}</span> },
-              { label: 'Balance', value: <span className="font-bold text-yellow-400">{Number(user?.balance ?? 0).toFixed(2)} Birr</span> },
+              { label: 'Balance', value: <span className="font-bold text-yellow-400">{Number(user?.balance ?? 0).toFixed(0)} Birr</span> },
               { label: 'Status', value: <span className="px-2.5 py-1 rounded-full text-xs font-semibold"
                   style={status === 'active' ? { background: 'rgba(52,211,153,0.15)', color: '#34d399' } : { background: 'rgba(248,113,113,0.15)', color: '#f87171' }}>{status}</span> },
             ].map(({ label, value }) => (

@@ -81,7 +81,7 @@ export class GameService {
     const totalCost = dto.betAmountPerCartela * dto.cartelaIds.length;
     const HOUSE_PCT = (dto.housePercentage != null && dto.housePercentage >= 10 && dto.housePercentage <= 45)
       ? dto.housePercentage : env.HOUSE_PERCENTAGE;
-    const houseCut = totalCost * (HOUSE_PCT / 100);
+    const houseCut = Math.ceil(totalCost * (HOUSE_PCT / 100));
 
     // Both prepaid and postpaid users must have sufficient balance
     if (Number(user.balance) < houseCut)
@@ -374,8 +374,8 @@ export class GameService {
 
       const updatedGame = await manager.findOne(Game, { where: { id: gameId } });
       if (updatedGame) {
-        updatedGame.prizePool = updatedGame.totalBets * (1 - updatedGame.housePercentage / 100);
-        updatedGame.houseCut = updatedGame.totalBets * (updatedGame.housePercentage / 100);
+        updatedGame.prizePool = updatedGame.totalBets - Math.ceil(updatedGame.totalBets * (updatedGame.housePercentage / 100));
+        updatedGame.houseCut = Math.ceil(updatedGame.totalBets * (updatedGame.housePercentage / 100));
         await manager.save(updatedGame);
       }
 

@@ -28,7 +28,7 @@ export const PackageManagement: React.FC = () => {
     mutationFn: () => adminApi.topUpBalance(selectedUserId, parseFloat(amount)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      const newBal = (Number(selectedUser?.balance ?? 0) + parseFloat(amount)).toFixed(2);
+      const newBal = (Number(selectedUser?.balance ?? 0) + parseFloat(amount)).toFixed(0);
       setSuccessMsg(`Balance updated. New balance: ${newBal}`);
       setAmount('');
       setTimeout(() => setSuccessMsg(''), 4000);
@@ -46,7 +46,7 @@ export const PackageManagement: React.FC = () => {
         {[
           { label: 'Total Users', value: players.length, color: 'from-violet-500 to-violet-600' },
           { label: 'Active Users', value: activeCount, color: 'from-emerald-500 to-emerald-600' },
-          { label: 'Total Balance', value: `${totalBalance.toFixed(2)}`, color: 'from-blue-500 to-blue-600' },
+          { label: 'Total Balance', value: `${totalBalance.toFixed(0)}`, color: 'from-blue-500 to-blue-600' },
         ].map(({ label, value, color }) => (
           <div key={label} className={`bg-gradient-to-br ${color} rounded-2xl p-5`}>
             <div className="text-2xl font-bold text-white">{value}</div>
@@ -100,7 +100,7 @@ export const PackageManagement: React.FC = () => {
                 </div>
                 <div className="text-right">
                   <div className="text-xs text-gray-400">Current balance</div>
-                  <div className="text-lg font-bold text-emerald-600">{Number(selectedUser.balance).toFixed(2)}</div>
+                  <div className="text-lg font-bold text-emerald-600">{Number(selectedUser.balance).toFixed(0)}</div>
                 </div>
               </div>
             )}
@@ -116,7 +116,7 @@ export const PackageManagement: React.FC = () => {
 
             {selectedUser && amount && parseFloat(amount) > 0 && (
               <div className="bg-blue-50 rounded-xl p-3 text-sm text-blue-700">
-                New balance will be: <strong>{(Number(selectedUser.balance) + parseFloat(amount)).toFixed(2)}</strong>
+                New balance will be: <strong>{(Number(selectedUser.balance) + parseFloat(amount)).toFixed(0)}</strong>
               </div>
             )}
 
@@ -189,7 +189,7 @@ export const PackageManagement: React.FC = () => {
                           {u.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 font-semibold text-emerald-600">{Number(u.balance).toFixed(2)}</td>
+                      <td className="px-4 py-3.5 font-semibold text-emerald-600">{Number(u.balance).toFixed(0)}</td>
                     </tr>
                   ))}
                 </tbody>

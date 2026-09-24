@@ -321,7 +321,7 @@ export const UserManagement: React.FC = () => {
           <div className="space-y-4">
             <div className="bg-emerald-50 rounded-xl p-4 flex items-center justify-between">
               <span className="text-sm text-gray-600">Current balance</span>
-              <span className="text-lg font-bold text-emerald-600">${Number(topUpUser.balance).toFixed(2)}</span>
+              <span className="text-lg font-bold text-emerald-600">${Number(topUpUser.balance).toFixed(0)}</span>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Amount to Add ($)</label>
@@ -330,7 +330,7 @@ export const UserManagement: React.FC = () => {
             </div>
             {topUpAmount && parseFloat(topUpAmount) > 0 && (
               <div className="bg-blue-50 rounded-xl p-3 text-sm text-blue-700">
-                New balance: <strong>${(Number(topUpUser.balance) + parseFloat(topUpAmount)).toFixed(2)}</strong>
+                New balance: <strong>${(Number(topUpUser.balance) + parseFloat(topUpAmount)).toFixed(0)}</strong>
               </div>
             )}
             <div className="flex gap-3 pt-1">
@@ -355,7 +355,7 @@ export const UserManagement: React.FC = () => {
           <div className="space-y-4">
             <div className="bg-red-50 rounded-xl p-4 flex items-center justify-between">
               <span className="text-sm text-gray-600">Current balance</span>
-              <span className="text-lg font-bold text-red-500">${Number(deductUser.balance).toFixed(2)}</span>
+              <span className="text-lg font-bold text-red-500">${Number(deductUser.balance).toFixed(0)}</span>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Amount to Deduct ($)</label>
@@ -366,7 +366,7 @@ export const UserManagement: React.FC = () => {
               <div className={`rounded-xl p-3 text-sm ${parseFloat(deductAmount) > Number(deductUser.balance) ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-700'}`}>
                 {parseFloat(deductAmount) > Number(deductUser.balance)
                   ? 'Amount exceeds current balance'
-                  : <>New balance: <strong>${(Number(deductUser.balance) - parseFloat(deductAmount)).toFixed(2)}</strong></>}
+                  : <>New balance: <strong>${(Number(deductUser.balance) - parseFloat(deductAmount)).toFixed(0)}</strong></>}
               </div>
             )}
             {deductMutation.isError && (
@@ -793,7 +793,7 @@ export const UserManagement: React.FC = () => {
                     </td>
                     <td className="px-6 py-4">
                       {u.paymentType === 'prepaid'
-                        ? <span className="font-medium text-emerald-600">${Number(u.balance).toFixed(2)}</span>
+                        ? <span className="font-medium text-emerald-600">${Number(u.balance).toFixed(0)}</span>
                         : <span className="text-gray-300">—</span>}
                     </td>
                     <td className="px-6 py-4">
@@ -907,7 +907,7 @@ export const UserManagement: React.FC = () => {
               </div>
             </div>
             {u.paymentType === 'prepaid' && (
-              <div className="text-xs text-gray-500 mb-3">Balance: <span className="font-semibold text-emerald-600">${Number(u.balance).toFixed(2)}</span></div>
+              <div className="text-xs text-gray-500 mb-3">Balance: <span className="font-semibold text-emerald-600">${Number(u.balance).toFixed(0)}</span></div>
             )}
             {u.agentUsername && (
               <div className="text-xs text-gray-500 mb-3">Agent: <span className="font-medium text-purple-600">{u.agentUsername}</span></div>

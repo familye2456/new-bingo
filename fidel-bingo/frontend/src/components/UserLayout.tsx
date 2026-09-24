@@ -193,7 +193,7 @@ export const UserLayout: React.FC = () => {
           <div className="text-[10px] font-semibold text-yellow-400/50 uppercase tracking-widest mb-1">Balance</div>
           <div className="flex items-end gap-1.5">
             <span className="text-yellow-400 font-extrabold text-2xl leading-none">
-              {Number(user?.balance ?? 0).toFixed(2)}
+              {Number(user?.balance ?? 0).toFixed(0)}
             </span>
             <span className="text-yellow-400/50 text-xs font-medium mb-0.5">BIRR</span>
           </div>

@@ -349,12 +349,12 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean 
             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-500">Current balance</span>
-              <span className="text-red-400 font-bold text-base">{Number(user.balance ?? 0).toFixed(2)} Birr</span>
+              <span className="text-red-400 font-bold text-base">{Number(user.balance ?? 0).toFixed(0)} Birr</span>
             </div>
             {lastPositiveBalance !== null && (
               <div className="flex items-center justify-between border-t border-white/5 pt-3">
                 <span className="text-xs text-gray-500">Last positive balance</span>
-                <span className="text-emerald-400 font-semibold text-sm">{lastPositiveBalance.toFixed(2)} Birr</span>
+                <span className="text-emerald-400 font-semibold text-sm">{lastPositiveBalance.toFixed(0)} Birr</span>
               </div>
             )}
           </div>

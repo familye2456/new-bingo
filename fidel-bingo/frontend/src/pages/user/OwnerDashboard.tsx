@@ -73,14 +73,14 @@ export const OwnerDashboard: React.FC = () => {
         </div>
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
           <div className="text-slate-400 text-xs mb-1">Total Bet</div>
-          <div className="text-white text-xl font-bold">{totalBet.toFixed(2)}</div>
+          <div className="text-white text-xl font-bold">{totalBet.toFixed(0)}</div>
           <div className="text-slate-500 text-xs">Birr</div>
         </div>
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
           <div className="text-slate-400 text-xs mb-1">
             {filter === 'today' ? 'Daily Profit' : 'Total Profit'}
           </div>
-          <div className="text-green-400 text-xl font-bold">{totalProfit.toFixed(2)}</div>
+          <div className="text-green-400 text-xl font-bold">{totalProfit.toFixed(0)}</div>
           <div className="text-slate-500 text-xs">Birr (house cut)</div>
         </div>
       </div>
@@ -107,10 +107,10 @@ export const OwnerDashboard: React.FC = () => {
                   <tr key={g.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                     <td className="px-4 py-3 font-mono text-slate-400 text-xs">#{g.gameNumber ?? (i + 1)}</td>
                     <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">{fmt(g.createdAt)}</td>
-                    <td className="px-4 py-3 font-semibold text-white">{Number(g.betAmount).toFixed(2)}</td>
+                    <td className="px-4 py-3 font-semibold text-white">{Number(g.betAmount).toFixed(0)}</td>
                     <td className="px-4 py-3 text-slate-300">{g.cartelaCount}</td>
-                    <td className="px-4 py-3 text-slate-300">{Number(g.totalBets).toFixed(2)}</td>
-                    <td className="px-4 py-3 text-green-400 font-semibold">{Number(g.houseCut).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-slate-300">{Number(g.totalBets).toFixed(0)}</td>
+                    <td className="px-4 py-3 text-green-400 font-semibold">{Number(g.houseCut).toFixed(0)}</td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${
                         g.status === 'finished' ? 'bg-slate-600 text-slate-200' :
@@ -142,9 +142,9 @@ export const OwnerDashboard: React.FC = () => {
                 </div>
                 <div className="text-slate-400 text-xs mb-2">{fmt(g.createdAt)}</div>
                 <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div><span className="text-slate-500">Bet</span><div className="font-semibold text-white">{Number(g.betAmount).toFixed(2)}</div></div>
-                  <div><span className="text-slate-500">Total Bet</span><div className="font-semibold text-slate-200">{Number(g.totalBets).toFixed(2)}</div></div>
-                  <div><span className="text-slate-500">House Cut</span><div className="font-semibold text-green-400">{Number(g.houseCut).toFixed(2)}</div></div>
+                  <div><span className="text-slate-500">Bet</span><div className="font-semibold text-white">{Number(g.betAmount).toFixed(0)}</div></div>
+                  <div><span className="text-slate-500">Total Bet</span><div className="font-semibold text-slate-200">{Number(g.totalBets).toFixed(0)}</div></div>
+                  <div><span className="text-slate-500">House Cut</span><div className="font-semibold text-green-400">{Number(g.houseCut).toFixed(0)}</div></div>
                 </div>
               </div>
             ))}

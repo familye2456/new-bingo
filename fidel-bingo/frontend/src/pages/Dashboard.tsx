@@ -39,7 +39,7 @@ export const Dashboard: React.FC = () => {
         <h1 className="text-2xl font-bold text-blue-600">Fidel Bingo</h1>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-600">
-            Balance: <strong className="text-green-600">${Number(user?.balance ?? 0).toFixed(2)}</strong>
+            Balance: <strong className="text-green-600">${Number(user?.balance ?? 0).toFixed(0)}</strong>
           </span>
           <span className="text-sm text-gray-700">{user?.username}</span>
           <button onClick={logout} className="text-sm text-red-500 hover:underline">Logout</button>
@@ -113,7 +113,7 @@ export const Dashboard: React.FC = () => {
                   <div>
                     <div className="font-medium">Game #{game.gameNumber ?? game.id.slice(0, 8)}</div>
                     <div className="text-sm text-gray-500">
-                      Bet: ${Number(game.betAmount).toFixed(2)} · Pool: ${Number(game.prizePool).toFixed(2)} · {game.cartelaCount} cartelas
+                      Bet: ${Number(game.betAmount).toFixed(0)} · Pool: ${Number(game.prizePool).toFixed(0)} · {game.cartelaCount} cartelas
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
