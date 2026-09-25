@@ -174,14 +174,14 @@ export function unlockAudioContext(): void {
  * then resumes it so future sounds can play normally.
  */
 export function stopAllAudio(): void {
+  // Reset the playing flag and clear pending tasks immediately so callers
+  // (e.g. the auto-call interval) see playing=false right away on pause.
   audioQueue.clear();
   const ctx = getAudioContext();
   if (!ctx) return;
-  // Suspend cuts off all currently playing AudioBufferSourceNodes immediately
-  ctx.suspend().then(() => {
-    // Resume right away so the context is ready for the next sound
-    ctx.resume().catch(() => {});
-  }).catch(() => {});
+  // Suspend cuts off all currently playing AudioBufferSourceNodes immediately,
+  // then resume so the context is ready for the next sound.
+  ctx.suspend().then(() => ctx.resume().catch(() => {})).catch(() => {});
 }
 
 /**
@@ -398,9 +398,12 @@ export class AudioQueue {
     }
   }
 
-  /** Discard all pending (not yet started) tasks in the queue */
+  /** Discard all pending tasks and reset the playing flag immediately */
   clear(): void {
     this.queue.length = 0;
+    this.playing = false;
+    const resolvers = this.drainResolvers.splice(0);
+    resolvers.forEach(r => r());
   }
 
   /** Returns a promise that resolves when the queue is fully drained */
