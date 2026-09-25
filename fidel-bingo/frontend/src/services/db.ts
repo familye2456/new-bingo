@@ -376,7 +376,10 @@ export class AudioQueue {
 
   enqueue(task: () => Promise<void>): void {
     this.queue.push(task);
-    if (!this.playing) this.drain();
+    if (!this.playing) {
+      this.playing = true; // set BEFORE drain() so callers see playing=true immediately
+      this.drain();
+    }
   }
 
   /** Discard all pending (not yet started) tasks in the queue */
