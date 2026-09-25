@@ -390,7 +390,8 @@ export const PlayBingo: React.FC = () => {
   const prevCalledRef = useRef<number[]>([]);
   useEffect(() => {
     const newNums = sessionCalledNumbers.filter((n) => !prevCalledRef.current.includes(n));
-    if (newNums.length > 0) {
+    // Only play the number sound if auto-call is still active (not paused/stopped)
+    if (newNums.length > 0 && autoActiveRef.current) {
       playSound(`${newNums[newNums.length - 1]}`);
     }
     prevCalledRef.current = sessionCalledNumbers;
