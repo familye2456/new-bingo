@@ -338,7 +338,7 @@ export const PlayBingo: React.FC = () => {
           playRootSound('winner.wav');
           setWinnerInfo({
             cardNumber: num,
-            amount: Number(currentGame?.prizePool ?? 0),
+            amount: Math.floor(Number(currentGame?.prizePool ?? 0) / 10) * 10,
             pattern: result.winPattern ?? '',
           });
         } else {
@@ -455,7 +455,7 @@ export const PlayBingo: React.FC = () => {
                 }}>
                 <span className="text-blue-100 font-bold leading-none" style={{ fontSize: 7 }}>ደራሽ</span>
                 <span className="font-black tabular-nums text-white leading-none" style={{ fontSize: 16 }}>
-                  {Number(game.prizePool).toFixed(0)}
+                  {Math.floor(Number(game.prizePool) / 10) * 10}
                 </span>
                 <span className="text-yellow-300 font-extrabold leading-none" style={{ fontSize: 8 }}>ብር</span>
                 <div className="absolute -top-1 -right-1 flex items-center justify-center rounded-full font-black"
@@ -625,7 +625,7 @@ export const PlayBingo: React.FC = () => {
               }}>
               <span className="text-blue-100 font-bold leading-none" style={{ fontSize: 11 }}>ደራሽ</span>
               <span className="font-black tabular-nums text-white leading-none" style={{ fontSize: 28 }}>
-                {Number(game.prizePool).toFixed(0)}
+                {Math.floor(Number(game.prizePool) / 10) * 10}
               </span>
               <span className="text-yellow-300 font-extrabold leading-none" style={{ fontSize: 12 }}>ብር</span>
               <div className="absolute -top-1 -right-1 flex items-center justify-center rounded-full font-black"
@@ -772,7 +772,7 @@ export const PlayBingo: React.FC = () => {
               }}>
               <span className="text-blue-100 font-bold leading-none" style={{ fontSize: 'clamp(11px,1.4vw,16px)' }}>ደራሽ</span>
               <span className="font-black tabular-nums text-white leading-none" style={{ fontSize: 'clamp(35px,4.95vw,64px)' }}>
-                {Number(game.prizePool).toFixed(0)}
+                {Math.floor(Number(game.prizePool) / 10) * 10}
               </span>
               <span className="text-yellow-300 font-extrabold leading-none" style={{ fontSize: 'clamp(14px,1.8vw,22px)' }}>ብር</span>
               <div className="absolute -top-1 -right-1 flex items-center justify-center rounded-full font-black"
