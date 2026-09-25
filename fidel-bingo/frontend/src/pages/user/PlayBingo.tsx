@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { offlineGameApi } from '../../services/offlineApi';
 import { useAuthStore } from '../../store/authStore';
 import { useGameSettings } from '../../store/gameSettingsStore';
-import { dbGet, playCachedSound, playNumberSoundQueued, unlockAudioContext, audioQueue } from '../../services/db';
+import { dbGet, playCachedSound, playNumberSoundQueued, unlockAudioContext, stopAllAudio, audioQueue } from '../../services/db';
 import { setGameSessionActive } from '../../services/sync';
 
 let _userInteracted = false;
@@ -175,6 +175,7 @@ export const PlayBingo: React.FC = () => {
     if (autoRef.current) { clearInterval(autoRef.current); autoRef.current = null; }
     autoActiveRef.current = false;
     lastCallTimeRef.current = 0;
+    stopAllAudio(); // cut any playing sound instantly
     setGameSessionActive(false);
     setAutoOn(false);
     if (!silent) playRootSound('aac_ended.mp3');
