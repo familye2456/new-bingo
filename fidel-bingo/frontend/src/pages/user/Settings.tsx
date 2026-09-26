@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { userApi } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
-import { useGameSettings } from '../../store/gameSettingsStore';
+import { useGameSettings, THEMES } from '../../store/gameSettingsStore';
 import { downloadVoiceSounds, getVoiceCacheStatus } from '../../services/db';
 import { ALL_VOICE_CATEGORIES } from '../../store/gameSettingsStore';
 
@@ -36,6 +36,7 @@ const Card: React.FC<{ title: string; subtitle?: string; icon: React.ReactNode; 
 export const Settings: React.FC = () => {
   const { user, fetchMe } = useAuthStore();
   const { voice, autoCallInterval, setAutoCallInterval, setVoice } = useGameSettings();
+  const { theme: themeName, setTheme } = useGameSettings();
   const [form, setForm] = useState({ firstName: user?.firstName ?? '', lastName: user?.lastName ?? '' });
   const [saved, setSaved] = useState(false);
 
@@ -151,6 +152,83 @@ export const Settings: React.FC = () => {
                 </span>
               )}
             </div>
+          </div>
+        </Card>
+
+        {/* Theme */}
+        <Card
+          title="Theme"
+          subtitle="Choose a look for the game page"
+          icon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 2a10 10 0 010 20" />
+              <path d="M12 2v20" />
+            </svg>
+          }
+        >
+          <div className="grid grid-cols-2 gap-3">
+            {(Object.values(THEMES)).map((t) => {
+              const isActive = themeName === t.name;
+              return (
+                <button
+                  key={t.name}
+                  onClick={() => setTheme(t.name)}
+                  className="relative flex flex-col items-center gap-2 p-3 rounded-xl transition-all"
+                  style={isActive
+                    ? { border: '2px solid #fbbf24', background: 'rgba(251,191,36,0.1)' }
+                    : { border: '1px solid rgba(255,255,255,0.08)', background: '#0e1a35' }
+                  }
+                >
+                  {/* Mini preview */}
+                  <div
+                    className="w-full rounded-lg overflow-hidden"
+                    style={{ height: 52, background: t.pageBg, border: `1px solid ${t.boardBorder}` }}
+                  >
+                    {/* header strip */}
+                    <div style={{ height: 14, background: t.headerBg }} />
+                    {/* number cells row */}
+                    <div className="flex gap-0.5 px-1 mt-1">
+                      {[1,2,3,4,5].map((n) => (
+                        <div
+                          key={n}
+                          className="flex-1 rounded-sm"
+                          style={{
+                            height: 10,
+                            background: n === 3 ? t.cellLastBg : n < 3 ? t.cellCalledBg : t.cellUncalledBg,
+                            border: `1px solid ${n === 3 ? t.cellLastBorder : n < 3 ? t.cellCalledBorder : t.cellUncalledBorder}`,
+                          }}
+                        />
+                      ))}
+                    </div>
+                    {/* cartela strip */}
+                    <div className="flex gap-0.5 px-1 mt-0.5">
+                      {[1,2,3,4,5].map((n) => (
+                        <div
+                          key={n}
+                          className="flex-1 rounded-sm"
+                          style={{
+                            height: 10,
+                            background: n === 2 ? t.cartelaMarkedBg : n === 4 ? t.cartelaCalledBg : t.cartelaUnmarkedBg,
+                            border: `1px solid ${n === 2 ? 'transparent' : n === 4 ? t.cartelaCalledBorder : t.cartelaUnmarkedBorder}`,
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <span className="text-sm font-semibold" style={{ color: isActive ? '#fbbf24' : '#9ca3af' }}>
+                    {t.label}
+                  </span>
+                  {isActive && (
+                    <div className="absolute top-2 right-2">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth={2.5} className="w-3.5 h-3.5">
+                        <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </Card>
 

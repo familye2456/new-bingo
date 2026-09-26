@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { offlineGameApi } from '../../services/offlineApi';
 import { useAuthStore } from '../../store/authStore';
-import { useGameSettings } from '../../store/gameSettingsStore';
+import { useGameSettings, THEMES } from '../../store/gameSettingsStore';
 import { dbGet, playCachedSound, playNumberSoundQueued, unlockAudioContext, stopAllAudio, audioQueue } from '../../services/db';
 import { setGameSessionActive } from '../../services/sync';
 
@@ -68,7 +68,8 @@ export const PlayBingo: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { user } = useAuthStore();
   const { refreshBalance } = useAuthStore();
-  const { voice } = useGameSettings();
+  const { voice, theme: themeName } = useGameSettings();
+  const theme = THEMES[themeName];
   const voiceRef = useRef(voice);
   // Keep ref in sync — also re-read from store directly on each sound call for safety
   useEffect(() => { voiceRef.current = voice; }, [voice]);
@@ -406,7 +407,7 @@ export const PlayBingo: React.FC = () => {
   }, [sessionCalledNumbers]);
 
   return (
-    <div className="fixed inset-0 flex flex-col" style={{ background: '#0a1220' }}>
+    <div className="fixed inset-0 flex flex-col" style={{ background: theme.pageBg }}>
 
       {/* ── Winner banner ── */}
       {winnerInfo && (
@@ -438,7 +439,7 @@ export const PlayBingo: React.FC = () => {
       `}</style>
       <div className="number-board-wrap min-h-0 px-3 sm:px-3 pb-1">
         {game
-          ? <NumberBoard calledNumbers={calledNumbers} lastNumber={lastNumber} />
+          ? <NumberBoard calledNumbers={calledNumbers} lastNumber={lastNumber} theme={theme} />
           : <div className="flex items-center justify-center h-full text-gray-900 text-sm">Loading…</div>
         }
       </div>
@@ -1109,8 +1110,8 @@ const CtrlBtn: React.FC<{
 };
 
 // ── NumberBoard ───────────────────────────────────────────────────────────────
-const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null }> = ({
-  calledNumbers, lastNumber,
+const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null; theme: import('../../store/gameSettingsStore').AppTheme }> = ({
+  calledNumbers, lastNumber, theme: t,
 }) => (
   <div className="w-full h-full flex flex-col" role="region" aria-label="Bingo number board"
     style={{ gap: 'clamp(1px, 0.4vh, 6px)' }}>
@@ -1123,8 +1124,8 @@ const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null
           style={{
             width: 'clamp(22px, 5.5vw, 60px)',
             borderRadius: 'clamp(3px, 0.5vw, 10px)',
-            background: 'linear-gradient(180deg, #f5a623, #e08c00)',
-            color: '#111',
+            background: t.letterChipBg,
+            color: t.letterChipText,
             fontSize: 'clamp(11px, 3.5vw, 32px)',
             boxShadow: '0 2px 8px rgba(245,166,35,0.4)',
           }}>
@@ -1143,24 +1144,16 @@ const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null
               style={{
                 fontSize: 'clamp(9px, 3.2vw, 38px)',
                 borderRadius: 'clamp(3px, 0.5vw, 10px)',
-                background: isLast
-                  ? 'linear-gradient(180deg, #f5a623, #e08c00)'
-                  : called
-                  ? 'linear-gradient(180deg, #22c55e, #15803d)'
-                  : 'linear-gradient(180deg, #1e2d45, #162033)',
-                color: '#fff',
+                background: isLast ? t.cellLastBg : called ? t.cellCalledBg : t.cellUncalledBg,
+                color: isLast ? t.cellLastText : called ? t.cellCalledText : t.cellUncalledText,
                 boxShadow: isLast
-                  ? '0 2px 12px rgba(245,166,35,0.5)'
+                  ? `0 2px 12px ${t.cellLastGlow}`
                   : called
                   ? '0 2px 8px rgba(34,197,94,0.35)'
                   : 'inset 0 1px 0 rgba(255,255,255,0.05)',
-                border: isLast
-                  ? '2px solid #f5a623'
-                  : called
-                  ? '1px solid #22c55e'
-                  : '1px solid rgba(255,255,255,0.08)',
+                border: `1px solid ${isLast ? t.cellLastBorder : called ? t.cellCalledBorder : t.cellUncalledBorder}`,
                 fontWeight: 800,
-                textShadow: isLast || called ? 'none' : '0 1px 3px rgba(0,0,0,0.8)',
+                textShadow: isLast || called ? 'none' : '0 1px 3px rgba(0,0,0,0.4)',
                 transform: isLast ? 'scale(1.02)' : 'scale(1)',
                 lineHeight: 1,
               }}>
