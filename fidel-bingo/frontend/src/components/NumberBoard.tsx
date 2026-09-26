@@ -1,8 +1,10 @@
 import React from 'react';
+import { AppTheme } from '../store/gameSettingsStore';
 
 interface Props {
   calledNumbers: number[];
   lastNumber?: number | null;
+  theme: AppTheme;
 }
 
 // B=1-15, I=16-30, N=31-45, G=46-60, O=61-75
@@ -14,11 +16,11 @@ const ROWS = [
   { letter: 'O', start: 61 },
 ];
 
-export const NumberBoard: React.FC<Props> = ({ calledNumbers, lastNumber }) => {
+export const NumberBoard: React.FC<Props> = ({ calledNumbers, lastNumber, theme: t }) => {
   return (
     <div
       className="rounded-2xl overflow-hidden w-full"
-      style={{ background: '#0d0d0d', padding: '8px' }}
+      style={{ background: t.boardBg, border: `2px solid ${t.boardBorder}`, padding: '8px' }}
       role="region"
       aria-label="Bingo number board"
     >
@@ -26,13 +28,14 @@ export const NumberBoard: React.FC<Props> = ({ calledNumbers, lastNumber }) => {
         <div key={letter} className="flex items-center gap-0.5 sm:gap-1 mb-0.5 sm:mb-1 last:mb-0">
           {/* Letter chip */}
           <div
-            className="flex items-center justify-center font-extrabold text-gray-900 rounded-lg shrink-0"
+            className="flex items-center justify-center font-extrabold rounded-lg shrink-0"
             style={{
               width: 'clamp(28px, 5.5vw, 52px)',
               height: 'clamp(28px, 5.5vw, 52px)',
-              background: 'linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%)',
+              background: t.letterChipBg,
+              color: t.letterChipText,
               fontSize: 'clamp(13px, 2.8vw, 26px)',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
             }}
           >
             {letter}
@@ -51,18 +54,14 @@ export const NumberBoard: React.FC<Props> = ({ calledNumbers, lastNumber }) => {
                 className="flex items-center justify-center font-bold rounded-md transition-all duration-300 flex-1 aspect-square md:font-extrabold"
                 style={{
                   fontSize: 'clamp(8px, 1.8vw, 25px)',
-                  background: isLast
-                    ? 'linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%)'
-                    : called
-                    ? 'linear-gradient(180deg, #ca8a04 0%, #a16207 100%)'
-                    : 'linear-gradient(180deg, #991b1b 0%, #7f1d1d 100%)',
-                  color: isLast ? '#1a1a1a' : called ? '#1a1a1a' : '#fff',
+                  background: isLast ? t.cellLastBg : called ? t.cellCalledBg : t.cellUncalledBg,
+                  color: isLast ? t.cellLastText : called ? t.cellCalledText : t.cellUncalledText,
                   boxShadow: isLast
-                    ? '0 0 12px rgba(251,191,36,0.7)'
+                    ? `0 0 12px ${t.cellLastGlow}`
                     : called
-                    ? '0 0 8px rgba(202,138,4,0.5)'
-                    : '0 2px 4px rgba(0,0,0,0.4)',
-                  border: isLast ? '2px solid #fbbf24' : called ? '1px solid #fbbf24' : '1px solid rgba(0,0,0,0.3)',
+                    ? '0 0 8px rgba(22,163,74,0.4)'
+                    : '0 1px 3px rgba(0,0,0,0.1)',
+                  border: `${isLast ? '2px' : '1px'} solid ${isLast ? t.cellLastBorder : called ? t.cellCalledBorder : t.cellUncalledBorder}`,
                   transform: isLast ? 'scale(1.1)' : 'scale(1)',
                 }}
               >
@@ -74,7 +73,7 @@ export const NumberBoard: React.FC<Props> = ({ calledNumbers, lastNumber }) => {
       ))}
 
       {/* Called count */}
-      <div className="text-center mt-2 text-xs text-gray-500">
+      <div className="text-center mt-2 text-xs" style={{ color: t.boardCountText }}>
         {calledNumbers.length} / 75 called
       </div>
     </div>

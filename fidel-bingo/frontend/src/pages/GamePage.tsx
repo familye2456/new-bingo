@@ -4,7 +4,7 @@ import { gameApi } from '../services/api';
 import { getSocket } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 import { useAuthStore } from '../store/authStore';
-import { useGameSettings, ALL_VOICE_CATEGORIES } from '../store/gameSettingsStore';
+import { useGameSettings, ALL_VOICE_CATEGORIES, THEMES } from '../store/gameSettingsStore';
 import { playCachedSound, playNumberSoundQueued, downloadVoiceSounds, audioQueue, unlockAudioContext } from '../services/db';
 import { CartelaCard } from '../components/CartelaCard';
 import { NumberBoard } from '../components/NumberBoard';
@@ -36,7 +36,8 @@ export const GamePage: React.FC = () => {
   const { user } = useAuthStore();
   const { currentGame, lastCalledNumber, setGame, addCalledNumber, updateCartela } = useGameStore();
 
-  const { voice, autoCallInterval, volume } = useGameSettings();
+  const { voice, autoCallInterval, volume, theme: themeName } = useGameSettings();
+  const theme = THEMES[themeName];
   const [autoCall, setAutoCall] = useState(false);
   const autoCallRef = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -223,23 +224,37 @@ export const GamePage: React.FC = () => {
   const isCreator = currentGame.creatorId === user?.id;
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4">
+    <div className="min-h-screen p-4" style={{ background: theme.pageBg }}>
       <div id="game-announcer" className="sr-only" role="status" aria-live="polite" />
       <div className="max-w-6xl mx-auto">
-        <div className="bg-white rounded-xl shadow p-4 mb-4 flex items-center justify-between flex-wrap gap-3">
+
+        {/* Header card */}
+        <div
+          className="rounded-xl p-4 mb-4 flex items-center justify-between flex-wrap gap-3"
+          style={{ background: theme.headerBg, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}
+        >
           <div>
-            <h1 className="text-xl font-bold">Game #{currentGame.gameNumber ?? currentGame.id.slice(0, 8)}</h1>
-            <span className={`text-sm px-2 py-0.5 rounded-full ${
-              currentGame.status === 'active'   ? 'bg-green-100 text-green-700' :
-              currentGame.status === 'finished' ? 'bg-gray-100 text-gray-600' :
-              'bg-yellow-100 text-yellow-700'
-            }`}>
+            <h1 className="text-xl font-extrabold" style={{ color: theme.headerText }}>
+              Happy Bingo — #{currentGame.gameNumber ?? currentGame.id.slice(0, 8)}
+            </h1>
+            <span
+              className="text-sm px-3 py-0.5 rounded-full font-semibold"
+              style={{
+                background:
+                  currentGame.status === 'active'   ? '#16a34a' :
+                  currentGame.status === 'finished' ? '#6b7280' :
+                  '#f59e0b',
+                color: '#ffffff',
+              }}
+            >
               {currentGame.status.charAt(0).toUpperCase() + currentGame.status.slice(1)}
             </span>
           </div>
           <div className="text-right">
-            <div className="text-sm text-gray-500">Prize Pool</div>
-            <div className="text-2xl font-bold text-green-600">${Number(currentGame.prizePool).toFixed(0)}</div>
+            <div className="text-sm" style={{ color: theme.headerSubText }}>Prize Pool</div>
+            <div className="text-2xl font-extrabold" style={{ color: theme.prizeText }}>
+              ${Number(currentGame.prizePool).toFixed(0)}
+            </div>
           </div>
         </div>
 
@@ -248,35 +263,53 @@ export const GamePage: React.FC = () => {
             <NumberBoard
               calledNumbers={displayedNumbers}
               lastNumber={displayedNumbers[displayedNumbers.length - 1] ?? null}
+              theme={theme}
             />
 
             {isCreator && currentGame.status === 'pending' && (
-              <button data-testid="start-game-btn" onClick={handleStartGame}
-                className="mt-4 w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
+              <button
+                data-testid="start-game-btn"
+                onClick={handleStartGame}
+                className="mt-4 w-full py-3 rounded-lg font-semibold transition-colors"
+                style={{ background: theme.btnPrimaryBg, color: theme.btnPrimaryText }}
+              >
                 Start Game
               </button>
             )}
 
             {isCreator && currentGame.status === 'active' && (
               <div className="mt-4 space-y-2">
-                <button data-testid="call-number-btn" onClick={handleCallNumber} disabled={autoCall}
-                  className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                <button
+                  data-testid="call-number-btn"
+                  onClick={handleCallNumber}
+                  disabled={autoCall}
+                  className="w-full py-3 rounded-lg font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ background: theme.btnSecondaryBg, color: theme.btnSecondaryText }}
+                >
                   Call Number
                 </button>
-                <div className="bg-white rounded-xl border p-3 space-y-2">
+                <div
+                  className="rounded-xl p-3 space-y-2"
+                  style={{ background: theme.autocallPanelBg, border: `1px solid ${theme.autocallPanelBorder}` }}
+                >
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">Auto Call</span>
+                    <span className="text-sm font-semibold" style={{ color: theme.autocallLabelText }}>Auto Call</span>
                     <button
                       onClick={() => setAutoCall((v) => {
                         const next = !v;
                         playRootSound(next ? 'aac_resumed.mp3' : 'aac_ended.mp3');
                         return next;
                       })}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoCall ? 'bg-green-500' : 'bg-gray-300'}`}>
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${autoCall ? 'translate-x-6' : 'translate-x-1'}`} />
+                      className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                      style={{ background: autoCall ? theme.autocallOnBg : theme.autocallOffBg }}
+                    >
+                      <span
+                        className="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                        style={{ transform: autoCall ? 'translateX(1.5rem)' : 'translateX(0.25rem)' }}
+                      />
                     </button>
                   </div>
-                  <div className="text-xs text-gray-400 text-center">
+                  <div className="text-xs text-center" style={{ color: theme.autocallInfoText }}>
                     Interval: {autoCallInterval}s · Voice: {ALL_VOICE_CATEGORIES.find(c => c.value === voice)?.label ?? voice}
                   </div>
                 </div>
@@ -285,18 +318,26 @@ export const GamePage: React.FC = () => {
           </div>
 
           <div className="lg:col-span-2">
-            <h2 className="font-semibold mb-3">Your Cartelas</h2>
+            <h2 className="font-extrabold mb-3 text-lg" style={{ color: theme.sectionTitle }}>Your Cartelas</h2>
             {myCartelas.length === 0 ? (
-              <div className="text-gray-500 text-center py-8">No cartelas yet</div>
+              <div className="text-center py-8" style={{ color: theme.sectionEmpty }}>No cartelas yet</div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-6">
                 {myCartelas.map((cartela) => (
                   <div key={cartela.id}>
-                    <CartelaCard cartela={cartela} calledNumbers={displayedNumbers}
-                      onMark={handleMarkNumber} disabled={currentGame.status !== 'active'} />
+                    <CartelaCard
+                      cartela={cartela}
+                      calledNumbers={displayedNumbers}
+                      onMark={handleMarkNumber}
+                      disabled={currentGame.status !== 'active'}
+                      theme={theme}
+                    />
                     {cartela.isWinner && (
-                      <button onClick={() => handleClaimBingo(cartela.id)}
-                        className="mt-2 w-full bg-yellow-500 text-white py-2 rounded-lg font-bold hover:bg-yellow-600">
+                      <button
+                        onClick={() => handleClaimBingo(cartela.id)}
+                        className="mt-2 w-full py-2 rounded-lg font-extrabold transition-colors"
+                        style={{ background: theme.btnClaimBg, color: theme.btnClaimText }}
+                      >
                         Claim BINGO!
                       </button>
                     )}
