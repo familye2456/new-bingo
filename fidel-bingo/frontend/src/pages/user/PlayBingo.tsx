@@ -437,7 +437,7 @@ export const PlayBingo: React.FC = () => {
           .ctrl-bar { padding-bottom: 5% !important; }
         }
       `}</style>
-      <div className="number-board-wrap min-h-0 px-3 sm:px-3 pb-1">
+      <div className="number-board-wrap min-h-0 px-3 sm:px-3 pb-1" style={{ background: theme.boardBg }}>
         {game
           ? <NumberBoard calledNumbers={calledNumbers} lastNumber={lastNumber} theme={theme} />
           : <div className="flex items-center justify-center h-full text-gray-900 text-sm">Loading…</div>
@@ -447,7 +447,7 @@ export const PlayBingo: React.FC = () => {
       {/* ── Bottom control bar ── */}
       {game && (
         <div className="shrink-0 mt-auto lg:mt-0 ctrl-bar"
-          style={{ background: 'rgba(0,0,0,0.7)', borderTop: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(8px)' }}>
+          style={{ background: theme.headerBg, borderTop: `1px solid ${theme.boardBorder}` }}>
 
           {/* ── Mobile layout (< md) — fixed bottom bar ── */}
           <div className="md:hidden flex flex-col" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>

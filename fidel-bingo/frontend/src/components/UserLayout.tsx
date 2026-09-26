@@ -122,7 +122,7 @@ export const UserLayout: React.FC = () => {
   }, [swReady, dismissSwReady]);
 
   return (
-    <div className="h-screen flex overflow-hidden" style={{ background: '#0a1628', color: '#fff' }}>
+    <div className="h-screen flex overflow-hidden" style={{ color: '#fff' }}>
 
       {/* ── Toggle button — always visible ── */}
       <button
@@ -270,7 +270,7 @@ export const UserLayout: React.FC = () => {
       </aside>
 
       {/* ── Main content ── */}
-      <main className="flex-1 overflow-hidden h-full" style={{ background: '#0e1a35' }}>
+      <main className="flex-1 overflow-hidden h-full">
 
         {/* Voice change prompt — shown when admin assigns a new voice */}
         {voicePrompt && (
