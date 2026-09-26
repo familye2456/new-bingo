@@ -162,7 +162,15 @@ export const PlayBingo: React.FC = () => {
     if (!game || game.status !== 'active') return;
     if (resetGameRef.current === game.id) return;
     resetGameRef.current = game.id;
-    offlineGameApi.reset(game.id).then(() => setSessionCalledNumbers([])).catch(() => {});
+    // Restore any already-called numbers from the game object (IDB/server).
+    // This prevents wiping the stack when the game object reloads mid-session
+    // due to a query invalidation (e.g. postpaid sync, offline→online transition).
+    const existing = game.calledNumbers ?? [];
+    if (existing.length > 0) {
+      setSessionCalledNumbers(existing);
+    } else {
+      offlineGameApi.reset(game.id).then(() => setSessionCalledNumbers([])).catch(() => {});
+    }
     // Pre-cache cartelas for this game so offline check works
     offlineGameApi.getCartelas(game.id).catch(() => {});
   }, [game?.id]);

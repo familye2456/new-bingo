@@ -37,6 +37,7 @@ function isSynced(id: string): boolean { return getSyncedIds().has(id); }
 // IDB with bulk cartela writes that compete with game-critical dbPut calls.
 let _gameSessionActive = false;
 export function setGameSessionActive(active: boolean) { _gameSessionActive = active; }
+export function isGameSessionActive() { return _gameSessionActive; }
 
 // ── Cache refresh ─────────────────────────────────────────────────────────────
 

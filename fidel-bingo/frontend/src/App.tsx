@@ -504,9 +504,20 @@ const AppRoutes: React.FC = () => {
     return () => clearInterval(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // When sync.ts finishes flushing + refreshing cache, invalidate all queries
+  // When sync.ts finishes flushing + refreshing cache, invalidate all queries.
+  // Skip the ['games'] query while an active game session is running — invalidating
+  // it mid-game causes the game object to reload, which triggers the resetGameRef
+  // effect in PlayBingo and wipes sessionCalledNumbers.
   useEffect(() => {
-    const handler = () => { qc.invalidateQueries(); };
+    const handler = async () => {
+      const { isGameSessionActive } = await import('./services/sync');
+      if (isGameSessionActive()) {
+        // Only refresh non-game data (balance, cartelas, etc.) during an active session
+        qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'games' });
+      } else {
+        qc.invalidateQueries();
+      }
+    };
     window.addEventListener('cache-refreshed', handler);
     return () => window.removeEventListener('cache-refreshed', handler);
   }, [qc]); // eslint-disable-line react-hooks/exhaustive-deps
