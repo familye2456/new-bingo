@@ -163,6 +163,10 @@ export const PlayBingo: React.FC = () => {
     if (!game || game.status !== 'active') return;
     if (resetGameRef.current === game.id) return;
     resetGameRef.current = game.id;
+    // Mark session active as soon as a game is loaded — this prevents
+    // cache-refreshed from invalidating ['games'] and resetting the stack
+    // even when the user is calling numbers manually (not just during auto-call).
+    setGameSessionActive(true);
     // Restore any already-called numbers from the game object (IDB/server).
     // This prevents wiping the stack when the game object reloads mid-session
     // due to a query invalidation (e.g. postpaid sync, offline→online transition).
@@ -185,7 +189,9 @@ export const PlayBingo: React.FC = () => {
     autoActiveRef.current = false;
     lastCallTimeRef.current = 0;
     stopAllAudio(); // cut any playing sound instantly
-    setGameSessionActive(false);
+    // Do NOT clear gameSessionActive here — the game is still loaded and
+    // we must keep the ['games'] query from refetching mid-session.
+    // Only unmount/game-finish clears it (see cleanup effect below).
     setAutoOn(false);
     if (!silent) playRootSound('aac_ended.mp3');
   }, []);
