@@ -144,11 +144,21 @@ async function getVoiceCache(): Promise<Cache | null> {
 // We create and resume the context once on first user interaction so it stays
 // unlocked for the entire session — even when sounds are triggered by setInterval.
 let _audioCtx: AudioContext | null = null;
+/** Track the currently playing WebAudio source so we can stop it on the next call */
+let _activeSource: AudioBufferSourceNode | null = null;
 
 function getAudioContext(): AudioContext | null {
   if (typeof AudioContext === 'undefined') return null;
   if (!_audioCtx) _audioCtx = new AudioContext();
   return _audioCtx;
+}
+
+/** Stop and discard the active WebAudio source node, if any */
+function stopActiveSource(): void {
+  if (_activeSource) {
+    try { _activeSource.stop(); } catch { /* already stopped */ }
+    _activeSource = null;
+  }
 }
 
 /** Call this once from a click/keydown handler to unlock audio for the session. */
@@ -177,6 +187,7 @@ export function stopAllAudio(): void {
   // Reset the playing flag and clear pending tasks immediately so callers
   // (e.g. the auto-call interval) see playing=false right away on pause.
   audioQueue.clear();
+  stopActiveSource();
   const ctx = getAudioContext();
   if (!ctx) return;
   // Suspend cuts off all currently playing AudioBufferSourceNodes immediately,
@@ -189,7 +200,7 @@ export function stopAllAudio(): void {
  * is used instead of a new HTMLAudioElement — avoids autoplay policy blocks
  * mid-session.
  */
-async function playDecodedAudio(arrayBuffer: ArrayBuffer, volume: number): Promise<void> {
+async function playDecodedAudio(arrayBuffer: ArrayBuffer, volume: number, mime = 'audio/mpeg'): Promise<void> {
   const ctx = getAudioContext();
   if (!ctx) return; // no WebAudio, skip
   if (ctx.state === 'suspended') {
@@ -199,22 +210,30 @@ async function playDecodedAudio(arrayBuffer: ArrayBuffer, volume: number): Promi
     const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
     console.log('[audio] decoded duration:', audioBuffer.duration.toFixed(0) + 's');
     await new Promise<void>((resolve) => {
+      // Stop any previously playing source before starting a new one
+      stopActiveSource();
       const src = ctx.createBufferSource();
       const gainNode = ctx.createGain();
       gainNode.gain.value = volume;
       src.buffer = audioBuffer;
       src.connect(gainNode);
       gainNode.connect(ctx.destination);
-      src.onended = () => { console.log('[audio] ended'); resolve(); };
+      _activeSource = src;
+      src.onended = () => {
+        console.log('[audio] ended');
+        if (_activeSource === src) _activeSource = null;
+        resolve();
+      };
       src.start(0);
       setTimeout(resolve, 4000);
     });
   } catch (err) {
     console.warn('[audio] decodeAudioData failed, falling back to HTMLAudio:', err);
     // Fallback: Use a Blob URL to play the original arrayBuffer via HTMLAudioElement.
-    // Providing a MIME type prevents ERR_REQUEST_RANGE_NOT_SATISFIABLE on blob URLs.
+    // Derive the correct MIME type — WAV files must not be tagged as audio/mpeg
+    // or the browser will reject them with ERR_REQUEST_RANGE_NOT_SATISFIABLE.
     try {
-      const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
+      const blob = new Blob([arrayBuffer], { type: mime });
       const url = URL.createObjectURL(blob);
       await playHtmlAudio(url, volume);
       URL.revokeObjectURL(url);
@@ -225,6 +244,11 @@ async function playDecodedAudio(arrayBuffer: ArrayBuffer, volume: number): Promi
 }
 
 async function playAudioBuffer(url: string, volume: number): Promise<void> {
+  // WAV and M4A: skip WebAudio entirely, use HTMLAudio directly
+  if (url.endsWith('.wav') || url.endsWith('.m4a')) {
+    await playHtmlAudio(url, volume);
+    return;
+  }
   const ctx = getAudioContext();
   if (!ctx) {
     await playHtmlAudio(url, volume);
@@ -237,7 +261,8 @@ async function playAudioBuffer(url: string, volume: number): Promise<void> {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`fetch failed: ${response.status}`);
     const arrayBuffer = await response.arrayBuffer();
-    await playDecodedAudio(arrayBuffer, volume);
+    const mime = 'audio/mpeg';
+    await playDecodedAudio(arrayBuffer, volume, mime);
   } catch (err) {
     console.warn('[audio] WebAudio failed, falling back to HTMLAudio:', url, err);
     await playHtmlAudio(url, volume);
@@ -268,23 +293,45 @@ async function playHtmlAudio(url: string, volume: number): Promise<void> {
  * during gameplay, then falls back to network if not cached.
  */
 export async function playCachedSound(path: string, volume = 1, bypassCache = false): Promise<void> {
+  // WAV and M4A files: use HTMLAudio directly — decodeAudioData is unreliable
+  // for these formats in Chrome/Chromium and causes EncodingError.
+  const useHtmlAudio = path.endsWith('.wav') || path.endsWith('.m4a');
+
   const cache = bypassCache ? null : await getVoiceCache();
   if (cache) {
     try {
       const response = await cache.match(path);
       if (response) {
-        // Decode directly from the cached ArrayBuffer — no network request needed
-        const arrayBuffer = await response.arrayBuffer();
-        const ctx = getAudioContext();
-        if (ctx) {
-          await playDecodedAudio(arrayBuffer, volume);
+        const arrayBuffer = await response.clone().arrayBuffer();
+        if (arrayBuffer.byteLength > 100) {
+          const mime = path.endsWith('.wav') ? 'audio/wav' : path.endsWith('.m4a') ? 'audio/mp4' : 'audio/mpeg';
+          if (useHtmlAudio) {
+            // Play WAV/M4A via blob URL + HTMLAudioElement — reliable across browsers
+            const blob = new Blob([arrayBuffer], { type: mime });
+            const url = URL.createObjectURL(blob);
+            try { await playHtmlAudio(url, volume); } finally { URL.revokeObjectURL(url); }
+            return;
+          }
+          const ctx = getAudioContext();
+          if (ctx) {
+            try {
+              await playDecodedAudio(arrayBuffer, volume, mime);
+              return;
+            } catch {
+              // decodeAudioData failed — cache entry is likely corrupt, evict it
+              console.warn('[audio] corrupt cache entry, evicting:', path);
+              cache.delete(path).catch(() => {});
+              // fall through to network
+            }
+          } else {
+            const blob = new Blob([arrayBuffer], { type: mime });
+            const url = URL.createObjectURL(blob);
+            try { await playHtmlAudio(url, volume); return; } finally { URL.revokeObjectURL(url); }
+          }
         } else {
-          // No WebAudio — fall back to blob URL + HTMLAudioElement
-          const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
-          const url = URL.createObjectURL(blob);
-          try { await playHtmlAudio(url, volume); } finally { URL.revokeObjectURL(url); }
+          console.warn('[audio] empty cache entry, evicting:', path);
+          cache.delete(path).catch(() => {});
         }
-        return;
       }
     } catch { /* fall through to network */ }
   }
@@ -452,6 +499,9 @@ export function playNumberSoundQueued(
 ): void {
   const ext = getVoiceExt(voice);
   const path = `/sounds/${encodeURIComponent(voice)}/${number}${ext}`;
+  // Stop any currently playing sound and clear pending tasks before enqueuing
+  // the new one — prevents sounds from stacking at the WebAudio layer.
+  stopActiveSource();
   audioQueue.clear();
   audioQueue.enqueue(() => playCachedSound(path, volume).then(() => {}));
 }
