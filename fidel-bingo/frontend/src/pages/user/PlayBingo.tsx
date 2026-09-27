@@ -360,8 +360,8 @@ export const PlayBingo: React.FC = () => {
           playRootSound('aac_locked.mp3');
         }
       } else {
-        playCachedSound('/sounds/notregisterd.mp3').catch(() => {
-          playCachedSound('/sounds/notregisterd.m4a').catch(() => {});
+        playCachedSound('/sounds/notregisterd.m4a').catch(() => {
+          playCachedSound('/sounds/notregisterd.mp3').catch(() => {});
         });
       }
     } catch {
@@ -1250,7 +1250,7 @@ const CartelaPreviewModal: React.FC<{
     >
       <div
         className="rounded-2xl p-4 sm:p-5 flex flex-col items-center gap-3 my-auto"
-        style={{ background: '#0f1e35', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 40px rgba(0,0,0,0.7)' }}
+        style={{ background: 'linear-gradient(135deg, #0d1b2a 0%, #1a1040 50%, #0a1628 100%)', border: '1px solid rgba(124,58,237,0.3)', boxShadow: '0 8px 40px rgba(0,0,0,0.7)' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Title row */}
@@ -1284,9 +1284,9 @@ const CartelaPreviewModal: React.FC<{
             const isWinCell = winIndices.includes(idx);
             const isLast = num === lastCalledNumber && !isFree;
 
-            let bg = '#1e3a5f';
-            let color = '#94a3b8';
-            let border = '1px solid rgba(255,255,255,0.06)';
+            let bg = 'linear-gradient(135deg, #0d1b2a 0%, #1a1040 100%)';
+            let color = '#a78bfa';
+            let border = '1px solid rgba(124,58,237,0.2)';
             let shadow = 'none';
 
             if (isFree || isMarked) {

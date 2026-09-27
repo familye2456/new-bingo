@@ -12,7 +12,7 @@ async function isPrepaid(): Promise<boolean> {
   return user.paymentType === 'prepaid';
 }
 
-// ── Global flush lock — prevents concurrent flushes ───────────────────────────
+// G��G�� Global flush lock G�� prevents concurrent flushes G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��
 let _flushing = false;
 let _refreshCacheRetryAt = 0;
 const REFRESH_CACHE_RETRY_COOLDOWN_MS = 60_000;
@@ -20,7 +20,7 @@ const REFRESH_CACHE_RETRY_COOLDOWN_MS = 60_000;
 // Persist synced tempIds across page reloads to prevent duplicate POSTs
 const SYNCED_KEY = 'synced_temp_ids';
 
-// Negative balance localStorage keys — declared here so refreshCache can access them
+// Negative balance localStorage keys G�� declared here so refreshCache can access them
 const NEG_BAL_KEY = 'neg_balance_last_positive';
 function getSyncedIds(): Set<string> {
   try { return new Set(JSON.parse(localStorage.getItem(SYNCED_KEY) || '[]')); } catch { return new Set(); }
@@ -32,14 +32,14 @@ function addSyncedId(id: string) {
 }
 function isSynced(id: string): boolean { return getSyncedIds().has(id); }
 
-// ── Active game session flag ──────────────────────────────────────────────────
+// G��G�� Active game session flag G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��
 // Set to true while auto-call is running to prevent refreshCache from flooding
 // IDB with bulk cartela writes that compete with game-critical dbPut calls.
 let _gameSessionActive = false;
 export function setGameSessionActive(active: boolean) { _gameSessionActive = active; }
 export function isGameSessionActive() { return _gameSessionActive; }
 
-// ── Cache refresh ─────────────────────────────────────────────────────────────
+// G��G�� Cache refresh G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��
 
 export async function refreshCache() {
   if (Date.now() < _refreshCacheRetryAt) return;
@@ -47,7 +47,7 @@ export async function refreshCache() {
   try {
     const requests: Promise<any>[] = [
       api.get('/users/me'),
-      api.get('/cartelas/mine'),  // always fetch — never skip based on cache
+      api.get('/cartelas/mine'),  // always fetch G�� never skip based on cache
       api.get('/games/mine'),
       api.get('/users/me/transactions'),
     ];
@@ -56,7 +56,7 @@ export async function refreshCache() {
 
     const meData = meRes.data?.data ?? meRes.data;
 
-    // ⭐ Balance sync: after queue flush all games are on the server — use server balance directly.
+    // G�� Balance sync: after queue flush all games are on the server G�� use server balance directly.
     // For prepaid players, push local IDB balance ONLY if there are no queued games left
     // (i.e. this is a periodic refresh, not a post-flush refresh).
     // Post-flush: server already has the authoritative balance from processing every game.
@@ -65,12 +65,12 @@ export async function refreshCache() {
       const isLocked = localStorage.getItem('neg_balance_locked') === '1';
 
       if (isLocked && localUser) {
-        // Account locked due to negative balance — preserve local negative so player stays blocked
+        // Account locked due to negative balance G�� preserve local negative so player stays blocked
         console.log(`[balance] refreshCache: locked, preserving local balance=${localUser.balance}`);
         meData.balance = localUser.balance;
       } else {
         // Server balance is always authoritative after sync.
-        // Do NOT subtract pending queue items here — local balance was already reduced
+        // Do NOT subtract pending queue items here G�� local balance was already reduced
         // by offlineApi at the time each offline game was created. Subtracting again
         // causes double-deduction and shows the wrong (too low) balance.
         const serverBalance = Number(meData.balance ?? 0);
@@ -91,7 +91,7 @@ export async function refreshCache() {
 
     const toList = (d: any) => Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : Array.isArray(d?.data?.data) ? d.data.data : [];
 
-    // Always clear and repopulate cartelas — ensures no stale data from another user
+    // Always clear and repopulate cartelas G�� ensures no stale data from another user
     // Skip during active game sessions to avoid flooding IDB and causing timeouts
     if (!_gameSessionActive) {
       const userId = meData?.id;
@@ -110,7 +110,8 @@ export async function refreshCache() {
       ..._justFinishedIds,
     ]);
     const serverGameIds = new Set(serverGames.map((g: any) => g.id));
-    await dbClear('games');
+    // Build merged list BEFORE touching IDB - eliminates the race window where
+    // callNumber reads an empty store between dbClear and dbPutMany.
     const mergedGames = serverGames.map((g: any) => {
       const localGame = localGames.find((l: any) => String(l.id) === String(g.id));
       const merged = {
@@ -128,7 +129,15 @@ export async function refreshCache() {
         : merged;
     });
     const preservedOfflineGames = offlineGames.filter((g: any) => !serverGameIds.has(g.id));
+    // Upsert merged games - no dbClear to avoid race window with callNumber
     await dbPutMany('games', [...mergedGames, ...preservedOfflineGames]);
+    // Remove stale server games no longer present on server
+    for (const lg of localGames) {
+      const lgId = String(lg.id);
+      if (!lgId.startsWith('offline-') && !serverGameIds.has(lgId)) {
+        await dbDelete('games', lgId);
+      }
+    }
 
     const serverTx = toList(txRes.data);
     const localTx = await dbGetAll<any>('transactions');
@@ -145,7 +154,7 @@ export async function refreshCache() {
   }
 }
 
-// ── Core flush logic (shared) ─────────────────────────────────────────────────
+// G��G�� Core flush logic (shared) G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��
 
 // Track game IDs finished during the current flush so refreshCache won't overwrite them
 export const _justFinishedIds = new Set<string>();
@@ -159,8 +168,8 @@ async function _doFlush() {
   console.log(`[sync] flushing ${items.length} queued items`);
 
   for (const item of items) {
-    // Re-read the item fresh from IDB — a previous iteration (e.g. createGame)
-    // may have updated this item's payload (e.g. tempId → realId on finishGame)
+    // Re-read the item fresh from IDB G�� a previous iteration (e.g. createGame)
+    // may have updated this item's payload (e.g. tempId G�� realId on finishGame)
     const db = await import('./db').then(m => m.getDB());
     const freshItem = await db.get('syncQueue', item.id!);
     const current = freshItem ?? item;
@@ -200,13 +209,13 @@ async function _doFlush() {
             console.log(`[sync] createGame success realId=${realGame?.id}`);
           } catch (postErr: any) {
             console.log(`[sync] createGame failed tempId=${p.tempId} status=${postErr?.response?.status} msg=${postErr?.response?.data?.error?.message ?? postErr?.message}`);
-            // Network error — un-mark so we retry next time
+            // Network error G�� un-mark so we retry next time
             if (!postErr?.response?.status && p.tempId) {
               const ids = getSyncedIds(); ids.delete(p.tempId);
               localStorage.setItem(SYNCED_KEY, JSON.stringify([...ids]));
             }
 
-            // HTTP error (e.g. INSUFFICIENT_BALANCE, FORBIDDEN) — server rejected it permanently.
+            // HTTP error (e.g. INSUFFICIENT_BALANCE, FORBIDDEN) G�� server rejected it permanently.
             // Clean up all orphaned IDB data so nothing is left dangling.
             if (postErr?.response?.status && p.tempId) {
               await dbDelete('games', p.tempId);
@@ -225,7 +234,7 @@ async function _doFlush() {
                 if (qp?.gameId === p.tempId) await dequeue(qi.id!);
               }
 
-              // Restore the house-cut that was deducted locally — server never charged it
+              // Restore the house-cut that was deducted locally G�� server never charged it
               const houseCut = (p.betAmountPerCartela ?? 0) * (p.cartelaIds?.length ?? 0)
                 * ((p.housePercentage ?? 10) / 100);
               if (houseCut > 0) {
@@ -280,7 +289,7 @@ async function _doFlush() {
             for (const qi of allQueued) {
               const qp = qi.payload as any;
               if (qp?.gameId === p.tempId) {
-                // syncQueue uses keyPath 'id' (in-line keys) — must not pass key separately
+                // syncQueue uses keyPath 'id' (in-line keys) G�� must not pass key separately
                 const updated = { ...qi, payload: { ...qp, gameId: realGame.id } };
                 await db.put('syncQueue', updated);
               }
@@ -310,7 +319,7 @@ async function _doFlush() {
 
         case 'finishGame': {
           const p = current.payload as any;
-          // If still has offline ID, createGame hasn't synced yet — dequeue and skip
+          // If still has offline ID, createGame hasn't synced yet G�� dequeue and skip
           // (these are orphaned finish events for games that never made it to the server)
           if (String(p.gameId).startsWith('offline-')) {
             console.log(`[sync] dequeuing orphaned finishGame with offline gameId=${p.gameId}`);
@@ -320,7 +329,7 @@ async function _doFlush() {
           try {
             await api.post(`/games/${p.gameId}/finish`);
           } catch (finishErr: any) {
-            // 400 "already ended" means server already has it finished — treat as success
+            // 400 "already ended" means server already has it finished G�� treat as success
             if (finishErr?.response?.status !== 400) throw finishErr;
           }
           // Track this ID so refreshCache won't overwrite it with 'active'
@@ -339,7 +348,7 @@ async function _doFlush() {
             break;
           }
           await api.post(`/games/${p.gameId}/bingo`, { cartelaId: p.cartelaId });
-          // Balance updated by refreshCache reading server balance — no local delta needed
+          // Balance updated by refreshCache reading server balance G�� no local delta needed
           await dequeue(current.id!);
           break;
         }
@@ -356,19 +365,19 @@ async function _doFlush() {
       }
     } catch (err: any) {
       console.log(`[sync] error on item id=${current.id} type=${current.type} status=${err?.response?.status} msg=${err?.message}`);
-      if (err?.response?.status) await dequeue(current.id!); // server error — discard
-      else continue; // network error — skip item, attempt remaining
+      if (err?.response?.status) await dequeue(current.id!); // server error G�� discard
+      else continue; // network error G�� skip item, attempt remaining
     }
   }
 }
 
-// ── Negative balance check ────────────────────────────────────────────────────
+// G��G�� Negative balance check G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��
 
 /**
  * After coming online and syncing:
  * - Fetch real server balance
- * - If positive → continue with refreshCache normally, clear any previous block
- * - If negative → skip refreshCache, block the UI, save last positive balance,
+ * - If positive G�� continue with refreshCache normally, clear any previous block
+ * - If negative G�� skip refreshCache, block the UI, save last positive balance,
  *   alert the backend, and start polling until admin resolves it
  *
  * Returns true if balance is OK to proceed with cache refresh.
@@ -390,7 +399,7 @@ export async function checkNegativeBalanceAfterSync(): Promise<boolean> {
       return false;
     }
 
-    // Not locked — check current local IDB balance (already updated by _doFlush refunds)
+    // Not locked G�� check current local IDB balance (already updated by _doFlush refunds)
     const localBalance = Number(user.balance ?? 0);
     if (localBalance < 0) {
       localStorage.setItem('neg_balance_locked', '1');
@@ -403,7 +412,7 @@ export async function checkNegativeBalanceAfterSync(): Promise<boolean> {
       return false;
     }
 
-    // Balance looks positive — let refreshCache() do the authoritative server balance write.
+    // Balance looks positive G�� let refreshCache() do the authoritative server balance write.
     // Do NOT make an extra GET /users/me here; that causes the delta-based double-update bug.
     return true;
   } catch {
@@ -427,12 +436,12 @@ function startRecoveryPolling() {
       if (!fresh) return;
       const balance = Number(fresh.balance ?? 0);
       if (balance >= 0) {
-        // Admin resolved it — unblock and do a full sync
+        // Admin resolved it G�� unblock and do a full sync
         clearInterval(_recoveryInterval!);
         _recoveryInterval = null;
         const user = await dbGet<any>('user', 'me');
         if (user) await dbPut('user', { ...user, balance }, 'me');
-        // Update Zustand directly with server balance — no delta math
+        // Update Zustand directly with server balance G�� no delta math
         useAuthStore.setState((state) => ({
           user: state.user ? { ...state.user, balance } : state.user,
         }));
@@ -445,9 +454,9 @@ function startRecoveryPolling() {
   }, 15_000);
 }
 
-// ── Public API ────────────────────────────────────────────────────────────────
+// G��G�� Public API G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��
 
-/** Returns true while a flush is in progress — used by UI to show sync indicator */
+/** Returns true while a flush is in progress G�� used by UI to show sync indicator */
 export function isSyncing() { return _flushing; }
 
 /**
@@ -457,7 +466,7 @@ export function isSyncing() { return _flushing; }
  */
 export function isFlushInProgress() { return _flushing; }
 
-/** Flush queue only — no cache refresh. Used before individual fetches. */
+/** Flush queue only G�� no cache refresh. Used before individual fetches. */
 export async function flushQueueOnly() {
   if (_flushing) return;
   _flushing = true;
@@ -482,18 +491,24 @@ export async function flushQueue() {
       preFlushUser.role !== 'admin' &&
       preFlushUser.role !== 'agent';
 
-    // ── Step 1: push the local balance to the server BEFORE syncing games ──
-    // The local IDB balance already reflects all offline deductions (e.g. 5000 → 1300).
-    // Writing it to the server first means game sync never causes a balance fluctuation —
-    // the server balance is correct from the start of the flush.
+    // ── Step 1: collect earliest offline game createdAt BEFORE flushing ──
+    // This timestamp tells the server the start of the offline session so it can
+    // recompute the authoritative balance from game history after the flush.
+    let earliestGameCreatedAt: string | undefined;
     if (isPrepaidPlayer) {
-      try {
-        console.log(`[sync] pushing local balance=${localBalance} to server before game flush`);
-        await api.post('/users/me/sync-balance', { balance: localBalance });
-        console.log(`[sync] balance pushed successfully`);
-      } catch (err) {
-        console.log(`[sync] balance push failed, continuing anyway`, err);
+      const queuedItems = await getAllQueued();
+      const createGameItems = queuedItems.filter((i: any) => i.type === 'createGame');
+      if (createGameItems.length > 0) {
+        const timestamps = createGameItems
+          .map((i: any) => i.payload?.createdAt as string | undefined)
+          .filter((t): t is string => !!t)
+          .map((t) => new Date(t).getTime())
+          .filter((t) => !isNaN(t));
+        if (timestamps.length > 0) {
+          earliestGameCreatedAt = new Date(Math.min(...timestamps)).toISOString();
+        }
       }
+      console.log(`[sync] earliest offline game createdAt=${earliestGameCreatedAt ?? 'none'}`);
     }
 
     // ── Step 2: lock immediately if local balance is negative ──────────────
@@ -509,10 +524,26 @@ export async function flushQueue() {
       return;
     }
 
-    // ── Step 3: sync game records (game data only — balance already correct) ─
+    // ── Step 3: sync game records to the server ────────────────────────────
     await _doFlush();
 
-    // ── Step 4: pull server state back into local cache ─────────────────────
+    // ── Step 4: push local balance AFTER games are on the server ──────────
+    // Now the server has all the game records so it can validate the balance
+    // against real game history (using earliestGameCreatedAt as the session boundary).
+    if (isPrepaidPlayer) {
+      try {
+        console.log(`[sync] pushing local balance=${localBalance} to server after game flush`);
+        await api.post('/users/me/sync-balance', {
+          balance: localBalance,
+          ...(earliestGameCreatedAt ? { earliestGameCreatedAt } : {}),
+        });
+        console.log(`[sync] balance pushed successfully`);
+      } catch (err) {
+        console.log(`[sync] balance push failed, continuing anyway`, err);
+      }
+    }
+
+    // ── Step 5: pull server state back into local cache ────────────────────
     const balanceOk = await checkNegativeBalanceAfterSync();
     console.log(`[sync] balanceOk=${balanceOk}`);
     if (balanceOk) {
@@ -531,9 +562,9 @@ export async function syncWhenOnline() {
   await flushQueue();
 }
 
-// ── Debounce sync to avoid thrashing ─────────────────────────────────────────
+// G��G�� Debounce sync to avoid thrashing G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��
 /**
- * Debounce — don't sync more than once per 10 seconds
+ * Debounce G�� don't sync more than once per 10 seconds
  * UNLESS we just came online (timer is reset on offline)
  */
 let _lastSync = 0;
@@ -548,39 +579,40 @@ function debouncedSync() {
   syncWhenOnline();
 }
 
-// ── Periodic sync even when already online ────────────────────────────────────
+// G��G�� Periodic sync even when already online G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��
 /**
  * Sync every 30 seconds to catch admin balance updates,
  * even for users who never go offline/online.
  * This fixes the issue where admin updates aren't visible until next refresh.
  */
 const PERIODIC_SYNC_INTERVAL = 30_000;  // 30 seconds
-let _periodicSyncInterval: ReturnType<typeof setInterval> | null = null;
+// Use window-level key so HMR module reloads don't create duplicate intervals
+const _INTERVAL_KEY = '__fidel_sync_interval__';
 
 function isOfflineGameSession() {
   return typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('gameId')?.startsWith('offline-');
 }
 
 export function startPeriodicSync() {
-  if (_periodicSyncInterval) {
+  if ((window as any)[_INTERVAL_KEY]) {
     console.log('[sync] Periodic sync already running');
     return;
   }
-  
+
   console.log('[sync] Starting periodic sync (every 30s)');
-  _periodicSyncInterval = setInterval(async () => {
+  (window as any)[_INTERVAL_KEY] = setInterval(async () => {
     if (!navigator.onLine) {
       console.log('[sync] Skipping periodic sync (offline)');
       return;
     }
 
-    // Skip if a flush is already in progress — it will call refreshCache itself
+    // Skip if a flush is already in progress G�� it will call refreshCache itself
     if (_flushing) {
       console.log('[sync] Skipping periodic sync (flush in progress)');
       return;
     }
 
-    // Skip if there are queued offline games — refreshCache would overwrite the locally-
+    // Skip if there are queued offline games G�� refreshCache would overwrite the locally-
     // deducted IDB balance with the server's pre-billing balance, giving the user fake money.
     try {
       const pending = await getAllQueued();
@@ -600,10 +632,10 @@ export function startPeriodicSync() {
 }
 
 export function stopPeriodicSync() {
-  if (_periodicSyncInterval) {
+  if ((window as any)[_INTERVAL_KEY]) {
     console.log('[sync] Stopping periodic sync');
-    clearInterval(_periodicSyncInterval);
-    _periodicSyncInterval = null;
+    clearInterval((window as any)[_INTERVAL_KEY]);
+    (window as any)[_INTERVAL_KEY] = null;
   }
 }
 

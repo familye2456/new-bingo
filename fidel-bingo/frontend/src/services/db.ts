@@ -207,13 +207,14 @@ async function playDecodedAudio(arrayBuffer: ArrayBuffer, volume: number): Promi
       gainNode.connect(ctx.destination);
       src.onended = () => { console.log('[audio] ended'); resolve(); };
       src.start(0);
-      setTimeout(resolve, 15000);
+      setTimeout(resolve, 4000);
     });
   } catch (err) {
     console.warn('[audio] decodeAudioData failed, falling back to HTMLAudio:', err);
-    // Fallback: Use a Blob URL to play the original arrayBuffer via HTMLAudioElement
+    // Fallback: Use a Blob URL to play the original arrayBuffer via HTMLAudioElement.
+    // Providing a MIME type prevents ERR_REQUEST_RANGE_NOT_SATISFIABLE on blob URLs.
     try {
-      const blob = new Blob([arrayBuffer]);
+      const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
       const url = URL.createObjectURL(blob);
       await playHtmlAudio(url, volume);
       URL.revokeObjectURL(url);
@@ -257,7 +258,7 @@ async function playHtmlAudio(url: string, volume: number): Promise<void> {
     };
     audio.onended = () => done('ended');
     audio.onerror = () => done('error');
-    setTimeout(() => done('timeout'), 15000);
+    setTimeout(() => done('timeout'), 4000);
     audio.play().catch((e) => { console.warn('[audio] play() rejected:', e?.message, url); done('play-rejected'); });
   });
 }
@@ -279,7 +280,7 @@ export async function playCachedSound(path: string, volume = 1, bypassCache = fa
           await playDecodedAudio(arrayBuffer, volume);
         } else {
           // No WebAudio — fall back to blob URL + HTMLAudioElement
-          const blob = new Blob([arrayBuffer]);
+          const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
           const url = URL.createObjectURL(blob);
           try { await playHtmlAudio(url, volume); } finally { URL.revokeObjectURL(url); }
         }
@@ -306,7 +307,6 @@ const ROOT_SOUND_FILES = [
   '/sounds/shuffle-audio-TfqyAnvz.mp3',
   '/sounds/start.wav',
   '/sounds/winner.wav',
-  '/sounds/notregisterd.mp3',
   '/sounds/notregisterd.m4a',
 ];
 
@@ -389,17 +389,20 @@ export class AudioQueue {
   private queue: Array<() => Promise<void>> = [];
   playing = false;
   private drainResolvers: Array<() => void> = [];
+  // Token incremented on every clear() — in-flight tasks check this to bail early
+  private _generation = 0;
 
   enqueue(task: () => Promise<void>): void {
     this.queue.push(task);
     if (!this.playing) {
-      this.playing = true; // set BEFORE drain() so callers see playing=true immediately
+      this.playing = true;
       this.drain();
     }
   }
 
   /** Discard all pending tasks and reset the playing flag immediately */
   clear(): void {
+    this._generation++;          // invalidates any in-flight task
     this.queue.length = 0;
     this.playing = false;
     const resolvers = this.drainResolvers.splice(0);
@@ -412,6 +415,14 @@ export class AudioQueue {
     return new Promise(resolve => this.drainResolvers.push(resolve));
   }
 
+  /** Wrap a task so it resolves immediately if the queue was cleared mid-flight */
+  private wrap(task: () => Promise<void>, gen: number): () => Promise<void> {
+    return () => {
+      if (this._generation !== gen) return Promise.resolve();
+      return task();
+    };
+  }
+
   private async drain(): Promise<void> {
     if (this.queue.length === 0) {
       this.playing = false;
@@ -420,8 +431,9 @@ export class AudioQueue {
       return;
     }
     this.playing = true;
+    const gen = this._generation;
     const task = this.queue.shift()!;
-    try { await task(); } catch { /* continue on error */ }
+    try { await this.wrap(task, gen)(); } catch { /* continue on error */ }
     this.drain();
   }
 }
