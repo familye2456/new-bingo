@@ -77,6 +77,7 @@ export const THEMES: Record<ThemeName, AppTheme> = {
     label: '🌙 Dark',
     pageBg: '#0e1a35',
     headerBg: '#1e2235',
+    headerText: '#ffffff',
     headerSubText: '#9ca3af',
     prizeText: '#fbbf24',
     boardBg: '#1a0a2e',
