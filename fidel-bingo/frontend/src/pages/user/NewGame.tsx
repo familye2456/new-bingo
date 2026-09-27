@@ -70,7 +70,8 @@ function savePrefs(bet: number, pattern: string, selectedIds: Set<string>, house
 export const NewGame: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { voice } = useGameSettings();
+  const { voice, theme: themeName } = useGameSettings();
+  const isDark = themeName === 'dark';
   const { user, refreshBalance, negativeBalance } = useAuthStore();
   const voiceRef = useRef(voice);
   useEffect(() => { voiceRef.current = voice; }, [voice]);
@@ -240,14 +241,28 @@ export const NewGame: React.FC = () => {
     };
   }, []);
 
+  // Override body/root background to white for this page only
+  React.useEffect(() => {
+    const prev = document.body.style.background;
+    document.documentElement.style.background = '#F8FAFC';
+    document.body.style.background = '#F8FAFC';
+    const root = document.getElementById('root');
+    if (root) root.style.background = '#F8FAFC';
+    return () => {
+      document.documentElement.style.background = '';
+      document.body.style.background = prev;
+      if (root) root.style.background = '';
+    };
+  }, []);
+
   return (
-    <div className="h-full flex flex-col" style={{ background: '#0a1220', color: '#fff' }}>
+    <div className="h-full flex flex-col" style={{ background: isDark ? '#0e1a35' : '#F9FAFB', color: isDark ? '#ffffff' : '#111827' }}>
 
       {/* ── Header — two columns ── */}
       <div className="px-3 sm:px-5 pt-2 pb-2 shrink-0 grid gap-2 sm:gap-3 lg:grid-cols-[2fr_3fr] grid-cols-1 lg:items-stretch"
         style={{ 
-          borderBottom: '1px solid rgba(255,255,255,0.06)', 
-          background: 'linear-gradient(180deg, rgba(0,0,0,0.3), rgba(0,0,0,0.2))', 
+          borderBottom: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #E5E7EB', 
+          background: isDark ? '#1e2235' : '#FFFFFF', 
           backdropFilter: 'blur(8px)' 
         }}>
 
@@ -270,30 +285,30 @@ export const NewGame: React.FC = () => {
 
           {/* Settings grid */}
           <div className="rounded-xl p-2.5 sm:p-3" style={{ 
-            background: 'linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))', 
-            border: '1px solid rgba(255,255,255,0.08)',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+            background: isDark ? '#0e1a35' : '#FFFFFF', 
+            border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #E5E7EB',
+            boxShadow: 'none'
           }}>
             {/* Bet row */}
             <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-400 text-xs font-medium flex items-center gap-1.5">
+              <span className="font-medium flex items-center gap-1.5" style={{ color: isDark ? '#ffffff' : '#6b7280', fontSize: isDark ? '13.2px' : '12px' }}>
                 💰 Bet per card
               </span>
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <button onClick={() => setBet((b) => Math.max(5, b - 5))}
                   className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs hover:brightness-125 active:scale-95"
-                  style={{ background: 'rgba(239,68,68,0.2)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>−</button>
-                <span className="w-10 text-center font-black text-yellow-400 text-base">{bet}</span>
+                  style={{ background: '#FEE2E2', color: '#DC2626', border: '1px solid #FECACA' }}>−</button>
+                <span className="w-10 text-center font-black" style={{ color: isDark ? '#ffffff' : '#111827', fontSize: isDark ? '17.6px' : '16px' }}>{bet}</span>
                 <button onClick={() => setBet((b) => b + 5)}
                   className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs hover:brightness-125 active:scale-95"
-                  style={{ background: 'rgba(34,197,94,0.2)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }}>+</button>
-                <span className="text-gray-500 text-[10px] ml-0.5 font-semibold">BIRR</span>
+                  style={{ background: '#DCFCE7', color: '#16A34A', border: '1px solid #BBF7D0' }}>+</button>
+                <span className="ml-0.5 font-semibold" style={{ color: isDark ? '#ffffff' : '#6b7280', fontSize: isDark ? '11px' : '10px' }}>BIRR</span>
               </div>
             </div>
 
             {/* House cut row */}
             <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-400 text-xs font-medium flex items-center gap-1.5">
+              <span className="font-medium flex items-center gap-1.5" style={{ color: isDark ? '#ffffff' : '#6b7280', fontSize: isDark ? '13.2px' : '12px' }}>
                 🏠 House cut
               </span>
               <HouseCutPicker value={houseCut} onChange={setHouseCut} />
@@ -301,14 +316,16 @@ export const NewGame: React.FC = () => {
 
             {/* Pattern row */}
             <div className="flex items-center justify-between">
-              <span className="text-gray-400 text-xs font-medium flex items-center gap-1.5">
+              <span className="font-medium flex items-center gap-1.5" style={{ color: isDark ? '#ffffff' : '#6b7280', fontSize: isDark ? '13.2px' : '12px' }}>
                 🎯 Win pattern
               </span>
               <select value={pattern} onChange={(e) => setPattern(e.target.value)}
                 className="bg-transparent text-xs font-semibold focus:outline-none cursor-pointer px-2 py-1 rounded-lg transition-colors hover:brightness-125"
-                style={{ color: '#fbbf24', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.25)', maxWidth: '140px' }}>
+                style={isDark
+                  ? { color: '#ffffff', background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.4)', maxWidth: '140px', fontSize: '13.2px' }
+                  : { color: '#6366F1', background: '#EEF2FF', border: '1px solid #E0E7FF', maxWidth: '140px' }}>
                 {PATTERNS.map((p) => (
-                  <option key={p.value} value={p.value} style={{ background: '#0f1e35' }}>
+                  <option key={p.value} value={p.value} style={{ background: isDark ? '#1e2235' : '#ffffff' }}>
                     {p.icon} {p.label}
                   </option>
                 ))}
@@ -322,13 +339,13 @@ export const NewGame: React.FC = () => {
             disabled={!canStart || createMutation.isPending}
             className="flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all hover:brightness-125 disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
             style={canStart ? {
-              background: 'linear-gradient(135deg,#fbbf24,#f59e0b)',
-              color: '#111',
-              boxShadow: '0 4px 16px rgba(251,191,36,0.4), 0 2px 8px rgba(0,0,0,0.2)',
+              background: '#6366F1',
+              color: '#ffffff',
+              boxShadow: 'none',
             } : {
-              background: 'rgba(255,255,255,0.06)',
-              color: '#4b5563',
-              border: '1px solid rgba(255,255,255,0.08)',
+              background: isDark ? 'rgba(255,255,255,0.08)' : '#F3F4F6',
+              color: isDark ? '#ffffff' : '#9CA3AF',
+              border: isDark ? '1px solid rgba(255,255,255,0.12)' : '1px solid #E5E7EB',
             }}>
             {createMutation.isPending ? (
               <>
@@ -387,7 +404,7 @@ export const NewGame: React.FC = () => {
 
         {/* ── Column 2: selected cartela balls ── */}
         <div className="flex flex-col gap-1.5 min-w-0 h-full lg:border-l lg:border-t-0 border-t lg:pl-3 lg:pt-0 pt-2"
-          style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+          style={{ borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#E5E7EB' }}>
 
           {/* Header row with stats */}
           <div className="flex items-center justify-between">
@@ -396,7 +413,7 @@ export const NewGame: React.FC = () => {
                 {selectedIds.size} selected
               </span>
               {selectedIds.size >= MIN_CARTELAS && (
-                <span className="text-[10px] text-gray-500">
+                <span className="text-[10px] text-gray-500" style={{ color: isDark ? '#ffffff' : undefined }}>
                   • Total: {(bet * selectedIds.size).toFixed(0)} BIRR
                 </span>
               )}
@@ -410,8 +427,8 @@ export const NewGame: React.FC = () => {
               <button onClick={() => setRememberActive((v) => !v)}
                 className="text-[9px] px-1.5 py-0.5 rounded font-medium transition-all hover:brightness-125"
                 style={rememberActive
-                  ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }
-                  : { background: 'rgba(255,255,255,0.05)', color: '#6b7280', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  ? { background: '#EEF2FF', color: '#6366F1', border: '1px solid #E0E7FF' }
+                  : { background: '#F9FAFB', color: '#6B7280', border: '1px solid #E5E7EB' }}>
                 {rememberActive ? '✓ Active' : '○ All'}
               </button>
               {showQuickAdd ? (
@@ -426,15 +443,15 @@ export const NewGame: React.FC = () => {
                     placeholder="Card #"
                     className="w-14 text-[10px] px-1.5 py-0.5 rounded font-bold focus:outline-none focus:ring-2 focus:ring-blue-400/50"
                     style={quickAddError
-                      ? { background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.4)' }
-                      : { background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)' }} />
+                      ? { background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }
+                      : { background: '#EEF2FF', color: '#6366F1', border: '1px solid #E0E7FF' }} />
                   {quickAddError && <span className="text-[8px] text-red-400 whitespace-nowrap">{quickAddError}</span>}
                 </div>
               ) : (
                 <button onClick={() => setShowQuickAdd(true)}
                   className="text-[9px] px-1.5 py-0.5 rounded font-bold hover:brightness-125 transition-all"
                   title="Quick add card by number (or press +)"
-                  style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)' }}>
+                  style={{ background: '#EEF2FF', color: '#6366F1', border: '1px solid #E0E7FF' }}>
                   ＋ Add
                 </button>
               )}
@@ -457,8 +474,8 @@ export const NewGame: React.FC = () => {
               `}</style>
               <div className="selected-cartelas-container flex flex-wrap gap-1.5 overflow-y-auto p-1.5 rounded-lg flex-1 min-h-0" 
                 style={{ 
-                  background: 'rgba(245,158,11,0.03)',
-                  border: '1px solid rgba(245,158,11,0.1)',
+                  background: isDark ? '#0e1a35' : '#F9FAFB',
+                  border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #E5E7EB',
                   minHeight: '80px',
                   maxHeight: '120px',
                   scrollbarWidth: 'none',
@@ -491,10 +508,10 @@ export const NewGame: React.FC = () => {
               </div>
             </>
           ) : (
-            <div className="flex items-center justify-center flex-1 text-gray-600 text-[10px] py-4 rounded-lg min-h-0"
+            <div className="flex items-center justify-center flex-1 text-slate-400 text-[10px] py-4 rounded-lg min-h-0"
               style={{ 
-                background: 'rgba(255,255,255,0.02)', 
-                border: '1px dashed rgba(255,255,255,0.08)',
+                background: isDark ? '#0e1a35' : '#F8FAFC', 
+                border: isDark ? '1px dashed rgba(255,255,255,0.1)' : '1px dashed #e2e8f0',
                 minHeight: '80px'
               }}>
               🎴 No cartelas selected
@@ -521,22 +538,30 @@ export const NewGame: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="grid gap-1.5 px-1 cartela-grid"
+          <div className="grid gap-[20px] px-1 cartela-grid"
             style={{ 
-              gridTemplateColumns: 'repeat(auto-fill, minmax(50px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(60px, 1fr))',
             }}>
             <style>{`
+              @media (max-width: 1023px) {
+                .cartela-grid button { font-size: 17.66px !important; }
+                .cartela-grid button[data-selected="true"] { font-size: 19.42px !important; }
+              }
               @media (min-width: 640px) {
                 .cartela-grid {
-                  grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)) !important;
+                  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)) !important;
                 }
               }
               @media (min-width: 1024px) {
                 .cartela-grid {
-                  grid-template-columns: repeat(auto-fill, minmax(69px, 1fr)) !important;
+                  grid-template-columns: repeat(auto-fill, minmax(109px, 1fr)) !important;
                 }
                 .cartela-grid button {
-                  font-size: 33px !important;
+                  font-size: 53.2px !important;
+                  height: 73px !important;
+                }
+                .cartela-grid button[data-selected="true"] {
+                  font-size: 63.65px !important;
                 }
               }
             `}</style>
@@ -546,30 +571,31 @@ export const NewGame: React.FC = () => {
                 <button
                   key={c.id}
                   onClick={() => toggle(c.id)}
+                  data-selected={sel ? 'true' : 'false'}
                   className="flex items-center justify-center font-black transition-all duration-200 hover:brightness-110 active:scale-95"
                   style={sel ? {
-                    background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                    background: '#6366F1',
                     color: '#fff',
-                    border: '2px solid rgba(255,255,255,0.85)',
-                    boxShadow: '0 0 12px rgba(168,85,247,0.6), 0 0 20px rgba(99,102,241,0.3), 0 4px 12px rgba(0,0,0,0.3)',
-                    fontSize: 'clamp(13px, 3vw, 25px)',
+                    border: '2px solid #fff',
+                    boxShadow: '0 2px 8px rgba(99,102,241,0.3)',
+                    fontSize: 'clamp(13.59px, 3.135vw, 26.13px)',
                     fontWeight: 900,
                     fontFamily: "'Bebas Neue', 'Black Han Sans', 'Arial Black', sans-serif",
                     letterSpacing: '0.04em',
                     transform: 'scale(1.02)',
                     borderRadius: '8px',
-                    height: '46px',
+                    height: '51px',
                   } : {
-                    background: 'linear-gradient(135deg, #1e293b, #334155)',
-                    color: '#ffffff',
-                    border: '1px solid rgba(148,163,184,0.25)',
-                    fontSize: 'clamp(12px, 2.5vw, 23px)',
+                    background: isDark ? '#1e2a4a' : '#E5E7EB',
+                    color: isDark ? '#ffffff' : '#111827',
+                    border: isDark ? '1px solid rgba(109,40,217,0.3)' : '1px solid #D1D5DB',
+                    fontSize: 'clamp(12.54px, 2.613vw, 24.04px)',
                     fontWeight: 900,
                     fontFamily: "'Bebas Neue', 'Black Han Sans', 'Arial Black', sans-serif",
                     letterSpacing: '0.04em',
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06)',
+                    boxShadow: 'none',
                     borderRadius: '8px',
-                    height: '46px',
+                    height: '51px',
                   }}>
                   {c.cardNumber ?? '?'}
                 </button>
@@ -613,17 +639,13 @@ const HouseCutPicker: React.FC<{
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition-all hover:brightness-125"
         style={{
-          background: open
-            ? 'rgba(251,191,36,0.1)'
-            : value !== ''
-            ? 'rgba(251,191,36,0.08)'
-            : 'rgba(255,255,255,0.05)',
-          border: `1px solid ${open || value !== '' ? 'rgba(251,191,36,0.35)' : 'rgba(255,255,255,0.08)'}`,
-          color: value !== '' ? '#fbbf24' : '#6b7280',
+          background: open ? '#EEF2FF' : value !== '' ? '#F9FAFB' : '#F9FAFB',
+          border: `1px solid ${open || value !== '' ? '#6366F1' : '#E5E7EB'}`,
+          color: value !== '' ? '#6366F1' : '#6B7280',
           minWidth: '90px',
         }}>
         <span className="text-[10px] font-semibold uppercase tracking-wider"
-          style={{ color: value !== '' ? 'rgba(251,191,36,0.6)' : '#4b5563' }}>
+          style={{ color: value !== '' ? '#6366F1' : '#9CA3AF' }}>
           House
         </span>
         <span className="flex-1 text-center">
@@ -631,7 +653,7 @@ const HouseCutPicker: React.FC<{
         </span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}
           className="w-3 h-3 shrink-0 transition-transform duration-200"
-          style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', color: value !== '' ? '#fbbf24' : '#4b5563' }}>
+          style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', color: value !== '' ? '#6366F1' : '#9CA3AF' }}>
           <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
@@ -640,7 +662,7 @@ const HouseCutPicker: React.FC<{
       <button
         onClick={() => setHidden((h) => !h)}
         className="flex items-center justify-center w-7 h-7 rounded-lg transition-all hover:brightness-125"
-        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#6b7280' }}
+        style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#6B7280' }}
         title={hidden ? 'Show house cut' : 'Hide house cut'}
       >
         {hidden ? (
@@ -664,9 +686,9 @@ const HouseCutPicker: React.FC<{
       {open && (
         <div className="absolute top-full left-0 mt-1.5 rounded-2xl overflow-hidden z-50"
           style={{
-            background: 'linear-gradient(180deg, #0f1e35 0%, #0a1628 100%)',
-            border: '1px solid rgba(251,191,36,0.2)',
-            boxShadow: '0 12px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04)',
+            background: '#FFFFFF',
+            border: '1px solid #E5E7EB',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
             width: '110px',
           }}>
           <div className="py-1" style={{ maxHeight: '111px', overflowY: 'auto' }}>
@@ -677,12 +699,12 @@ const HouseCutPicker: React.FC<{
                   onClick={() => { onChange(v); setOpen(false); }}
                   className="w-full flex items-center justify-between px-4 py-2 text-sm font-semibold transition-all"
                   style={{
-                    background: selected ? 'rgba(251,191,36,0.12)' : 'transparent',
-                    color: selected ? '#fbbf24' : '#94a3b8',
-                    borderTop: i > 0 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                    background: selected ? '#EEF2FF' : 'transparent',
+                    color: selected ? '#6366F1' : '#374151',
+                    borderTop: i > 0 ? '1px solid #F3F4F6' : 'none',
                   }}
-                  onMouseEnter={(e) => { if (!selected) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = selected ? 'rgba(251,191,36,0.12)' : 'transparent'; }}>
+                  onMouseEnter={(e) => { if (!selected) (e.currentTarget as HTMLElement).style.background = '#F9FAFB'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = selected ? '#EEF2FF' : 'transparent'; }}>
                   <span>{v}%</span>
                   {selected && (
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3 h-3">
@@ -716,11 +738,11 @@ const CartelaCheckModal: React.FC<{
       style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}
       onClick={onClose}>
       <div className="rounded-2xl p-5 w-80 flex flex-col gap-4"
-        style={{ background: '#0f1e35', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 40px rgba(0,0,0,0.7)' }}
+        style={{ background: '#ffffff', border: '1px solid #e2e8f0', boxShadow: '0 8px 40px rgba(79,70,229,0.15)' }}
         onClick={(e) => e.stopPropagation()}>
 
         <div className="flex items-center justify-between">
-          <span className="text-yellow-400 font-extrabold text-base tracking-wide">Cartela Check</span>
+          <span className="text-indigo-700 font-extrabold text-base tracking-wide">Cartela Check</span>
           <button onClick={onClose} className="text-gray-600 hover:text-gray-300 transition-colors">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
               <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
@@ -735,13 +757,13 @@ const CartelaCheckModal: React.FC<{
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="rounded-xl px-4 py-2.5 text-sm focus:outline-none"
-          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
+          style={{ background: '#F8FAFC', border: '1px solid #e2e8f0', color: '#0F172A' }}
         />
 
         {found ? (
           <div>
             <div className="flex items-center justify-between mb-3">
-              <span className="text-yellow-400 font-bold text-sm">Card #{found.cardNumber}</span>
+              <span className="text-indigo-700 font-bold text-sm">Card #{found.cardNumber}</span>
               {selectedIds.has(found.id) && (
                 <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
                   style={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }}>
@@ -762,8 +784,8 @@ const CartelaCheckModal: React.FC<{
                 <div key={i}
                   className="text-center text-xs rounded-lg py-2 font-semibold"
                   style={i === 12
-                    ? { background: 'linear-gradient(180deg,#fbbf24,#f59e0b)', color: '#111' }
-                    : { background: 'rgba(255,255,255,0.06)', color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    ? { background: 'linear-gradient(180deg,#4F46E5,#3730a3)', color: '#fff' }
+                    : { background: '#F8FAFC', color: '#0F172A', border: '1px solid #e2e8f0' }}>
                   {i === 12 ? '★' : n}
                 </div>
               ))}
@@ -777,7 +799,7 @@ const CartelaCheckModal: React.FC<{
 
         <button onClick={onClose}
           className="w-full py-2 rounded-xl text-sm font-medium transition-all hover:brightness-125"
-          style={{ background: 'rgba(255,255,255,0.06)', color: '#9ca3af', border: '1px solid rgba(255,255,255,0.08)' }}>
+          style={{ background: '#f1f5f9', color: '#64748B', border: '1px solid #e2e8f0' }}>
           Close
         </button>
       </div>

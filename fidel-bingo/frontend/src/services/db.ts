@@ -148,8 +148,9 @@ let _audioCtx: AudioContext | null = null;
 let _activeSource: AudioBufferSourceNode | null = null;
 
 function getAudioContext(): AudioContext | null {
-  if (typeof AudioContext === 'undefined') return null;
-  if (!_audioCtx) _audioCtx = new AudioContext();
+  // Never create the AudioContext here — it must only be created after a
+  // user gesture (in unlockAudioContext). Browsers will block and warn if
+  // we instantiate it before interaction.
   return _audioCtx;
 }
 
@@ -163,8 +164,12 @@ function stopActiveSource(): void {
 
 /** Call this once from a click/keydown handler to unlock audio for the session. */
 export function unlockAudioContext(): void {
-  const ctx = getAudioContext();
-  if (!ctx) return;
+  if (typeof AudioContext === 'undefined') return;
+  // Create the context on first user gesture if it doesn't exist yet
+  if (!_audioCtx) {
+    _audioCtx = new AudioContext();
+  }
+  const ctx = _audioCtx;
   if (ctx.state === 'suspended') {
     ctx.resume().catch(() => {});
   }

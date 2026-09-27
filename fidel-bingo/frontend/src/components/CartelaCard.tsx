@@ -21,7 +21,7 @@ export const CartelaCard: React.FC<Props> = ({ cartela, calledNumbers, onMark, d
 
   return (
     <div
-      className="rounded-lg p-2 lg:p-4"
+      className="rounded-lg p-2 lg:p-5"
       style={{
         border: `2px solid ${cartela.isWinner ? t.cartelaWinnerBorder : t.cartelaBorder}`,
         background: cartela.isWinner ? t.cartelaWinnerBg : t.cartelaBg,
@@ -31,11 +31,11 @@ export const CartelaCard: React.FC<Props> = ({ cartela, calledNumbers, onMark, d
       aria-label="Bingo cartela"
     >
       {/* Header */}
-      <div className="grid grid-cols-5 gap-1 lg:gap-2 mb-1 lg:mb-2">
+      <div className="grid grid-cols-5 gap-1 lg:gap-3 mb-1 lg:mb-2.5">
         {HEADERS.map((h) => (
           <div
             key={h}
-            className="text-center font-extrabold text-sm lg:text-xl py-1 lg:py-2 rounded"
+            className="text-center font-extrabold text-sm lg:text-2xl py-1 lg:py-2.5 rounded"
             style={{ color: t.cartelaHeaderText }}
           >
             {h}
@@ -44,7 +44,7 @@ export const CartelaCard: React.FC<Props> = ({ cartela, calledNumbers, onMark, d
       </div>
 
       {/* Grid */}
-      <div className="grid grid-cols-5 gap-1 lg:gap-2">
+      <div className="grid grid-cols-5 gap-1 lg:gap-3">
         {cartela.numbers.map((num, idx) => {
           const isFree = idx === 12;
           const isMarked = cartela.patternMask[idx];
@@ -70,8 +70,14 @@ export const CartelaCard: React.FC<Props> = ({ cartela, calledNumbers, onMark, d
               disabled={disabled || isFree || isMarked || !isCalled}
               aria-label={isFree ? 'Free space' : `Number ${num}${isMarked ? ' marked' : ''}`}
               aria-pressed={isMarked}
-              style={{ background: bg, color, border, cursor }}
-              className="w-full aspect-square flex items-center justify-center text-base lg:text-[clamp(1rem,2.2vw,1.75rem)] font-bold rounded lg:rounded-lg transition-all duration-150"
+              style={{
+                background: bg, color, border, cursor,
+                fontSize: (isMarked && !isFree)
+                  ? 'clamp(1.2rem, 2.64vw, 2.1rem)'
+                  : 'clamp(1rem, 2.2vw, 1.75rem)',
+                transform: (isMarked && !isFree) ? 'scale(1.05)' : undefined,
+              }}
+              className="w-full aspect-square flex items-center justify-center font-bold rounded lg:rounded-xl transition-all duration-150"
             >
               {isFree ? '★' : num}
             </button>

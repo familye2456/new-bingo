@@ -17,10 +17,24 @@ const ROWS = [
 ];
 
 export const NumberBoard: React.FC<Props> = ({ calledNumbers, lastNumber, theme: t }) => {
+  const isLight = t.name === 'light';
+  const [isDesktop, setIsDesktop] = React.useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : false
+  );
+  React.useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  const fontSizeBase = isLight && isDesktop ? 'clamp(23.9px, 5.371vw, 74.3px)' : t.cellFontSize;
+  const fontSizeCalled = isLight && isDesktop ? 'clamp(27.49px, 6.178vw, 85.45px)' : t.cellCalledFontSize;
+
   return (
     <div
-      className="rounded-2xl overflow-hidden w-full"
-      style={{ background: t.boardBg, border: `2px solid ${t.boardBorder}`, padding: '8px' }}
+      className="rounded-2xl w-full"
+      style={{ background: t.boardBg, border: `2px solid ${t.boardBorder}`, padding: '8px', overflow: 'visible' }}
       role="region"
       aria-label="Bingo number board"
     >
@@ -51,9 +65,11 @@ export const NumberBoard: React.FC<Props> = ({ calledNumbers, lastNumber, theme:
               <div
                 key={num}
                 aria-label={`${num}${called ? ' called' : ''}`}
-                className="flex items-center justify-center font-bold rounded-md transition-all duration-300 flex-1 aspect-square md:font-extrabold"
+                className="flex items-center justify-center rounded-md transition-all duration-300 aspect-square md:font-extrabold"
                 style={{
-                  fontSize: 'clamp(8px, 1.8vw, 25px)',
+                  flex: called || isLast ? '1.15' : '1',
+                  fontSize: isLast ? fontSizeBase : called ? fontSizeCalled : fontSizeBase,
+                  fontWeight: called || isLast ? 900 : 700,
                   background: isLast ? t.cellLastBg : called ? t.cellCalledBg : t.cellUncalledBg,
                   color: isLast ? t.cellLastText : called ? t.cellCalledText : t.cellUncalledText,
                   boxShadow: isLast
@@ -62,7 +78,9 @@ export const NumberBoard: React.FC<Props> = ({ calledNumbers, lastNumber, theme:
                     ? '0 0 8px rgba(22,163,74,0.4)'
                     : '0 1px 3px rgba(0,0,0,0.1)',
                   border: `${isLast ? '2px' : '1px'} solid ${isLast ? t.cellLastBorder : called ? t.cellCalledBorder : t.cellUncalledBorder}`,
-                  transform: isLast ? 'scale(1.1)' : 'scale(1)',
+                  transform: isLast ? 'scale(1.1)' : called ? 'scale(1.08)' : 'scale(1)',
+                  zIndex: called ? 1 : 0,
+                  position: 'relative',
                 }}
               >
                 {num}

@@ -415,23 +415,99 @@ router.get('/:id/cartelas', authorize('admin', 'agent'), async (req: AuthRequest
 });
 
 // ─── Offline balance sync — called when offline user comes back online ───────────
-// Sets the user's balance directly to the provided value (no add/subtract).
-// This is the authoritative local balance after offline play — server accepts it as-is.
+// When earliestGameCreatedAt is provided, the server reconstructs the authoritative
+// balance by replaying server-side transactions from the start of the offline session.
 router.post('/me/sync-balance', async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(User);
+  const txRepo = AppDataSource.getRepository(Transaction);
   const user = await repo.findOne({ where: { id: req.user!.id } });
   if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
   if (user.role === 'admin' || user.role === 'agent') {
     return res.json({ success: true, data: user.sanitize() });
   }
 
-  const balance = parseFloat(req.body.balance);
-  if (isNaN(balance)) throw new AppError(400, 'INVALID_AMOUNT', 'balance must be a number');
+  const clientBalance = parseFloat(req.body.balance);
+  if (isNaN(clientBalance)) throw new AppError(400, 'INVALID_AMOUNT', 'balance must be a number');
 
-  await repo.update(req.user!.id, { balance });
+  const earliestGameCreatedAt: string | undefined = req.body.earliestGameCreatedAt;
+  const serverBalanceNow = Number(user.balance);
+  let finalBalance = Math.min(clientBalance, serverBalanceNow);
+
+  if (earliestGameCreatedAt) {
+    const sessionStart = new Date(earliestGameCreatedAt);
+    if (!isNaN(sessionStart.getTime())) {
+      // At this point _doFlush() has already posted all offline games:
+      // - houseCut deductions are already reflected in serverBalanceNow
+      // - bingo winnings are already reflected in serverBalanceNow
+      //
+      // To find the correct balance we:
+      // 1. Fetch all completed server transactions created at or after the session start
+      // 2. Compute what serverBalanceNow was BEFORE those transactions (pre-session server balance)
+      // 3. Add back only server-side credits (deposits, wins, bonuses) that happened during/after session
+      // 4. Apply the client's deductions (house fees from offline games are already in serverBalanceNow)
+      //
+      // This ensures admin top-ups and bingo wins from the session are not lost,
+      // while preventing inflated client-reported balances from bypassing server records.
+
+      const txsSinceSession = await txRepo
+        .createQueryBuilder('tx')
+        .where('tx.user_id = :userId', { userId: user.id })
+        .andWhere('tx.created_at >= :sessionStart', { sessionStart: sessionStart.toISOString() })
+        .andWhere('tx.status = :status', { status: 'completed' })
+        .orderBy('tx.created_at', 'ASC')
+        .getMany();
+
+      // Compute net server-side delta since session start
+      // Credits: deposit, win, bonus → server applied these after session started (admin top-up, bingo win)
+      // Debits: bet, house_cut, withdrawal → game costs already deducted, reflected in serverBalanceNow
+      let serverCreditsAfterSession = 0;
+      let serverDebitsAfterSession = 0;
+      for (const tx of txsSinceSession) {
+        const amt = Number(tx.amount);
+        if (tx.transactionType === 'deposit' || tx.transactionType === 'win' || tx.transactionType === 'bonus') {
+          serverCreditsAfterSession += amt;
+        } else if (tx.transactionType === 'bet' || tx.transactionType === 'house_cut' || tx.transactionType === 'withdrawal') {
+          serverDebitsAfterSession += amt;
+        }
+      }
+
+      // Pre-session server balance = what the server had before the offline session started
+      const preSessionServerBalance = serverBalanceNow - serverCreditsAfterSession + serverDebitsAfterSession;
+
+      // The client's deductions during the session (game costs) come from the client balance delta
+      // clientBalance = preSessionLocalBalance - clientDeductions + clientWins
+      // Since preSessionLocalBalance ≈ preSessionServerBalance, we trust server for deductions
+      // Final = preSessionServerBalance - serverDebitsAfterSession + serverCreditsAfterSession
+      //       = serverBalanceNow  (which already includes all server transactions)
+      // But client may have extra deductions not yet on server (offline games that couldn't flush)
+      // Use: min(serverBalanceNow, preSessionServerBalance + (clientBalance - preSessionServerBalance))
+      //     = min(serverBalanceNow, clientBalance)  — but only when no server credits since session
+
+      // If server has credits (top-ups/wins) since session start, those must be honoured:
+      // finalBalance = serverBalanceNow adjusted so client deductions beyond server records are applied
+      const clientDeductionsFromPreSession = preSessionServerBalance - clientBalance;
+      finalBalance = serverBalanceNow - Math.max(0, clientDeductionsFromPreSession);
+
+      // Never go below what the server already knows (server is authoritative for its own deductions)
+      // Never exceed serverBalanceNow (client cannot inflate balance)
+      finalBalance = Math.min(finalBalance, serverBalanceNow);
+
+      console.log(
+        `[sync-balance] user=${user.id} sessionStart=${sessionStart.toISOString()} ` +
+        `clientBalance=${clientBalance} serverBalanceNow=${serverBalanceNow} ` +
+        `preSessionServerBalance=${preSessionServerBalance} ` +
+        `serverCreditsAfterSession=${serverCreditsAfterSession} ` +
+        `serverDebitsAfterSession=${serverDebitsAfterSession} ` +
+        `clientDeductionsFromPreSession=${clientDeductionsFromPreSession} ` +
+        `finalBalance=${finalBalance}`
+      );
+    }
+  }
+
+  await repo.update(req.user!.id, { balance: finalBalance });
   const updated = await repo.findOne({ where: { id: req.user!.id } });
 
-  notifyBalanceUpdate(req, req.user!.id, Number(updated?.balance ?? balance));
+  notifyBalanceUpdate(req, req.user!.id, Number(updated?.balance ?? finalBalance));
   return res.json({ success: true, data: updated?.sanitize() });
 });
 

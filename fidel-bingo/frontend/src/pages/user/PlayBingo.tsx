@@ -453,7 +453,12 @@ export const PlayBingo: React.FC = () => {
       {/* ── Bottom control bar ── */}
       {game && (
         <div className="shrink-0 mt-auto lg:mt-0 ctrl-bar"
-          style={{ background: theme.headerBg, borderTop: `1px solid ${theme.boardBorder}` }}>
+          style={{ background: theme.ctrlBarBg, borderTop: `1px solid ${theme.boardBorder}` }}>
+          {theme.name === 'dark' && (
+            <style>{`
+              @media (max-width: 1023px) { .ctrl-bar { background: #12544F !important; } }
+            `}</style>
+          )}
 
           {/* ── Mobile layout (< md) — fixed bottom bar ── */}
           <div className="md:hidden flex flex-col" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
@@ -465,9 +470,13 @@ export const PlayBingo: React.FC = () => {
               <div className="flex flex-col items-center justify-center shrink-0 relative"
                 style={{
                   width: 58, height: 58, borderRadius: '50%',
-                  background: 'radial-gradient(circle at 35% 30%, #3b82f6, #1e3a8a)',
-                  boxShadow: '0 0 18px rgba(59,130,246,0.7), inset 0 2px 0 rgba(255,255,255,0.3)',
-                  border: '2px solid rgba(147,197,253,0.9)',
+                  background: theme.name === 'light'
+                    ? 'radial-gradient(circle at 35% 30%, #6366F1, #4338CA)'
+                    : 'radial-gradient(circle at 35% 30%, #3b82f6, #1e3a8a)',
+                  boxShadow: theme.name === 'light'
+                    ? '0 2px 12px rgba(99,102,241,0.3), inset 0 2px 0 rgba(255,255,255,0.3)'
+                    : '0 2px 12px rgba(99,102,241,0.4), inset 0 2px 0 rgba(255,255,255,0.3)',
+                  border: theme.name === 'light' ? '2px solid rgba(165,180,252,0.9)' : '2px solid rgba(147,197,253,0.9)',
                 }}>
                 <span className="text-blue-100 font-bold leading-none" style={{ fontSize: 7 }}>ደራሽ</span>
                 <span className="font-black tabular-nums text-white leading-none" style={{ fontSize: 16 }}>
@@ -523,72 +532,64 @@ export const PlayBingo: React.FC = () => {
                 </div>
                 {/* Progress bar */}
                 <div className="w-full flex items-center gap-2">
-                  <div className="flex-1 rounded-full overflow-hidden" style={{ height: 4, background: 'rgba(255,255,255,0.08)' }}>
+                  <div className="flex-1 rounded-full overflow-hidden" style={{ height: 4, background: 'rgba(0,0,0,0.08)' }}>
                     <div className="h-full rounded-full transition-all duration-500"
-                      style={{ width: `${(calledNumbers.length / 75) * 100}%`, background: 'linear-gradient(90deg,#22c55e,#4ade80)' }} />
+                      style={{ width: `${(calledNumbers.length / 75) * 100}%`, background: '#6366F1' }} />
                   </div>
-                  <span className="text-blue-400 font-bold tabular-nums shrink-0" style={{ fontSize: 9 }}>
-                    {calledNumbers.length}<span className="text-gray-600">/75</span>
+                  <span className="font-bold tabular-nums shrink-0" style={{ fontSize: 9, color: '#6366F1' }}>
+                    {calledNumbers.length}<span style={{ color: '#9CA3AF' }}>/75</span>
                   </span>
                 </div>
               </div>
 
               {/* Last number ball */}
+              {lastNumber != null && (
               <div className="shrink-0 flex items-center justify-center" style={{ width: 58, height: 58 }}>
                 <div key={lastNumber} className="flex flex-col items-center justify-center relative overflow-hidden ball-container"
                   style={{
                     width: '100%', height: '100%', borderRadius: '50%',
-                    background: lastNumber != null
-                      ? `radial-gradient(circle at 35% 30%, ${getBingoColor(lastNumber)}ee, ${getBingoColor(lastNumber)}66)`
-                      : 'radial-gradient(circle at 35% 30%, #4c3fa0, #1e1040)',
-                    border: lastNumber != null ? `2px solid ${getBingoColor(lastNumber)}` : '2px solid rgba(147,51,234,0.6)',
-                    boxShadow: lastNumber != null
-                      ? `0 0 22px ${getBingoColor(lastNumber)}99, inset 0 2px 0 rgba(255,255,255,0.25)`
-                      : '0 0 14px rgba(124,58,237,0.4)',
-                    animation: lastNumber != null ? 'ballPop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards' : undefined,
+                    background: `radial-gradient(circle at 35% 30%, ${getBingoColor(lastNumber)}ee, ${getBingoColor(lastNumber)}66)`,
+                    border: `2px solid ${getBingoColor(lastNumber)}`,
+                    boxShadow: `0 0 22px ${getBingoColor(lastNumber)}99, inset 0 2px 0 rgba(255,255,255,0.25)`,
+                    animation: 'ballPop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards',
                   }}>
-                  {lastNumber != null ? (
-                    <>
-                      <div style={{
-                        position: 'absolute', top: 0, left: 0, width: '40%', height: '100%',
-                        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)',
-                        animation: 'ballShine 0.7s 0.3s ease-out forwards',
-                        transform: 'translateX(-100%) rotate(25deg)', pointerEvents: 'none',
+                    <div style={{
+                      position: 'absolute', top: 0, left: 0, width: '40%', height: '100%',
+                      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)',
+                      animation: 'ballShine 0.7s 0.3s ease-out forwards',
+                      transform: 'translateX(-100%) rotate(25deg)', pointerEvents: 'none',
+                    }} />
+                    <span className="font-extrabold leading-none relative z-10"
+                      style={{ fontSize: 7, color: '#fff', letterSpacing: '0.15em', opacity: 0.9 }}>
+                      {getBingoLetter(lastNumber)}
+                    </span>
+                    <span className="font-black tabular-nums leading-none relative z-10"
+                      style={{ fontSize: 18, color: '#fff', textShadow: '0 2px 8px rgba(0,0,0,0.6)' }}>
+                      {String(lastNumber).padStart(2, '0')}
+                    </span>
+                    <div className="absolute inset-0 rounded-full pointer-events-none"
+                      style={{
+                        background: `conic-gradient(from 0deg, ${getBingoColor(lastNumber)}40, transparent, ${getBingoColor(lastNumber)}40)`,
+                        animation: 'spin 2s linear infinite',
                       }} />
-                      <span className="font-extrabold leading-none relative z-10"
-                        style={{ fontSize: 7, color: '#fff', letterSpacing: '0.15em', opacity: 0.9 }}>
-                        {getBingoLetter(lastNumber)}
-                      </span>
-                      <span className="font-black tabular-nums leading-none relative z-10"
-                        style={{ fontSize: 18, color: '#fff', textShadow: '0 2px 8px rgba(0,0,0,0.6)' }}>
-                        {String(lastNumber).padStart(2, '0')}
-                      </span>
-                      <div className="absolute inset-0 rounded-full pointer-events-none"
-                        style={{
-                          background: `conic-gradient(from 0deg, ${getBingoColor(lastNumber)}40, transparent, ${getBingoColor(lastNumber)}40)`,
-                          animation: 'spin 2s linear infinite',
-                        }} />
-                    </>
-                  ) : (
-                    <span className="font-black text-white/20" style={{ fontSize: 18 }}>?</span>
-                  )}
                 </div>
               </div>
+              )}
             </div>
 
             {/* ── Row 2: speed slider | card check ── */}
             <div className="flex items-center gap-3 px-3 pb-3 pt-0"
-              style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              style={{ borderTop: '1px solid #E5E7EB' }}>
               {/* Speed */}
               <div className="flex items-center gap-1.5 flex-1">
-                <span className="text-gray-500 shrink-0" style={{ fontSize: 9 }}>SPD</span>
+                <span className="shrink-0" style={{ fontSize: 9, color: '#6B7280' }}>SPD</span>
                 <input type="range" min={1} max={10} step={1} value={speed}
                   onChange={(e) => setSpeed(Number(e.target.value))}
-                  className="flex-1 accent-yellow-400" style={{ height: 16 }} />
-                <span className="text-yellow-400 font-bold shrink-0 w-5 text-center" style={{ fontSize: 10 }}>{speed}s</span>
+                  className="flex-1 accent-indigo-500" style={{ height: 16 }} />
+                <span className="font-bold shrink-0 w-5 text-center" style={{ fontSize: 10, color: '#6366F1' }}>{speed}s</span>
               </div>
               {/* Divider */}
-              <div className="shrink-0 w-px self-stretch" style={{ background: 'rgba(255,255,255,0.08)' }} />
+              <div className="shrink-0 w-px self-stretch" style={{ background: '#E5E7EB' }} />
               {/* Card check */}
               <div className="flex flex-col gap-1 shrink-0">
                 <div className="flex items-center gap-1">
@@ -597,13 +598,13 @@ export const PlayBingo: React.FC = () => {
                     onChange={(e) => { setCheckId(e.target.value); setCheckResult(null); }}
                     onKeyDown={(e) => e.key === 'Enter' && handleCheck()}
                     className="rounded-lg px-2 py-1.5 text-xs w-20 focus:outline-none"
-                    style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff' }}
+                    style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#111827' }}
                   />
                   <button
                     onClick={handleCheck}
                     disabled={checkLoading || !checkId}
                     className="font-bold px-3 py-1.5 rounded-lg text-xs disabled:opacity-40 active:scale-95"
-                    style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
+                    style={{ background: '#6366F1', color: '#ffffff', border: 'none' }}>
                     {checkLoading ? '…' : 'Check'}
                   </button>
                 </div>
@@ -611,10 +612,10 @@ export const PlayBingo: React.FC = () => {
                   <div className="text-[10px] font-semibold px-2 py-0.5 rounded"
                     style={
                       !checkResult.registered
-                        ? { background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }
+                        ? { background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }
                         : checkResult.isWinner
-                        ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }
-                        : { background: 'rgba(255,255,255,0.06)', color: '#9ca3af', border: '1px solid rgba(255,255,255,0.1)' }
+                        ? { background: '#F0FDF4', color: '#16A34A', border: '1px solid #BBF7D0' }
+                        : { background: '#F9FAFB', color: '#6B7280', border: '1px solid #E5E7EB' }
                     }>
                     {!checkResult.registered
                       ? `#${checkId} not found`
@@ -730,50 +731,43 @@ export const PlayBingo: React.FC = () => {
             <div className="shrink-0 w-px self-stretch" style={{ background: 'rgba(255,255,255,0.1)' }} />
 
             {/* Last number ball */}
+            {lastNumber != null && (
             <div className="shrink-0 flex items-center justify-center" style={{ width: 100, height: 100 }}>
               <div key={lastNumber} className="flex flex-col items-center justify-center relative overflow-hidden ball-container"
                 style={{
                   width: '100%', height: '100%', borderRadius: '50%',
-                  background: lastNumber != null
-                    ? `radial-gradient(circle at 35% 30%, ${getBingoColor(lastNumber)}ee, ${getBingoColor(lastNumber)}66)`
-                    : 'radial-gradient(circle at 35% 30%, #4c3fa0, #1e1040)',
-                  border: lastNumber != null ? `2px solid ${getBingoColor(lastNumber)}` : '2px solid rgba(147,51,234,0.6)',
-                  boxShadow: lastNumber != null
-                    ? `0 0 28px ${getBingoColor(lastNumber)}99, inset 0 2px 0 rgba(255,255,255,0.25)`
-                    : '0 0 18px rgba(124,58,237,0.4)',
-                  animation: lastNumber != null ? 'ballPop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards' : undefined,
+                  background: `radial-gradient(circle at 35% 30%, ${getBingoColor(lastNumber)}ee, ${getBingoColor(lastNumber)}66)`,
+                  border: `2px solid ${getBingoColor(lastNumber)}`,
+                  boxShadow: `0 0 28px ${getBingoColor(lastNumber)}99, inset 0 2px 0 rgba(255,255,255,0.25)`,
+                  animation: 'ballPop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards',
                 }}>
-                {lastNumber != null ? (
-                  <>
-                    <div style={{
-                      position: 'absolute', top: 0, left: 0, width: '40%', height: '100%',
-                      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)',
-                      animation: 'ballShine 0.7s 0.3s ease-out forwards',
-                      transform: 'translateX(-100%) rotate(25deg)', pointerEvents: 'none',
+                  <div style={{
+                    position: 'absolute', top: 0, left: 0, width: '40%', height: '100%',
+                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)',
+                    animation: 'ballShine 0.7s 0.3s ease-out forwards',
+                    transform: 'translateX(-100%) rotate(25deg)', pointerEvents: 'none',
+                  }} />
+                  <span className="font-extrabold leading-none relative z-10"
+                    style={{ fontSize: 11, color: '#fff', letterSpacing: '0.15em', opacity: 0.9 }}>
+                    {getBingoLetter(lastNumber)}
+                  </span>
+                  <span className="font-black tabular-nums leading-none relative z-10"
+                    style={{ fontSize: 34, color: '#fff', textShadow: '0 2px 10px rgba(0,0,0,0.6)' }}>
+                    {String(lastNumber).padStart(2, '0')}
+                  </span>
+                  <div className="absolute inset-0 rounded-full pointer-events-none"
+                    style={{
+                      background: `conic-gradient(from 0deg, ${getBingoColor(lastNumber)}40, transparent, ${getBingoColor(lastNumber)}40)`,
+                      animation: 'spin 2s linear infinite',
                     }} />
-                    <span className="font-extrabold leading-none relative z-10"
-                      style={{ fontSize: 11, color: '#fff', letterSpacing: '0.15em', opacity: 0.9 }}>
-                      {getBingoLetter(lastNumber)}
-                    </span>
-                    <span className="font-black tabular-nums leading-none relative z-10"
-                      style={{ fontSize: 34, color: '#fff', textShadow: '0 2px 10px rgba(0,0,0,0.6)' }}>
-                      {String(lastNumber).padStart(2, '0')}
-                    </span>
-                    <div className="absolute inset-0 rounded-full pointer-events-none"
-                      style={{
-                        background: `conic-gradient(from 0deg, ${getBingoColor(lastNumber)}40, transparent, ${getBingoColor(lastNumber)}40)`,
-                        animation: 'spin 2s linear infinite',
-                      }} />
-                  </>
-                ) : (
-                  <span className="font-black text-white/20" style={{ fontSize: 32 }}>?</span>
-                )}
               </div>
             </div>
+            )}
           </div>
 
           {/* ── Desktop layout (≥ lg: 1024px+) ── */}
-          <div className="hidden lg:flex items-center gap-3 px-3 py-2" style={{ minHeight: 130 }}>
+          <div className="hidden lg:flex items-center gap-3 px-3 py-2"
+            style={{ minHeight: 130, background: theme.ctrlBarBg }}>
 
             {/* Derash ball */}
             <div className="flex flex-col items-center justify-center shrink-0 relative"
@@ -813,23 +807,27 @@ export const PlayBingo: React.FC = () => {
             {/* Buttons */}
             <div className="flex items-center gap-1 shrink-0">
               <CtrlBtn
+                desktop
                 label={autoOn ? '⏸ Pause' : '▶ Auto'}
                 active={autoOn}
                 onClick={toggleAuto}
                 disabled={!isCreator || game.status !== 'active' || calledNumbers.length >= 75}
               />
               <CtrlBtn
+                desktop
                 label="➤ Next"
                 onClick={() => callMutation.mutate()}
                 disabled={!isCreator || game.status !== 'active' || callMutation.isPending || calledNumbers.length >= 75}
               />
               <CtrlBtn
+                desktop
                 label={finishMutation.isPending ? '⌛' : '⏹ End'}
                 onClick={() => { stopAuto(true); finishMutation.mutate(); }}
                 disabled={!isCreator || game.status !== 'active' || finishMutation.isPending}
                 danger
               />
               <CtrlBtn
+                desktop
                 label="🔄"
                 purple
                 onClick={() => {
@@ -872,13 +870,17 @@ export const PlayBingo: React.FC = () => {
                   onChange={(e) => { setCheckId(e.target.value); setCheckResult(null); }}
                   onKeyDown={(e) => e.key === 'Enter' && handleCheck()}
                   className="rounded-lg px-2 py-1 text-xs w-16 focus:outline-none"
-                  style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff' }}
+                  style={theme.name === 'light'
+                    ? { background: '#ffffff', border: '1px solid #bfdbfe', color: '#111827' }
+                    : { background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff' }}
                 />
                 <button
                   onClick={handleCheck}
                   disabled={checkLoading || !checkId}
                   className="font-bold px-3 py-1 rounded-lg text-xs disabled:opacity-40"
-                  style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
+                  style={theme.name === 'light'
+                    ? { background: '#1D4ED8', color: '#ffffff', border: 'none' }
+                    : { background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
                   {checkLoading ? '…' : 'Check'}
                 </button>
               </div>
@@ -903,53 +905,41 @@ export const PlayBingo: React.FC = () => {
             <div className="flex-1 min-w-[8px]" />
 
             {/* Last number ball */}
+            {lastNumber != null && (
             <div className="shrink-0 flex items-center justify-center"
               style={{ width: 'clamp(110px,14vw,150px)', height: 'clamp(110px,14vw,150px)' }}>
               <div key={lastNumber} className="flex flex-col items-center justify-center relative overflow-hidden ball-container"
                 style={{
                   width: '100%', height: '100%',
                   borderRadius: '50%',
-                  background: lastNumber != null
-                    ? `radial-gradient(circle at 35% 30%, ${getBingoColor(lastNumber)}ee, ${getBingoColor(lastNumber)}66)`
-                    : 'radial-gradient(circle at 35% 30%, #4c3fa0, #1e1040)',
-                  border: lastNumber != null
-                    ? `3px solid ${getBingoColor(lastNumber)}`
-                    : '3px solid rgba(147,51,234,0.6)',
-                  boxShadow: lastNumber != null
-                    ? `0 0 40px ${getBingoColor(lastNumber)}99, inset 0 2px 0 rgba(255,255,255,0.25)`
-                    : '0 0 24px rgba(124,58,237,0.4)',
-                  animation: lastNumber != null
-                    ? 'ballPop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards'
-                    : undefined,
+                  background: `radial-gradient(circle at 35% 30%, ${getBingoColor(lastNumber)}ee, ${getBingoColor(lastNumber)}66)`,
+                  border: `3px solid ${getBingoColor(lastNumber)}`,
+                  boxShadow: `0 0 40px ${getBingoColor(lastNumber)}99, inset 0 2px 0 rgba(255,255,255,0.25)`,
+                  animation: 'ballPop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards',
                 }}>
-                {lastNumber != null ? (
-                  <>
-                    <div style={{
-                      position: 'absolute', top: 0, left: 0, width: '40%', height: '100%',
-                      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)',
-                      animation: 'ballShine 0.7s 0.3s ease-out forwards',
-                      transform: 'translateX(-100%) rotate(25deg)',
-                      pointerEvents: 'none',
+                  <div style={{
+                    position: 'absolute', top: 0, left: 0, width: '40%', height: '100%',
+                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)',
+                    animation: 'ballShine 0.7s 0.3s ease-out forwards',
+                    transform: 'translateX(-100%) rotate(25deg)',
+                    pointerEvents: 'none',
+                  }} />
+                  <span className="font-extrabold leading-none relative z-10"
+                    style={{ fontSize: 'clamp(11px,1.4vw,16px)', color: '#fff', letterSpacing: '0.15em', opacity: 0.9 }}>
+                    {getBingoLetter(lastNumber)}
+                  </span>
+                  <span className="font-black tabular-nums leading-none relative z-10"
+                    style={{ fontSize: 'clamp(32px,4.8vw,58px)', color: '#fff', textShadow: '0 2px 16px rgba(0,0,0,0.6)' }}>
+                    {String(lastNumber).padStart(2, '0')}
+                  </span>
+                  <div className="absolute inset-0 rounded-full pointer-events-none"
+                    style={{
+                      background: `conic-gradient(from 0deg, ${getBingoColor(lastNumber)}40, transparent, ${getBingoColor(lastNumber)}40)`,
+                      animation: 'spin 2s linear infinite',
                     }} />
-                    <span className="font-extrabold leading-none relative z-10"
-                      style={{ fontSize: 'clamp(11px,1.4vw,16px)', color: '#fff', letterSpacing: '0.15em', opacity: 0.9 }}>
-                      {getBingoLetter(lastNumber)}
-                    </span>
-                    <span className="font-black tabular-nums leading-none relative z-10"
-                      style={{ fontSize: 'clamp(32px,4.8vw,58px)', color: '#fff', textShadow: '0 2px 16px rgba(0,0,0,0.6)' }}>
-                      {String(lastNumber).padStart(2, '0')}
-                    </span>
-                    <div className="absolute inset-0 rounded-full pointer-events-none"
-                      style={{
-                        background: `conic-gradient(from 0deg, ${getBingoColor(lastNumber)}40, transparent, ${getBingoColor(lastNumber)}40)`,
-                        animation: 'spin 2s linear infinite',
-                      }} />
-                  </>
-                ) : (
-                  <span className="font-black text-white/20" style={{ fontSize: 'clamp(28px,4vw,48px)' }}>?</span>
-                )}
               </div>
             </div>
+            )}
 
           </div>
         </div>
@@ -1092,14 +1082,18 @@ if (typeof document !== 'undefined' && !document.getElementById('ball-pop-style'
 const CtrlBtn: React.FC<{
   label: string; onClick: () => void;
   disabled?: boolean; active?: boolean; purple?: boolean; danger?: boolean;
-  title?: string; size?: 'sm' | 'md' | 'lg';
-}> = ({ label, onClick, disabled, active, purple, danger, title, size = 'md' }) => {
-  let bg = 'rgba(251,191,36,0.15)';
-  let color = '#fbbf24';
-  let border = '1px solid rgba(251,191,36,0.3)';
-  if (active) { bg = '#fbbf24'; color = '#111'; border = 'none'; }
-  if (purple) { bg = 'rgba(147,51,234,0.2)'; color = '#c084fc'; border = '1px solid rgba(147,51,234,0.3)'; }
-  if (danger) { bg = 'rgba(239,68,68,0.15)'; color = '#f87171'; border = '1px solid rgba(239,68,68,0.3)'; }
+  title?: string; size?: 'sm' | 'md' | 'lg'; desktop?: boolean;
+}> = ({ label, onClick, disabled, active, purple, danger, title, size = 'md', desktop = false }) => {
+  const { theme: themeName } = useGameSettings();
+  const isLight = themeName === 'light';
+  const isLightDesktop = isLight && desktop;
+
+  let bg = isLightDesktop ? '#2373F4' : isLight ? '#6366F1' : 'rgba(251,191,36,0.15)';
+  let color = '#ffffff';
+  let border = 'none';
+  if (active)  { bg = isLight ? '#16A34A' : '#fbbf24'; }
+  if (purple)  { bg = isLight ? '#7C3AED' : 'rgba(147,51,234,0.2)'; color = isLight ? '#ffffff' : '#c084fc'; border = isLight ? 'none' : '1px solid rgba(147,51,234,0.3)'; }
+  if (danger)  { bg = isLight ? '#DC2626' : 'rgba(239,68,68,0.15)'; color = isLight ? '#ffffff' : '#f87171'; border = isLight ? 'none' : '1px solid rgba(239,68,68,0.3)'; }
 
   const sizeClass =
     size === 'lg' ? 'px-5 py-3 text-base rounded-2xl' :
@@ -1118,7 +1112,23 @@ const CtrlBtn: React.FC<{
 // ── NumberBoard ───────────────────────────────────────────────────────────────
 const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null; theme: import('../../store/gameSettingsStore').AppTheme }> = ({
   calledNumbers, lastNumber, theme: t,
-}) => (
+}) => {
+  const [isDesktop, setIsDesktop] = React.useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : false
+  );
+  React.useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  const cellFontSize = t.name === 'light' && isDesktop
+    ? 'clamp(12.31px, 4.378vw, 51.98px)'
+    : 'clamp(9px, 3.2vw, 38px)';
+  const cellCalledFontSize = t.name === 'light' && isDesktop
+    ? 'clamp(13.55px, 4.816vw, 57.18px)'
+    : 'clamp(9.9px, 3.52vw, 41.8px)';
+  return (
   <div className="w-full h-full flex flex-col" role="region" aria-label="Bingo number board"
     style={{ gap: 'clamp(1px, 0.4vh, 6px)' }}>
     {ROWS_DEF.map(({ letter, start }) => (
@@ -1148,7 +1158,7 @@ const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null
               aria-label={`${num}${called ? ' called' : ''}`}
               className="flex-1 flex items-center justify-center font-bold transition-all duration-200 number-cell"
               style={{
-                fontSize: 'clamp(9px, 3.2vw, 38px)',
+                fontSize: called || isLast ? cellCalledFontSize : cellFontSize,
                 borderRadius: 'clamp(3px, 0.5vw, 10px)',
                 background: isLast ? t.cellLastBg : called ? t.cellCalledBg : t.cellUncalledBg,
                 color: isLast ? t.cellLastText : called ? t.cellCalledText : t.cellUncalledText,
@@ -1159,7 +1169,7 @@ const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null
                   : 'inset 0 1px 0 rgba(255,255,255,0.05)',
                 border: `1px solid ${isLast ? t.cellLastBorder : called ? t.cellCalledBorder : t.cellUncalledBorder}`,
                 fontWeight: 800,
-                textShadow: isLast || called ? 'none' : '0 1px 3px rgba(0,0,0,0.4)',
+                textShadow: 'none',
                 transform: isLast ? 'scale(1.02)' : 'scale(1)',
                 lineHeight: 1,
               }}>
@@ -1170,7 +1180,8 @@ const NumberBoard: React.FC<{ calledNumbers: number[]; lastNumber: number | null
       </div>
     ))}
   </div>
-);
+  );
+};
 
 // ── CartelaPreviewModal ───────────────────────────────────────────────────────
 

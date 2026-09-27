@@ -270,7 +270,7 @@ export const UserLayout: React.FC = () => {
       </aside>
 
       {/* ── Main content ── */}
-      <main className="flex-1 overflow-hidden h-full">
+      <main className="flex-1 overflow-hidden h-full" style={{ background: 'inherit' }}>
 
         {/* Voice change prompt — shown when admin assigns a new voice */}
         {voicePrompt && (
