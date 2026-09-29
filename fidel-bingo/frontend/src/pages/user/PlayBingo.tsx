@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { offlineGameApi } from '../../services/offlineApi';
 import { useAuthStore } from '../../store/authStore';
 import { useGameSettings, THEMES } from '../../store/gameSettingsStore';
-import { dbGet, playCachedSound, playNumberSoundQueued, unlockAudioContext, stopAllAudio, audioQueue } from '../../services/db';
+import { dbGet, playCachedSound, playNumberSoundQueued, unlockAudioContext, stopAllAudio, audioQueue, wasSoundCut } from '../../services/db';
 import { setGameSessionActive } from '../../services/sync';
 
 let _userInteracted = false;
@@ -178,11 +178,16 @@ export const PlayBingo: React.FC = () => {
     }
     // Pre-cache cartelas for this game so offline check works
     offlineGameApi.getCartelas(game.id).catch(() => {});
+    // Clear last called number so first resume plays aac_resumed.mp3 not a stale number
+    lastCalledNumberRef.current = null;
   }, [game?.id]);
 
   // Timestamp of the last number call — used to enforce a minimum gap between calls
   // so the audio queue has time to start playing before the next interval tick checks it.
   const lastCallTimeRef = useRef<number>(0);
+  // Track the last successfully called number so we can replay it on resume
+  // if the sound was cut by a stop/pause before it finished playing.
+  const lastCalledNumberRef = useRef<number | null>(null);
 
   const stopAuto = useCallback((silent = false) => {
     if (autoRef.current) { clearInterval(autoRef.current); autoRef.current = null; }
@@ -218,13 +223,17 @@ export const PlayBingo: React.FC = () => {
       // If auto was paused/stopped before this response arrived, discard it
       if (!autoActiveRef.current && autoRef.current === null) return;
       const num: number | null = response?.data?.data?.number ?? response?.data?.number ?? null;
-      if (num != null) setSessionCalledNumbers((prev) => prev.includes(num) ? prev : [...prev, num]);
+      if (num != null) {
+        lastCalledNumberRef.current = num;
+        setSessionCalledNumbers((prev) => prev.includes(num) ? prev : [...prev, num]);
+      }
       // Do NOT invalidate games here — it triggers a server refetch mid-game
       // which can overwrite local IDB state and disrupt audio/call flow online.
     },
     onError: (err: any) => {
-      console.log('[callMutation] onError triggered:', err);
+      isMutationPendingRef.current = false; // always clear — React effect will re-sync if needed
       mutationStartTimeRef.current = 0;
+      console.log('[callMutation] onError triggered:', err);
       soundPendingRef.current = false; // always clear on error so game doesn't freeze
       const status = err?.response?.status;
       const code = err?.response?.data?.error?.code;
@@ -302,10 +311,21 @@ export const PlayBingo: React.FC = () => {
 
   const startAuto = useCallback(() => {
     if (!game || game.status !== 'active') return;
-    playRootSound('aac_resumed.mp3');
     autoActiveRef.current = true;
     setGameSessionActive(true);
     setAutoOn(true);
+    // Only play the resume chime when resuming after a pause (lastCalledNumberRef is set).
+    // On the very first start of a game it's null — no chime, just start calling.
+    // Then, if the last number's sound was cut mid-play, replay it after the chime.
+    if (lastCalledNumberRef.current != null) {
+      if (wasSoundCut()) {
+        playRootSound('aac_resumed.mp3').then(() => {
+          if (autoActiveRef.current) playSound(`${lastCalledNumberRef.current}`);
+        });
+      } else {
+        playRootSound('aac_resumed.mp3');
+      }
+    }
     let elapsed = 0;
     autoRef.current = setInterval(() => {
       // If auto was stopped (pause/end), bail immediately — don't call next number
@@ -329,7 +349,6 @@ export const PlayBingo: React.FC = () => {
         return; // don't fire if previous call still in flight
       }
       lastCallTimeRef.current = Date.now();
-      mutationStartTimeRef.current = Date.now();
       mutateRef.current();
     }, 500);
   }, [game, stopAuto, checkMutationTimeout]);

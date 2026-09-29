@@ -146,6 +146,8 @@ async function getVoiceCache(): Promise<Cache | null> {
 let _audioCtx: AudioContext | null = null;
 /** Track the currently playing WebAudio source so we can stop it on the next call */
 let _activeSource: AudioBufferSourceNode | null = null;
+/** Track the currently playing HTMLAudioElement so we can stop it instantly */
+let _activeHtmlAudio: HTMLAudioElement | null = null;
 
 function getAudioContext(): AudioContext | null {
   // Never create the AudioContext here — it must only be created after a
@@ -159,6 +161,10 @@ function stopActiveSource(): void {
   if (_activeSource) {
     try { _activeSource.stop(); } catch { /* already stopped */ }
     _activeSource = null;
+  }
+  if (_activeHtmlAudio) {
+    try { _activeHtmlAudio.pause(); _activeHtmlAudio.currentTime = 0; } catch { /* ignore */ }
+    _activeHtmlAudio = null;
   }
 }
 
@@ -184,11 +190,22 @@ export function unlockAudioContext(): void {
 }
 
 /**
+ * Returns true if a sound was playing and got cut by the last stopAllAudio() call.
+ * Used by PlayBingo to decide whether to replay the last number on resume.
+ */
+let _soundWasCut = false;
+export function wasSoundCut(): boolean {
+  return _soundWasCut;
+}
+
+/**
  * Immediately stop all playing audio and clear the queue.
  * Suspends the AudioContext so any in-flight sound cuts off instantly,
  * then resumes it so future sounds can play normally.
  */
 export function stopAllAudio(): void {
+  // Record whether a sound was actively playing when stop was called
+  _soundWasCut = !!_activeHtmlAudio || !!_activeSource;
   // Reset the playing flag and clear pending tasks immediately so callers
   // (e.g. the auto-call interval) see playing=false right away on pause.
   audioQueue.clear();
@@ -277,11 +294,13 @@ async function playAudioBuffer(url: string, volume: number): Promise<void> {
 async function playHtmlAudio(url: string, volume: number): Promise<void> {
   const audio = new Audio(url);
   audio.volume = volume;
+  _activeHtmlAudio = audio;
   await new Promise<void>((resolve) => {
     let resolved = false;
     const done = (reason: string) => {
       if (!resolved) {
         resolved = true;
+        if (_activeHtmlAudio === audio) _activeHtmlAudio = null;
         console.log('[audio] htmlAudio', reason, url);
         resolve();
       }
@@ -323,9 +342,20 @@ export async function playCachedSound(path: string, volume = 1, bypassCache = fa
               await playDecodedAudio(arrayBuffer, volume, mime);
               return;
             } catch {
-              // decodeAudioData failed — cache entry is likely corrupt, evict it
+              // decodeAudioData failed — cache entry is likely corrupt, evict and re-cache
               console.warn('[audio] corrupt cache entry, evicting:', path);
               cache.delete(path).catch(() => {});
+              fetch(path).then(res => {
+                if (res.ok) {
+                  const mime = path.endsWith('.wav') ? 'audio/wav' : path.endsWith('.m4a') ? 'audio/mp4' : 'audio/mpeg';
+                  res.arrayBuffer().then(buf => {
+                    if (buf.byteLength > 100) {
+                      const blob = new Blob([buf], { type: mime });
+                      cache.put(path, new Response(blob, { status: 200, headers: { 'Content-Type': mime } })).catch(() => {});
+                    }
+                  }).catch(() => {});
+                }
+              }).catch(() => {});
               // fall through to network
             }
           } else {
@@ -334,8 +364,24 @@ export async function playCachedSound(path: string, volume = 1, bypassCache = fa
             try { await playHtmlAudio(url, volume); return; } finally { URL.revokeObjectURL(url); }
           }
         } else {
+          // Empty/stub cache entry — evict it and re-fetch+re-cache in the background
           console.warn('[audio] empty cache entry, evicting:', path);
           cache.delete(path).catch(() => {});
+          // Re-cache by fetching, cloning (one copy to cache, original discarded)
+          // Do NOT race with the playAudioBuffer call below — just cache for next time
+          fetch(path).then(res => {
+            if (res.ok) {
+              const toCache = res.clone();
+              toCache.arrayBuffer().then(buf => {
+                if (buf.byteLength > 100) {
+                  // Reconstruct a cacheable response from the buffer
+                  const mime = path.endsWith('.wav') ? 'audio/wav' : path.endsWith('.m4a') ? 'audio/mp4' : 'audio/mpeg';
+                  const blob = new Blob([buf], { type: mime });
+                  cache.put(path, new Response(blob, { status: 200, headers: { 'Content-Type': mime } })).catch(() => {});
+                }
+              }).catch(() => {});
+            }
+          }).catch(() => {});
         }
       }
     } catch { /* fall through to network */ }
@@ -485,7 +531,7 @@ export class AudioQueue {
     this.playing = true;
     const gen = this._generation;
     const task = this.queue.shift()!;
-    try { await this.wrap(task, gen)(); } catch { /* continue on error */ }
+    try { await this.wrap(task, gen)(); } catch { this.playing = false; }
     this.drain();
   }
 }
@@ -508,5 +554,11 @@ export function playNumberSoundQueued(
   // the new one — prevents sounds from stacking at the WebAudio layer.
   stopActiveSource();
   audioQueue.clear();
-  audioQueue.enqueue(() => playCachedSound(path, volume).then(() => {}));
+  audioQueue.enqueue(async () => {
+    try {
+      await playCachedSound(path, volume);
+    } catch {
+      audioQueue.playing = false; // ensure gate is cleared on failure
+    }
+  });
 }

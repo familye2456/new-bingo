@@ -88,7 +88,7 @@ export const THEMES: Record<ThemeName, AppTheme> = {
     cellUncalledText: '#e2d9f3',
     cellUncalledBorder: 'rgba(109,40,217,0.3)',
     cellCalledBg: 'linear-gradient(180deg,#ca8a04 0%,#a16207 100%)',
-    cellCalledText: '#ff0000',
+    cellCalledText: '#ffffff',
     cellCalledBorder: '#fbbf24',
     cellLastBg: 'linear-gradient(180deg,#ef4444 0%,#b91c1c 100%)',
     cellLastText: '#ffffff',
@@ -152,6 +152,7 @@ export const THEMES: Record<ThemeName, AppTheme> = {
     cellLastText: '#ffffff',
     cellLastBorder: '#ef4444',
     cellLastGlow: 'rgba(239,68,68,0.8)',
+    
     
     boardCountText: '#64748B',
     cellFontSize: 'clamp(16.6px, 3.73vw, 51.6px)',
