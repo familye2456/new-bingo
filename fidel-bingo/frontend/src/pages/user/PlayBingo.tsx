@@ -973,13 +973,14 @@ export const PlayBingo: React.FC = () => {
             </div>
 
             {/* Card number badge */}
-            <div className="flex items-center justify-center rounded-2xl px-8 py-4"
+            <div className="flex items-center justify-center rounded-2xl w-full"
               style={{
-                background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
-                boxShadow: '0 0 24px rgba(251,191,36,0.5)',
-                minWidth: 140,
+                background: 'linear-gradient(135deg, #dc2626, #ea580c)',
+                boxShadow: '0 0 24px rgba(220,38,38,0.5)',
+                height: '200px',
+                padding: '0.5rem',
               }}>
-              <span className="font-black text-gray-900 text-4xl tracking-tight">Card #{bonusCardNumber}</span>
+              <span style={{ fontSize: 'clamp(6rem, 20vw, 12rem)', color: '#fff', fontWeight: 900, lineHeight: 1, letterSpacing: '-0.02em', textShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>{bonusCardNumber}</span>
             </div>
 
             {bonusAmount != null && (
