@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { offlineGameApi } from '../../services/offlineApi';
 import { useAuthStore } from '../../store/authStore';
 import { useGameSettings, THEMES } from '../../store/gameSettingsStore';
-import { dbGet, dbPut, playCachedSound, playNumberSoundQueued, unlockAudioContext, stopAllAudio, audioQueue } from '../../services/db';
+import { dbGet, playCachedSound, playNumberSoundQueued, unlockAudioContext, stopAllAudio, audioQueue } from '../../services/db';
 import { setGameSessionActive } from '../../services/sync';
 
 let _userInteracted = false;
@@ -116,8 +116,6 @@ export const PlayBingo: React.FC = () => {
   // always sees the latest value synchronously — prevents a final number
   // being called after the user presses pause/stop
   const autoActiveRef = useRef(false);
-  // Last number called during auto — used to roll back if pause fires mid-announcement
-  const lastAutoCalledNumberRef = useRef<{ number: number; gameId: string } | null>(null);
   const resetGameRef = useRef<string | null>(null);
   const [sessionCalledNumbers, setSessionCalledNumbers] = useState<number[]>([]);
   const [winnerInfo, setWinnerInfo] = useState<{ cardNumber: number; amount: number; pattern: string } | null>(null);
@@ -190,25 +188,10 @@ export const PlayBingo: React.FC = () => {
     if (autoRef.current) { clearInterval(autoRef.current); autoRef.current = null; }
     autoActiveRef.current = false;
     lastCallTimeRef.current = 0;
-
-    // If audio is still playing when pause fires, the last called number was
-    // only partially announced — roll it back so it's treated as not-called.
-    const wasPlaying = audioQueue.playing;
     stopAllAudio(); // cut any playing sound instantly
-
-    if (wasPlaying && lastAutoCalledNumberRef.current) {
-      const { number, gameId } = lastAutoCalledNumberRef.current;
-      // Remove from session state immediately
-      setSessionCalledNumbers((prev) => prev.filter((n) => n !== number));
-      // Remove from IDB so it stays consistent
-      dbGet<any>('games', gameId).then((game) => {
-        if (!game) return;
-        game.calledNumbers = (game.calledNumbers ?? []).filter((n: number) => n !== number);
-        dbPut('games', game, gameId);
-      });
-    }
-    lastAutoCalledNumberRef.current = null;
-
+    // Do NOT clear gameSessionActive here — the game is still loaded and
+    // we must keep the ['games'] query from refetching mid-session.
+    // Only unmount/game-finish clears it (see cleanup effect below).
     setAutoOn(false);
     if (!silent) playRootSound('aac_ended.mp3');
   }, []);
@@ -235,13 +218,7 @@ export const PlayBingo: React.FC = () => {
       // If auto was paused/stopped before this response arrived, discard it
       if (!autoActiveRef.current && autoRef.current === null) return;
       const num: number | null = response?.data?.data?.number ?? response?.data?.number ?? null;
-      if (num != null) {
-        setSessionCalledNumbers((prev) => prev.includes(num) ? prev : [...prev, num]);
-        // Track this number so stopAuto can roll it back if paused mid-announcement
-        if (gameRef.current) {
-          lastAutoCalledNumberRef.current = { number: num, gameId: gameRef.current.id };
-        }
-      }
+      if (num != null) setSessionCalledNumbers((prev) => prev.includes(num) ? prev : [...prev, num]);
       // Do NOT invalidate games here — it triggers a server refetch mid-game
       // which can overwrite local IDB state and disrupt audio/call flow online.
     },
@@ -431,10 +408,6 @@ export const PlayBingo: React.FC = () => {
     // Only play the number sound if auto-call is still active (not paused/stopped)
     if (newNums.length > 0 && autoActiveRef.current) {
       playSound(`${newNums[newNums.length - 1]}`);
-      // Once audio fully finishes, the number was fully announced — safe to clear rollback ref
-      audioQueue.waitForDrain().then(() => {
-        lastAutoCalledNumberRef.current = null;
-      });
     }
     prevCalledRef.current = sessionCalledNumbers;
   }, [sessionCalledNumbers]);
