@@ -13,6 +13,16 @@ async function applyBalanceDelta(delta: number) {
   useAuthStore.getState().adjustUserBalance(delta);
 }
 
+// ── Per-game call mutex — prevents concurrent callNumber for the same game ───
+const _callLocks = new Map<string, Promise<any>>();
+
+function withCallLock<T>(gameId: string, fn: () => Promise<T>): Promise<T> {
+  const prev = _callLocks.get(gameId) ?? Promise.resolve();
+  const next = prev.then(fn, fn); // chain regardless of error
+  _callLocks.set(gameId, next.catch(() => {})); // keep chain clean
+  return next;
+}
+
 // ── Server reachability ───────────────────────────────────────────────────────
 
 let _serverDown = false;
@@ -401,6 +411,7 @@ export const offlineGameApi = {
   },
 
   callNumber: async (gameId: string) => {
+    return withCallLock(gameId, async () => {
     console.log('[offlineApi.callNumber] Starting for gameId:', gameId);
     
     // Offline games always use local logic
@@ -509,6 +520,7 @@ export const offlineGameApi = {
     await dbPut('games', game, gameId);
 
     return { data: { data: { number, remaining: 75 - game.calledNumbers.length } } };
+    }); // end withCallLock
   },
 
   /**
