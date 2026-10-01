@@ -5,7 +5,7 @@ import { getSocket } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 import { useAuthStore } from '../store/authStore';
 import { useGameSettings, ALL_VOICE_CATEGORIES, THEMES } from '../store/gameSettingsStore';
-import { playCachedSound, playNumberSoundQueued, downloadVoiceSounds, audioQueue, unlockAudioContext } from '../services/db';
+import { playCachedSound, playNumberSoundQueued, downloadVoiceSounds, audioQueue, unlockAudioContext, stopAllAudio } from '../services/db';
 import { CartelaCard } from '../components/CartelaCard';
 import { NumberBoard } from '../components/NumberBoard';
 
@@ -297,6 +297,10 @@ export const GamePage: React.FC = () => {
                     <button
                       onClick={() => setAutoCall((v) => {
                         const next = !v;
+                        if (!next) {
+                          // Pause: stop any playing sound immediately, then play the ended cue
+                          stopAllAudio();
+                        }
                         playRootSound(next ? 'aac_resumed.mp3' : 'aac_ended.mp3');
                         return next;
                       })}

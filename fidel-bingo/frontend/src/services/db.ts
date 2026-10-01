@@ -224,13 +224,18 @@ async function playDecodedAudio(arrayBuffer: ArrayBuffer, volume: number, mime =
       src.connect(gainNode);
       gainNode.connect(ctx.destination);
       _activeSource = src;
-      src.onended = () => {
-        console.log('[audio] ended');
+      let safetyTimer: ReturnType<typeof setTimeout> | null = null;
+      const done = () => {
+        if (safetyTimer !== null) { clearTimeout(safetyTimer); safetyTimer = null; }
         if (_activeSource === src) _activeSource = null;
         resolve();
       };
+      src.onended = () => {
+        console.log('[audio] ended');
+        done();
+      };
       src.start(0);
-      setTimeout(resolve, 4000);
+      safetyTimer = setTimeout(done, 4000);
     });
   } catch (err) {
     console.warn('[audio] decodeAudioData failed, falling back to HTMLAudio:', err);
@@ -249,11 +254,6 @@ async function playDecodedAudio(arrayBuffer: ArrayBuffer, volume: number, mime =
 }
 
 async function playAudioBuffer(url: string, volume: number): Promise<void> {
-  // WAV and M4A: skip WebAudio entirely, use HTMLAudio directly
-  if (url.endsWith('.wav') || url.endsWith('.m4a')) {
-    await playHtmlAudio(url, volume);
-    return;
-  }
   const ctx = getAudioContext();
   if (!ctx) {
     await playHtmlAudio(url, volume);
@@ -266,7 +266,7 @@ async function playAudioBuffer(url: string, volume: number): Promise<void> {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`fetch failed: ${response.status}`);
     const arrayBuffer = await response.arrayBuffer();
-    const mime = 'audio/mpeg';
+    const mime = url.endsWith('.wav') ? 'audio/wav' : url.endsWith('.m4a') ? 'audio/mp4' : 'audio/mpeg';
     await playDecodedAudio(arrayBuffer, volume, mime);
   } catch (err) {
     console.warn('[audio] WebAudio failed, falling back to HTMLAudio:', url, err);
@@ -298,9 +298,7 @@ async function playHtmlAudio(url: string, volume: number): Promise<void> {
  * during gameplay, then falls back to network if not cached.
  */
 export async function playCachedSound(path: string, volume = 1, bypassCache = false): Promise<void> {
-  // WAV and M4A files: use HTMLAudio directly — decodeAudioData is unreliable
-  // for these formats in Chrome/Chromium and causes EncodingError.
-  const useHtmlAudio = path.endsWith('.wav') || path.endsWith('.m4a');
+  const mime = path.endsWith('.wav') ? 'audio/wav' : path.endsWith('.m4a') ? 'audio/mp4' : 'audio/mpeg';
 
   const cache = bypassCache ? null : await getVoiceCache();
   if (cache) {
@@ -309,26 +307,19 @@ export async function playCachedSound(path: string, volume = 1, bypassCache = fa
       if (response) {
         const arrayBuffer = await response.clone().arrayBuffer();
         if (arrayBuffer.byteLength > 100) {
-          const mime = path.endsWith('.wav') ? 'audio/wav' : path.endsWith('.m4a') ? 'audio/mp4' : 'audio/mpeg';
-          if (useHtmlAudio) {
-            // Play WAV/M4A via blob URL + HTMLAudioElement — reliable across browsers
-            const blob = new Blob([arrayBuffer], { type: mime });
-            const url = URL.createObjectURL(blob);
-            try { await playHtmlAudio(url, volume); } finally { URL.revokeObjectURL(url); }
-            return;
-          }
           const ctx = getAudioContext();
           if (ctx) {
             try {
+              // Prefer WebAudio for all formats — reliable onended event, no HTMLAudio blob-URL issues
               await playDecodedAudio(arrayBuffer, volume, mime);
               return;
             } catch {
-              // decodeAudioData failed — cache entry is likely corrupt, evict it
+              // decodeAudioData failed — cache entry may be corrupt, evict and fall through
               console.warn('[audio] corrupt cache entry, evicting:', path);
               cache.delete(path).catch(() => {});
-              // fall through to network
             }
           } else {
+            // No WebAudio context — fall back to HTMLAudio
             const blob = new Blob([arrayBuffer], { type: mime });
             const url = URL.createObjectURL(blob);
             try { await playHtmlAudio(url, volume); return; } finally { URL.revokeObjectURL(url); }
@@ -417,7 +408,9 @@ export async function downloadVoiceSounds(
     if (!existing) {
       try {
         const res = await fetch(url);
-        if (res.ok) await cache.put(url, res);
+        if (res.ok) {
+          try { await cache.put(url, res); } catch { /* skip if caching not supported for this response */ }
+        }
       } catch { /* skip failed files */ }
     }
     done++;
@@ -485,7 +478,7 @@ export class AudioQueue {
     this.playing = true;
     const gen = this._generation;
     const task = this.queue.shift()!;
-    try { await this.wrap(task, gen)(); } catch { /* continue on error */ }
+    try { await this.wrap(task, gen)(); } catch { this.playing = false; }
     this.drain();
   }
 }
@@ -508,5 +501,38 @@ export function playNumberSoundQueued(
   // the new one — prevents sounds from stacking at the WebAudio layer.
   stopActiveSource();
   audioQueue.clear();
-  audioQueue.enqueue(() => playCachedSound(path, volume).then(() => {}));
+  audioQueue.enqueue(async () => {
+    try {
+      await playCachedSound(path, volume);
+    } catch {
+      audioQueue.playing = false; // ensure gate is cleared on failure
+    }
+  });
+}
+
+/**
+ * Play a number sound and return a promise that resolves when the sound
+ * finishes playing fully. Use this when you need to wait for completion
+ * before marking the number as officially called.
+ */
+export function playNumberSoundAndWait(
+  number: number,
+  voice: string,
+  volume?: number
+): Promise<void> {
+  const ext = getVoiceExt(voice);
+  const path = `/sounds/${encodeURIComponent(voice)}/${number}${ext}`;
+  stopActiveSource();
+  audioQueue.clear();
+  return new Promise<void>((resolve) => {
+    audioQueue.enqueue(async () => {
+      try {
+        await playCachedSound(path, volume);
+      } catch {
+        audioQueue.playing = false;
+      } finally {
+        resolve();
+      }
+    });
+  });
 }

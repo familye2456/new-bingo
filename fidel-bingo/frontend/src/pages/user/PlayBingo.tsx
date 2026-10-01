@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { offlineGameApi } from '../../services/offlineApi';
 import { useAuthStore } from '../../store/authStore';
 import { useGameSettings, THEMES } from '../../store/gameSettingsStore';
-import { dbGet, playCachedSound, playNumberSoundQueued, unlockAudioContext, stopAllAudio, audioQueue } from '../../services/db';
+import { dbGet, playCachedSound, playNumberSoundQueued, playNumberSoundAndWait, unlockAudioContext, stopAllAudio } from '../../services/db';
 import { setGameSessionActive } from '../../services/sync';
 
 let _userInteracted = false;
@@ -167,14 +167,26 @@ export const PlayBingo: React.FC = () => {
     // cache-refreshed from invalidating ['games'] and resetting the stack
     // even when the user is calling numbers manually (not just during auto-call).
     setGameSessionActive(true);
-    // Restore any already-called numbers from the game object (IDB/server).
-    // This prevents wiping the stack when the game object reloads mid-session
-    // due to a query invalidation (e.g. postpaid sync, offline→online transition).
-    const existing = game.calledNumbers ?? [];
-    if (existing.length > 0) {
-      setSessionCalledNumbers(existing);
-    } else {
+
+    // Detect a true page refresh: sessionStorage key is absent on fresh page load/refresh
+    // but present when the component re-mounts due to in-session query invalidations.
+    const sessionKey = `bingo_session_${game.id}`;
+    const isPageRefresh = !sessionStorage.getItem(sessionKey);
+    sessionStorage.setItem(sessionKey, '1');
+
+    if (isPageRefresh) {
+      // Fresh page load or browser refresh — always reset called numbers so the
+      // sequence starts from the beginning.
       offlineGameApi.reset(game.id).then(() => setSessionCalledNumbers([])).catch(() => {});
+    } else {
+      // Mid-session re-mount (query invalidation, offline→online transition, etc.)
+      // Restore already-called numbers to avoid wiping the stack.
+      const existing = game.calledNumbers ?? [];
+      if (existing.length > 0) {
+        setSessionCalledNumbers(existing);
+      } else {
+        setSessionCalledNumbers([]);
+      }
     }
     // Pre-cache cartelas for this game so offline check works
     offlineGameApi.getCartelas(game.id).catch(() => {});
@@ -184,14 +196,34 @@ export const PlayBingo: React.FC = () => {
   // so the audio queue has time to start playing before the next interval tick checks it.
   const lastCallTimeRef = useRef<number>(0);
 
+  // Stable ref to the scheduleNext function so onSettled can trigger it
+  const scheduleNextRef = useRef<((delayMs: number) => void) | null>(null);
+  // Generation counter — incremented on stopAuto so in-flight calls can be discarded
+  const callGenRef = useRef(0);
+  // Number that has been called on the server but not yet marked on the board
+  // (waiting for full sound playback to complete)
+  const pendingNumberRef = useRef<number | null>(null);
+
   const stopAuto = useCallback((silent = false) => {
-    if (autoRef.current) { clearInterval(autoRef.current); autoRef.current = null; }
+    if (autoRef.current) { clearTimeout(autoRef.current); autoRef.current = null; }
     autoActiveRef.current = false;
+    callGenRef.current++; // invalidate any in-flight call result and pending sound
+    pendingNumberRef.current = null; // sound was cut — number not officially called
     lastCallTimeRef.current = 0;
-    stopAllAudio(); // cut any playing sound instantly
-    // Do NOT clear gameSessionActive here — the game is still loaded and
-    // we must keep the ['games'] query from refetching mid-session.
-    // Only unmount/game-finish clears it (see cleanup effect below).
+    // Do NOT stopAllAudio here — let the currently playing number sound finish.
+    // stopAllAudio is only called on hard stops (game finish, unmount, error).
+    setAutoOn(false);
+    if (!silent) playRootSound('aac_ended.mp3');
+  }, []);
+
+  // Hard stop — cuts all audio immediately (used on finish, unmount, error)
+  const hardStopAuto = useCallback((silent = false) => {
+    if (autoRef.current) { clearTimeout(autoRef.current); autoRef.current = null; }
+    autoActiveRef.current = false;
+    callGenRef.current++;
+    pendingNumberRef.current = null;
+    lastCallTimeRef.current = 0;
+    stopAllAudio();
     setAutoOn(false);
     if (!silent) playRootSound('aac_ended.mp3');
   }, []);
@@ -207,38 +239,60 @@ export const PlayBingo: React.FC = () => {
         throw new Error('Game is null');
       }
       mutationStartTimeRef.current = Date.now();
+      const callGen = callGenRef.current; // snapshot generation before async call
       const result = await offlineGameApi.callNumber(gameRef.current.id);
       console.log('[callMutation] Call completed:', result);
       mutationStartTimeRef.current = 0;
-      return result;
+      return { result, callGen };
     },
-    onSuccess: (response: any) => {
+    onSuccess: ({ result: response, callGen }: { result: any; callGen: number }) => {
       console.log('[callMutation] onSuccess triggered');
       mutationStartTimeRef.current = 0;
-      // If auto was paused/stopped before this response arrived, discard it
-      if (!autoActiveRef.current && autoRef.current === null) return;
+      // Discard result if stopAuto was called while this call was in-flight
+      if (callGen !== callGenRef.current) {
+        console.log('[callMutation] onSuccess discarded — auto was stopped mid-flight');
+        return;
+      }
       const num: number | null = response?.data?.data?.number ?? response?.data?.number ?? null;
-      if (num != null) setSessionCalledNumbers((prev) => prev.includes(num) ? prev : [...prev, num]);
+      if (num == null) return;
+      // Hold the number as pending — only mark on board after sound plays fully
+      pendingNumberRef.current = num;
+      const { voice, volume } = useGameSettings.getState();
+      playNumberSoundAndWait(num, voice, volume).then(() => {
+        // Only mark on board if this number is still the pending one
+        // (not cleared by stopAuto) and the generation hasn't changed
+        if (pendingNumberRef.current === num && callGen === callGenRef.current) {
+          pendingNumberRef.current = null;
+          setSessionCalledNumbers((prev) => prev.includes(num) ? prev : [...prev, num]);
+        }
+      });
       // Do NOT invalidate games here — it triggers a server refetch mid-game
       // which can overwrite local IDB state and disrupt audio/call flow online.
     },
     onError: (err: any) => {
       console.log('[callMutation] onError triggered:', err);
+      // Always reset both timing and pending flags first — regardless of error type —
+      // so no code path can leave the interval permanently blocked.
+      isMutationPendingRef.current = false;
       mutationStartTimeRef.current = 0;
       soundPendingRef.current = false; // always clear on error so game doesn't freeze
       const status = err?.response?.status;
       const code = err?.response?.data?.error?.code;
       if (status === 429) return; // rate limited — skip this tick, keep going
       if (code === 'NO_NUMBERS_LEFT' || code === 'INVALID_STATE') {
-        stopAuto(true); // game over or finished — stop silently
+        hardStopAuto(true); // game over or finished — stop silently
         return;
       }
       console.error('[callNumber]', err?.response?.data ?? err.message);
-      stopAuto(true);
+      hardStopAuto(true);
     },
     onSettled: () => {
       console.log('[callMutation] onSettled - mutation completed');
       mutationStartTimeRef.current = 0;
+      // Start counting speed delay immediately after this call finishes
+      if (autoActiveRef.current && scheduleNextRef.current) {
+        scheduleNextRef.current(speedRef.current * 1000);
+      }
     },
   });
 
@@ -248,8 +302,7 @@ export const PlayBingo: React.FC = () => {
       return offlineGameApi.finish(gameRef.current.id);
     },
     onSuccess: (response: any) => {
-      stopAuto(true);
-      queryClient.invalidateQueries({ queryKey: ['games'] });
+      hardStopAuto(true);
       if (!isOfflineGame) refreshBalance();
 
       // Extract bonus info from server response
@@ -306,35 +359,66 @@ export const PlayBingo: React.FC = () => {
     autoActiveRef.current = true;
     setGameSessionActive(true);
     setAutoOn(true);
-    let elapsed = 0;
-    autoRef.current = setInterval(() => {
-      // If auto was stopped (pause/end), bail immediately — don't call next number
-      if (!autoActiveRef.current) return;
-      // Guard against game becoming null during auto-call
-      if (!gameRef.current || gameRef.current.status !== 'active') {
-        stopAuto(true);
-        return;
-      }
-      elapsed += 0.5;
-      if (elapsed < speedRef.current) return;
-      // Wait for audio queue to finish playing the current number sound.
-      // Also enforce a 300ms minimum gap after each call so the queue has
-      // time to start before the next tick checks audioQueue.playing.
-      const timeSinceLastCall = Date.now() - lastCallTimeRef.current;
-      if (audioQueue.playing || (lastCallTimeRef.current > 0 && timeSinceLastCall < 300)) return;
-      elapsed = 0;
-      if (sessionCalledRef.current.length >= 75) { stopAuto(); return; }
-      if (isMutationPendingRef.current) {
-        checkMutationTimeout(); // Check if mutation is stuck
-        return; // don't fire if previous call still in flight
-      }
-      lastCallTimeRef.current = Date.now();
-      mutationStartTimeRef.current = Date.now();
-      mutateRef.current();
-    }, 500);
+
+    // If a number was pending (sound cut mid-play), replay it fully before continuing.
+    // Otherwise replay the last board number so players can hear it again on resume.
+    const pendingNum = pendingNumberRef.current;
+    const lastCalled = sessionCalledRef.current;
+    const replayNum = pendingNum ?? (lastCalled.length > 0 ? lastCalled[lastCalled.length - 1] : null);
+
+    if (replayNum != null) {
+      const { voice, volume } = useGameSettings.getState();
+      playNumberSoundAndWait(replayNum, voice, volume).then(() => {
+        // After sound completes fully, mark as official if it was pending
+        if (pendingNum != null && pendingNumberRef.current === pendingNum) {
+          pendingNumberRef.current = null;
+          setSessionCalledNumbers((prev) => prev.includes(pendingNum) ? prev : [...prev, pendingNum]);
+        }
+        // Schedule first new call after replay finishes
+        if (autoActiveRef.current && scheduleNextRef.current) {
+          scheduleNextRef.current(speedRef.current * 1000);
+        }
+      });
+      return; // wait for replay to finish before starting calls
+    }
+
+    // scheduleNext is called from onSettled — starts counting speedMs AFTER each call finishes.
+    // e.g. speed=2s: call completes → wait 2s → fire next call → repeat.
+    const scheduleNext = (delayMs: number) => {
+      if (autoRef.current) { clearTimeout(autoRef.current); autoRef.current = null; }
+      autoRef.current = setTimeout(() => {
+        autoRef.current = null;
+        if (!autoActiveRef.current) return;
+        if (!gameRef.current || gameRef.current.status !== 'active') { stopAuto(true); return; }
+        if (sessionCalledRef.current.length >= 75) { stopAuto(); return; }
+        // If somehow a previous call is still in flight (shouldn't happen in normal flow),
+        // check for stuck and retry after a short delay rather than dropping the call.
+        if (isMutationPendingRef.current) {
+          checkMutationTimeout();
+          scheduleNextRef.current?.(500);
+          return;
+        }
+        lastCallTimeRef.current = Date.now();
+        mutateRef.current();
+        // onSettled will schedule the next one
+      }, delayMs) as unknown as ReturnType<typeof setInterval>;
+    };
+    scheduleNextRef.current = scheduleNext;
+
+    // Fire the first call immediately (no initial delay)
+    if (sessionCalledRef.current.length >= 75) { stopAuto(); return; }
+    lastCallTimeRef.current = Date.now();
+    mutateRef.current();
+    // onSettled will schedule subsequent calls
   }, [game, stopAuto, checkMutationTimeout]);
 
-  useEffect(() => () => { stopAuto(true); setGameSessionActive(false); }, [stopAuto]);
+  useEffect(() => () => {
+    stopAuto(true);
+    setGameSessionActive(false);
+    // Remove the session key on unmount so the next page load for this game
+    // (including after finish → new-game → back) always resets the sequence.
+    if (selectedGameId) sessionStorage.removeItem(`bingo_session_${selectedGameId}`);
+  }, [stopAuto, selectedGameId]);
   useEffect(() => { if (sessionCalledNumbers.length >= 75 && autoOn) stopAuto(true); }, [sessionCalledNumbers.length, autoOn, stopAuto]);
 
   const toggleAuto = () => autoOn ? stopAuto() : startAuto();
@@ -404,11 +488,6 @@ export const PlayBingo: React.FC = () => {
 
   const prevCalledRef = useRef<number[]>([]);
   useEffect(() => {
-    const newNums = sessionCalledNumbers.filter((n) => !prevCalledRef.current.includes(n));
-    // Only play the number sound if auto-call is still active (not paused/stopped)
-    if (newNums.length > 0 && autoActiveRef.current) {
-      playSound(`${newNums[newNums.length - 1]}`);
-    }
     prevCalledRef.current = sessionCalledNumbers;
   }, [sessionCalledNumbers]);
 

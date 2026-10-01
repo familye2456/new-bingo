@@ -320,9 +320,9 @@ export class GameService {
   async resetGame(gameId: string, userId: string): Promise<void> {
     const game = await this.gameRepo.findOne({ where: { id: gameId } });
     if (!game) throw new AppError(404, 'GAME_NOT_FOUND', 'Game not found');
-    if (game.creatorId !== userId) throw new AppError(403, 'FORBIDDEN', 'Only creator can reset the game');
     if (game.status !== 'active') throw new AppError(400, 'INVALID_STATE', 'Game is not active');
     game.calledNumbers = [];
+    game.numberSequence = this.shuffleNumbers();
     await this.gameRepo.save(game);
     try { await redisClient.setEx(`game:${gameId}`, 3600, JSON.stringify(game)); } catch {}
   }

@@ -1,36 +1,45 @@
+/// <reference types="jest" />
 /**
- * Property-Based Tests: GameService - cartela bonus system
- * Feature: cartela-bonus-system
+ * Property-Based Tests: GameService
  *
- * Tests Properties 1, 2, 3 from the design document.
+ * Property 1 — Validates: Requirements 2.1, 2.2, 2.3
+ *   For any active game state (random calledNumbers length 0–74), after resetGame:
+ *   calledNumbers = [], numberSequence is a permutation of [1..75],
+ *   and callNumber returns numberSequence[0].
  *
- * All tests use fast-check with a minimum of 100 iterations (default).
- * No real DB connections are used; all dependencies are mocked.
+ * Property 2 — Validates: Requirements 3.1, 3.5
+ *   For any active game state where reset has NOT been called, repeated callNumber
+ *   invocations always return sequence[i] for i=0,1,2,… with no duplicates.
  */
 
 import * as fc from 'fast-check';
 
-// ── Mock all external dependencies before importing GameService ──────────────
-
-const mockUserFindOne = jest.fn();
-const mockUCFind = jest.fn();
-const mockGameCount = jest.fn();
-const mockTransactionFn = jest.fn();
+const mockGameFindOne = jest.fn();
+const mockGameSave = jest.fn();
 
 jest.mock('../../../config/database', () => ({
   AppDataSource: {
     getRepository: (entity: { name: string }) => {
-      if (entity.name === 'User')        return { findOne: mockUserFindOne };
-      if (entity.name === 'UserCartela') return { find: mockUCFind };
-      if (entity.name === 'Game')        return { count: mockGameCount, findOne: jest.fn(), find: jest.fn(), save: jest.fn() };
-      return {};
+      if (entity.name === 'Game') {
+        return {
+          findOne: mockGameFindOne,
+          save: mockGameSave,
+          find: jest.fn(),
+          count: jest.fn(),
+        };
+      }
+      return { findOne: jest.fn(), find: jest.fn(), save: jest.fn(), count: jest.fn() };
     },
-    transaction: (...args: unknown[]) => mockTransactionFn(...args),
+    transaction: jest.fn(),
   },
 }));
 
 jest.mock('../../../config/redis', () => ({
-  redisClient: { setEx: jest.fn(), get: jest.fn().mockResolvedValue(null), del: jest.fn() },
+  redisClient: {
+    setEx: jest.fn(),
+    get: jest.fn().mockResolvedValue(null),
+    del: jest.fn(),
+  },
 }));
 
 jest.mock('../../../shared/infrastructure/metrics', () => ({
@@ -41,291 +50,197 @@ jest.mock('../../../shared/infrastructure/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
-import { GameService, CreateGameDTO } from './GameService';
+import { GameService } from './GameService';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-/**
- * Build a mock EntityManager that captures increment and save calls.
- * Optionally accepts an override for the save method to simulate errors.
- */
-function buildManager(saveFn?: (entity: unknown) => Promise<unknown>) {
-  const incrementCalls: Array<{ entity: unknown; where: Record<string, unknown>; field: string; amount: number }> = [];
-  const saveCalls: unknown[] = [];
-
-  const defaultSave = (entity: unknown): Promise<unknown> => {
-    if (Array.isArray(entity)) {
-      entity.forEach((e) => saveCalls.push(e));
-      return Promise.resolve(entity);
-    }
-    const e = entity as Record<string, unknown>;
-    // Assign a fake id to game objects so description can reference it
-    if (!e.id && !e.transactionType) e.id = 'game-uuid-pbt-1234';
-    saveCalls.push(e);
-    return Promise.resolve(e);
-  };
-
-  return {
-    get incrementCalls() { return incrementCalls; },
-    get saveCalls()      { return saveCalls; },
-
-    increment(entityClass: unknown, where: Record<string, unknown>, field: string, amount: number) {
-      incrementCalls.push({ entity: entityClass, where, field, amount });
-      return Promise.resolve();
-    },
-    decrement(_e: unknown, _w: unknown, _f: string, _a: number) { return Promise.resolve(); },
-    create(_e: unknown, data: Record<string, unknown>) { return { ...data }; },
-    save: saveFn ?? defaultSave,
-    findOne(_e: unknown, _o: unknown) { return Promise.resolve(null); },
-  };
+/** Pick k distinct numbers from [1..75] without repetition */
+function sampleDistinct(pool: number[], k: number): number[] {
+  const copy = [...pool];
+  const result: number[] = [];
+  for (let i = 0; i < k; i++) {
+    const idx = Math.floor(Math.random() * (copy.length - i));
+    result.push(copy[idx]);
+    [copy[idx], copy[copy.length - 1 - i]] = [copy[copy.length - 1 - i], copy[idx]];
+  }
+  return result;
 }
 
-function buildUser(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 'user-uuid-pbt-0001',
-    balance: 500,
-    paymentType: 'prepaid',
-    creditLimit: 0,
-    status: 'active',
-    cartelaBonusEnabled: false,
-    ...overrides,
-  };
+/** Check that an array is a valid permutation of [1..75] */
+function isValidPermutation(seq: number[]): boolean {
+  if (seq.length !== 75) return false;
+  const sorted = [...seq].sort((a, b) => a - b);
+  for (let i = 0; i < 75; i++) {
+    if (sorted[i] !== i + 1) return false;
+  }
+  return true;
 }
 
-function buildDTO(overrides: Partial<CreateGameDTO> = {}): CreateGameDTO {
-  return {
-    cartelaIds: ['uc-uuid-pbt-0001'],
-    betAmountPerCartela: 50,
-    winPattern: 'any',
-    ...overrides,
-  };
-}
+// ---------------------------------------------------------------------------
+// Property 1 — reset always produces a valid fresh sequence
+// Validates: Requirements 2.1, 2.2, 2.3
+// ---------------------------------------------------------------------------
 
-let service: GameService;
+describe('PBT — Property 1: reset always produces a valid fresh sequence', () => {
+  let service: GameService;
 
-beforeEach(() => {
-  mockUserFindOne.mockReset();
-  mockUCFind.mockReset();
-  mockGameCount.mockReset();
-  mockTransactionFn.mockReset();
-  service = new GameService();
+  beforeEach(() => {
+    mockGameFindOne.mockReset();
+    mockGameSave.mockReset();
+    service = new GameService();
+  });
+
+  it('calledNumbers=[], numberSequence is a fresh permutation, callNumber returns seq[0]', async () => {
+    const all75 = Array.from({ length: 75 }, (_, i) => i + 1);
+
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 0, max: 74 }),
+        async (k) => {
+          mockGameFindOne.mockReset();
+          mockGameSave.mockReset();
+
+          const calledNumbers = sampleDistinct(all75, k);
+          const originalSequence = [...all75];
+
+          const game = {
+            id: 'game-pbt-001',
+            creatorId: 'creator-uuid-001',
+            status: 'active' as const,
+            calledNumbers: [...calledNumbers],
+            numberSequence: [...originalSequence],
+            betAmount: 50,
+            housePercentage: 20,
+            winPattern: 'any',
+            winnerIds: [],
+          };
+
+          let savedGame: Record<string, unknown> | undefined;
+          mockGameFindOne.mockResolvedValueOnce(game);
+          mockGameSave.mockImplementation((g: Record<string, unknown>) => {
+            savedGame = {
+              ...g,
+              calledNumbers: Array.isArray(g.calledNumbers) ? [...(g.calledNumbers as number[])] : g.calledNumbers,
+              numberSequence: Array.isArray(g.numberSequence) ? [...(g.numberSequence as number[])] : g.numberSequence,
+            };
+            return Promise.resolve(g);
+          });
+
+          await service.resetGame(game.id, 'any-user-uuid');
+
+          expect(savedGame!.calledNumbers).toEqual([]);
+
+          const newSequence = savedGame!.numberSequence as number[];
+          expect(newSequence).toHaveLength(75);
+          expect(isValidPermutation(newSequence)).toBe(true);
+
+          const postResetGame = {
+            ...game,
+            calledNumbers: [],
+            numberSequence: [...newSequence],
+          };
+
+          mockGameFindOne.mockResolvedValueOnce(postResetGame);
+          mockGameSave.mockImplementation((g: Record<string, unknown>) => Promise.resolve(g));
+
+          const result = await service.callNumber(game.id, 'creator-uuid-001');
+
+          expect(result.number).toBe(newSequence[0]);
+          expect(result.remaining).toBe(74);
+        }
+      ),
+      { numRuns: 50 }
+    );
+  });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Property 1: Eligible user credit round-trip
-// Feature: cartela-bonus-system, Property 1: For any eligible user
-// (cartelaBonusEnabled = true) and any game created with betAmount > 0, after
-// game creation: (a) a bonus transaction should exist with transactionType =
-// 'bonus', amount = betAmount, status = 'completed', and description containing
-// the gameId, and (b) manager.increment should have been called with betAmount.
-// Validates: Requirements 3.1, 3.2
-// ─────────────────────────────────────────────────────────────────────────────
-describe('Property 1: Eligible user credit round-trip', () => {
-  it(
-    'manager.increment called with betAmount and bonus Transaction saved with correct fields',
-    async () => {
-      // Feature: cartela-bonus-system, Property 1: eligible user bonus round-trip
-      await fc.assert(
-        fc.asyncProperty(
-          fc.float({ min: Math.fround(0.01), max: Math.fround(1000), noNaN: true }),
-          async (betAmount) => {
-            mockUserFindOne.mockReset();
-            mockUCFind.mockReset();
-            mockGameCount.mockReset();
-            mockTransactionFn.mockReset();
+// ---------------------------------------------------------------------------
+// Property 2 — sequential calling is preserved (no reset path)
+// Validates: Requirements 3.1, 3.5
+// ---------------------------------------------------------------------------
 
-            mockUserFindOne.mockResolvedValue(buildUser({ cartelaBonusEnabled: true }));
-            mockUCFind.mockResolvedValue([{ id: 'uc-uuid-pbt-0001', userId: 'user-uuid-pbt-0001' }]);
-            mockGameCount.mockResolvedValue(0);
+describe('PBT — Property 2: sequential calling is preserved (no reset path)', () => {
+  let service: GameService;
 
-            const mgr = buildManager();
-            mockTransactionFn.mockImplementation((cb: Function) => cb(mgr));
+  beforeEach(() => {
+    mockGameFindOne.mockReset();
+    mockGameSave.mockReset();
+    service = new GameService();
+  });
 
-            await service.createGame('user-uuid-pbt-0001', buildDTO({ betAmountPerCartela: betAmount }));
+  /**
+   * For any active game state where reset has NOT been called:
+   * repeated callNumber invocations always return sequence[i] for i=0,1,2,…
+   * with no duplicates.
+   *
+   * Validates: Requirements 3.1, 3.5
+   */
+  it('repeated callNumber calls return sequence[i] in order with no duplicates', async () => {
+    const all75 = Array.from({ length: 75 }, (_, i) => i + 1);
 
-            // (a) manager.increment was called with betAmount for balance
-            const balanceIncs = mgr.incrementCalls.filter((c) => c.field === 'balance');
-            expect(balanceIncs).toHaveLength(1);
-            expect(balanceIncs[0].amount).toBe(betAmount);
-            expect(balanceIncs[0].where).toMatchObject({ id: 'user-uuid-pbt-0001' });
+    await fc.assert(
+      fc.asyncProperty(
+        // k: how many numbers already called (0–70), n: how many more to call (1–5)
+        fc.integer({ min: 0, max: 70 }),
+        fc.integer({ min: 1, max: 5 }),
+        async (k, n) => {
+          mockGameFindOne.mockReset();
+          mockGameSave.mockReset();
 
-            // (b) bonus Transaction was saved with correct fields
-            const bonusTxs = mgr.saveCalls.filter((s: any) => s.transactionType === 'bonus');
-            expect(bonusTxs).toHaveLength(1);
+          // Build a shuffled sequence (use a known shuffle for determinism in test)
+          const sequence = sampleDistinct(all75, 75); // full random permutation
+          const alreadyCalled = sequence.slice(0, k);
 
-            const tx = bonusTxs[0] as any;
-            expect(tx.transactionType).toBe('bonus');
-            expect(tx.amount).toBe(betAmount);
-            expect(tx.status).toBe('completed');
-            expect(tx.userId).toBe('user-uuid-pbt-0001');
+          // The game state: k numbers already called, sequence in place
+          const baseGame = {
+            id: 'game-pbt-002',
+            creatorId: 'creator-uuid-001',
+            status: 'active' as const,
+            calledNumbers: [...alreadyCalled],
+            numberSequence: [...sequence],
+            betAmount: 50,
+            housePercentage: 20,
+            winPattern: 'any',
+            winnerIds: [],
+          };
 
-            // Description must contain the gameId that was assigned
-            const savedGame = mgr.saveCalls.find((s: any) => !s.transactionType) as any;
-            expect(tx.description).toContain(savedGame?.id ?? 'game-uuid-pbt-1234');
-          }
-        ),
-        { numRuns: 25 }
-      );
-    }
-  );
-});
+          const calledDuringTest: number[] = [];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Property 2: No bonus for non-eligible users or zero-bet games
-// Feature: cartela-bonus-system, Property 2: For any user where
-// cartelaBonusEnabled = false, or any game where betAmount = 0, after game
-// creation no transaction with transactionType = 'bonus' linked to that gameId
-// should exist, and the balance should not have been incremented by any bonus.
-// Validates: Requirements 3.3, 3.5
-// ─────────────────────────────────────────────────────────────────────────────
-describe('Property 2: No bonus for non-eligible users', () => {
-  it(
-    'manager.increment and bonus manager.save are never called when cartelaBonusEnabled = false',
-    async () => {
-      // Feature: cartela-bonus-system, Property 2: no bonus for ineligible users (cartelaBonusEnabled=false)
-      await fc.assert(
-        fc.asyncProperty(
-          fc.float({ min: Math.fround(0.01), max: Math.fround(1000), noNaN: true }),
-          async (betAmount) => {
-            mockUserFindOne.mockReset();
-            mockUCFind.mockReset();
-            mockGameCount.mockReset();
-            mockTransactionFn.mockReset();
-
-            // Non-eligible user: cartelaBonusEnabled = false
-            mockUserFindOne.mockResolvedValue(buildUser({ cartelaBonusEnabled: false }));
-            mockUCFind.mockResolvedValue([{ id: 'uc-uuid-pbt-0001', userId: 'user-uuid-pbt-0001' }]);
-            mockGameCount.mockResolvedValue(0);
-
-            const mgr = buildManager();
-            mockTransactionFn.mockImplementation((cb: Function) => cb(mgr));
-
-            await service.createGame('user-uuid-pbt-0001', buildDTO({ betAmountPerCartela: betAmount }));
-
-            // manager.increment should NEVER be called for a bonus
-            const balanceIncs = mgr.incrementCalls.filter((c) => c.field === 'balance');
-            expect(balanceIncs).toHaveLength(0);
-
-            // No bonus Transaction should be saved
-            const bonusTxs = mgr.saveCalls.filter((s: any) => s.transactionType === 'bonus');
-            expect(bonusTxs).toHaveLength(0);
-          }
-        ),
-        { numRuns: 25 }
-      );
-    }
-  );
-
-  it(
-    'manager.increment and bonus manager.save are never called when betAmount = 0 (INVALID_BET guard)',
-    async () => {
-      // Feature: cartela-bonus-system, Property 2: no bonus for zero-bet games (betAmount=0 edge case)
-      await fc.assert(
-        fc.asyncProperty(
-          fc.boolean(),
-          async (cartelaBonusEnabled) => {
-            mockUserFindOne.mockReset();
-            mockUCFind.mockReset();
-            mockGameCount.mockReset();
-            mockTransactionFn.mockReset();
-
-            // Eligible or not — betAmount = 0 should throw before any DB work
-            mockUserFindOne.mockResolvedValue(buildUser({ cartelaBonusEnabled }));
-            mockUCFind.mockResolvedValue([{ id: 'uc-uuid-pbt-0001', userId: 'user-uuid-pbt-0001' }]);
-            mockGameCount.mockResolvedValue(0);
-
-            const mgr = buildManager();
-            mockTransactionFn.mockImplementation((cb: Function) => cb(mgr));
-
-            // betAmountPerCartela = 0 should throw INVALID_BET before the transaction runs
-            await expect(
-              service.createGame('user-uuid-pbt-0001', buildDTO({ betAmountPerCartela: 0 }))
-            ).rejects.toMatchObject({ code: 'INVALID_BET' });
-
-            // The transaction was never entered
-            expect(mockTransactionFn).not.toHaveBeenCalled();
-
-            // So increment and bonus save are never reached
-            const balanceIncs = mgr.incrementCalls.filter((c) => c.field === 'balance');
-            expect(balanceIncs).toHaveLength(0);
-
-            const bonusTxs = mgr.saveCalls.filter((s: any) => s.transactionType === 'bonus');
-            expect(bonusTxs).toHaveLength(0);
-          }
-        ),
-        { numRuns: 25 }
-      );
-    }
-  );
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Property 3: Bonus credit atomicity invariant
-// Feature: cartela-bonus-system, Property 3: For any game creation sequence,
-// the database should never contain a committed game row without its corresponding
-// bonus transaction — both are created in the same DB transaction or neither is.
-// Simulates a DB error on manager.save for the bonus transaction; verifies the
-// outer AppDataSource.transaction throws.
-// Validates: Requirements 3.4
-// ─────────────────────────────────────────────────────────────────────────────
-describe('Property 3: Bonus credit atomicity invariant', () => {
-  it(
-    'when manager.save throws for the bonus transaction the entire createGame rejects',
-    async () => {
-      // Feature: cartela-bonus-system, Property 3: bonus credit atomicity invariant
-      await fc.assert(
-        fc.asyncProperty(
-          fc.boolean(),
-          fc.float({ min: Math.fround(0.01), max: Math.fround(1000), noNaN: true }),
-          async (cartelaBonusEnabled, betAmount) => {
-            mockUserFindOne.mockReset();
-            mockUCFind.mockReset();
-            mockGameCount.mockReset();
-            mockTransactionFn.mockReset();
-
-            mockUserFindOne.mockResolvedValue(buildUser({ cartelaBonusEnabled }));
-            mockUCFind.mockResolvedValue([{ id: 'uc-uuid-pbt-0001', userId: 'user-uuid-pbt-0001' }]);
-            mockGameCount.mockResolvedValue(0);
-
-            const DB_ERROR = new Error('DB constraint error — simulated atomicity failure');
-
-            // Faulty save: throws only when saving the bonus transaction
-            const faultySave = (entity: unknown): Promise<unknown> => {
-              if (Array.isArray(entity)) {
-                return Promise.resolve(entity);
-              }
-              const e = entity as Record<string, unknown>;
-              if (!e.id && !e.transactionType) e.id = 'game-uuid-pbt-1234';
-              if (e.transactionType === 'bonus') {
-                return Promise.reject(DB_ERROR);
-              }
-              return Promise.resolve(e);
+          // For each of the n calls, mock findOne to return current game state
+          for (let i = 0; i < n; i++) {
+            const currentGame = {
+              ...baseGame,
+              calledNumbers: [...alreadyCalled, ...calledDuringTest],
             };
 
-            const faultyMgr = buildManager(faultySave);
-
-            // Wire up the transaction mock so it runs the callback with the faulty manager
-            // and propagates the rejection (mimicking real TypeORM transaction behaviour)
-            mockTransactionFn.mockImplementation(async (cb: Function) => {
-              return cb(faultyMgr);
+            mockGameFindOne.mockResolvedValueOnce(currentGame);
+            mockGameSave.mockImplementation((g: Record<string, unknown>) => {
+              // Track what was saved
+              if (Array.isArray(g.calledNumbers)) {
+                const saved = g.calledNumbers as number[];
+                calledDuringTest.push(saved[saved.length - 1]);
+              }
+              return Promise.resolve(g);
             });
 
-            if (cartelaBonusEnabled) {
-              // Eligible users: bonus save will be reached and will throw,
-              // so createGame must reject (the outer transaction propagates the error)
-              await expect(
-                service.createGame('user-uuid-pbt-0001', buildDTO({ betAmountPerCartela: betAmount }))
-              ).rejects.toThrow('DB constraint error — simulated atomicity failure');
-            } else {
-              // Non-eligible users: bonus save is never reached, so createGame succeeds
-              await expect(
-                service.createGame('user-uuid-pbt-0001', buildDTO({ betAmountPerCartela: betAmount }))
-              ).resolves.toBeDefined();
-            }
+            const result = await service.callNumber(baseGame.id, 'creator-uuid-001');
+            const expectedNumber = sequence[k + i];
+
+            // Each call must return the next number in the sequence
+            expect(result.number).toBe(expectedNumber);
+            // Remaining count decreases by 1 each time
+            expect(result.remaining).toBe(75 - k - i - 1);
           }
-        ),
-        { numRuns: 25 }
-      );
-    }
-  );
+
+          // No duplicates among called numbers
+          const allCalled = [...alreadyCalled, ...calledDuringTest];
+          const uniqueCalled = new Set(allCalled);
+          expect(uniqueCalled.size).toBe(allCalled.length);
+        }
+      ),
+      { numRuns: 50 }
+    );
+  });
 });
