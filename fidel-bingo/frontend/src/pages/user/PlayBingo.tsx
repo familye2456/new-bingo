@@ -355,7 +355,11 @@ export const PlayBingo: React.FC = () => {
 
   const startAuto = useCallback(() => {
     if (!game || game.status !== 'active') return;
-    playRootSound('aac_resumed.mp3');
+    // Only play the resume sound when resuming a paused game (numbers already called).
+    // On a fresh game (no numbers yet), skip the resume sound and just start calling.
+    if (sessionCalledNumbers.length > 0) {
+      playRootSound('aac_resumed.mp3');
+    }
     autoActiveRef.current = true;
     setGameSessionActive(true);
     setAutoOn(true);
@@ -410,7 +414,7 @@ export const PlayBingo: React.FC = () => {
     lastCallTimeRef.current = Date.now();
     mutateRef.current();
     // onSettled will schedule subsequent calls
-  }, [game, stopAuto, checkMutationTimeout]);
+  }, [game, sessionCalledNumbers, stopAuto, checkMutationTimeout]);
 
   useEffect(() => () => {
     stopAuto(true);
