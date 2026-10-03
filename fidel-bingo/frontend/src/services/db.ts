@@ -489,11 +489,19 @@ export const audioQueue = new AudioQueue();
 /**
  * Enqueue a number sound for sequential playback via the AudioQueue.
  * Routes through playCachedSound so local cache is always used when available.
+ *
+ * @param onStart - Optional callback fired the moment the sound begins playing.
+ *                  Use this to update UI (e.g. mark the board) in sync with the call.
+ * @param onEnd   - Optional callback fired when the sound finishes playing fully
+ *                  (or when it is interrupted and the queue task completes).
+ *                  Use this to clear any "currently playing" tracking state.
  */
 export function playNumberSoundQueued(
   number: number,
   voice: string,
-  volume?: number
+  volume?: number,
+  onStart?: () => void,
+  onEnd?: () => void
 ): void {
   const ext = getVoiceExt(voice);
   const path = `/sounds/${encodeURIComponent(voice)}/${number}${ext}`;
@@ -503,9 +511,12 @@ export function playNumberSoundQueued(
   audioQueue.clear();
   audioQueue.enqueue(async () => {
     try {
+      onStart?.(); // mark board exactly when sound starts
       await playCachedSound(path, volume);
     } catch {
       audioQueue.playing = false; // ensure gate is cleared on failure
+    } finally {
+      onEnd?.(); // always fires when sound ends or is interrupted
     }
   });
 }

@@ -203,11 +203,17 @@ export const PlayBingo: React.FC = () => {
   // Number that has been called on the server but not yet marked on the board
   // (waiting for full sound playback to complete)
   const pendingNumberRef = useRef<number | null>(null);
+  // The number whose audio is currently playing (set at audio start, cleared at audio end)
+  // Used by stopAuto to know which number was mid-sound at pause time
+  const playingNumberRef = useRef<number | null>(null);
+  // Saves the interrupted number when stopAuto fires mid-sound, so startAuto can replay it
+  const resumePendingRef = useRef<number | null>(null);
 
   const stopAuto = useCallback((silent = false) => {
     if (autoRef.current) { clearTimeout(autoRef.current); autoRef.current = null; }
     autoActiveRef.current = false;
     callGenRef.current++; // invalidate any in-flight call result and pending sound
+    resumePendingRef.current = playingNumberRef.current; // save currently-playing number for resume
     pendingNumberRef.current = null; // sound was cut — number not officially called
     lastCallTimeRef.current = 0;
     // Do NOT stopAllAudio here — let the currently playing number sound finish.
@@ -222,6 +228,8 @@ export const PlayBingo: React.FC = () => {
     autoActiveRef.current = false;
     callGenRef.current++;
     pendingNumberRef.current = null;
+    playingNumberRef.current = null; // hard stop — no resume target
+    resumePendingRef.current = null; // hard stop discards resume target
     lastCallTimeRef.current = 0;
     stopAllAudio();
     setAutoOn(false);
@@ -255,16 +263,22 @@ export const PlayBingo: React.FC = () => {
       }
       const num: number | null = response?.data?.data?.number ?? response?.data?.number ?? null;
       if (num == null) return;
-      // Hold the number as pending — only mark on board after sound plays fully
+      // Hold the number as pending — still needed for pause/resume replay in startAuto
       pendingNumberRef.current = num;
       const { voice, volume } = useGameSettings.getState();
-      playNumberSoundAndWait(num, voice, volume).then(() => {
+      // Update board immediately when audio STARTS (not when it ends) — fix for board sync delay
+      playNumberSoundQueued(num, voice, volume, () => {
+        // Track this as the currently playing number for pause/resume
+        playingNumberRef.current = num;
         // Only mark on board if this number is still the pending one
         // (not cleared by stopAuto) and the generation hasn't changed
         if (pendingNumberRef.current === num && callGen === callGenRef.current) {
           pendingNumberRef.current = null;
           setSessionCalledNumbers((prev) => prev.includes(num) ? prev : [...prev, num]);
         }
+      }, () => {
+        // Audio finished (or was interrupted) — clear playing tracker
+        if (playingNumberRef.current === num) playingNumberRef.current = null;
       });
       // Do NOT invalidate games here — it triggers a server refetch mid-game
       // which can overwrite local IDB state and disrupt audio/call flow online.
@@ -355,39 +369,12 @@ export const PlayBingo: React.FC = () => {
 
   const startAuto = useCallback(() => {
     if (!game || game.status !== 'active') return;
-    // Only play the resume sound when resuming a paused game (numbers already called).
-    // On a fresh game (no numbers yet), skip the resume sound and just start calling.
-    if (sessionCalledNumbers.length > 0) {
-      playRootSound('aac_resumed.mp3');
-    }
     autoActiveRef.current = true;
     setGameSessionActive(true);
     setAutoOn(true);
 
-    // If a number was pending (sound cut mid-play), replay it fully before continuing.
-    // Otherwise replay the last board number so players can hear it again on resume.
-    const pendingNum = pendingNumberRef.current;
-    const lastCalled = sessionCalledRef.current;
-    const replayNum = pendingNum ?? (lastCalled.length > 0 ? lastCalled[lastCalled.length - 1] : null);
-
-    if (replayNum != null) {
-      const { voice, volume } = useGameSettings.getState();
-      playNumberSoundAndWait(replayNum, voice, volume).then(() => {
-        // After sound completes fully, mark as official if it was pending
-        if (pendingNum != null && pendingNumberRef.current === pendingNum) {
-          pendingNumberRef.current = null;
-          setSessionCalledNumbers((prev) => prev.includes(pendingNum) ? prev : [...prev, pendingNum]);
-        }
-        // Schedule first new call after replay finishes
-        if (autoActiveRef.current && scheduleNextRef.current) {
-          scheduleNextRef.current(speedRef.current * 1000);
-        }
-      });
-      return; // wait for replay to finish before starting calls
-    }
-
-    // scheduleNext is called from onSettled — starts counting speedMs AFTER each call finishes.
-    // e.g. speed=2s: call completes → wait 2s → fire next call → repeat.
+    // scheduleNext drives the auto-call loop after each number finishes.
+    // Always set it up fresh on every startAuto so the loop is never relying on a stale closure.
     const scheduleNext = (delayMs: number) => {
       if (autoRef.current) { clearTimeout(autoRef.current); autoRef.current = null; }
       autoRef.current = setTimeout(() => {
@@ -409,11 +396,44 @@ export const PlayBingo: React.FC = () => {
     };
     scheduleNextRef.current = scheduleNext;
 
-    // Fire the first call immediately (no initial delay)
+    // Only replay if a number was interrupted mid-sound at pause time.
+    // If the sound had already finished before the user paused, skip replay and continue.
+    const pendingNum = resumePendingRef.current;
+    resumePendingRef.current = null; // consume: only replay once per pause
+
+    if (pendingNum != null) {
+      // Number was mid-sound when paused — play resume sound then replay it fully.
+      playRootSound('aac_resumed.mp3').then(() => {
+        if (!autoActiveRef.current) return; // user stopped before resume sound finished
+        const { voice, volume } = useGameSettings.getState();
+        return playNumberSoundAndWait(pendingNum, voice, volume).then(() => {
+          // After sound completes fully, commit the interrupted number to the board
+          if (autoActiveRef.current) {
+            setSessionCalledNumbers((prev) => prev.includes(pendingNum) ? prev : [...prev, pendingNum]);
+          }
+          // Schedule first new call 1 second after replay finishes
+          if (autoActiveRef.current) {
+            scheduleNextRef.current!(1000);
+          }
+        });
+      });
+      return; // wait for resume sound + replay to finish before starting calls
+    }
+
+    // No interrupted number — play resume sound if there are numbers on the board, then continue
+    const lastCalled = sessionCalledRef.current;
+    if (lastCalled.length > 0) {
+      playRootSound('aac_resumed.mp3').then(() => {
+        if (!autoActiveRef.current) return;
+        scheduleNextRef.current!(1000);
+      });
+      return;
+    }
+
+    // No replay — fresh game start, no resume sound needed
     if (sessionCalledRef.current.length >= 75) { stopAuto(); return; }
-    lastCallTimeRef.current = Date.now();
-    mutateRef.current();
-    // onSettled will schedule subsequent calls
+    // Wait 1 second before the first call so the UI has time to settle
+    scheduleNextRef.current!(1000);
   }, [game, sessionCalledNumbers, stopAuto, checkMutationTimeout]);
 
   useEffect(() => () => {

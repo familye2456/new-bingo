@@ -110,6 +110,7 @@ export async function refreshCache() {
       ..._justFinishedIds,
     ]);
     const serverGameIds = new Set(serverGames.map((g: any) => g.id));
+
     // Build merged list BEFORE touching IDB - eliminates the race window where
     // callNumber reads an empty store between dbClear and dbPutMany.
     const mergedGames = serverGames.map((g: any) => {
@@ -117,11 +118,14 @@ export async function refreshCache() {
       const merged = {
         ...g,
         cartelaIds: g.cartelaIds ?? localGame?.cartelaIds,
+        // For prepaid/offline users, the server never stores numberSequence or calledNumbers —
+        // always keep the local values. Using the server's empty array would reset the
+        // sequence position and cause numbers to repeat from the beginning.
         ...(preserveLocalGameState && localGame?.numberSequence
           ? { numberSequence: localGame.numberSequence }
           : {}),
-        ...(preserveLocalGameState && localGame?.calledNumbers
-          ? { calledNumbers: localGame.calledNumbers }
+        ...(preserveLocalGameState && localGame
+          ? { calledNumbers: localGame.calledNumbers ?? [] }
           : {}),
       };
       return localFinishedIds.has(String(g.id)) && g.status !== 'finished'
@@ -129,13 +133,17 @@ export async function refreshCache() {
         : merged;
     });
     const preservedOfflineGames = offlineGames.filter((g: any) => !serverGameIds.has(g.id));
-    // Upsert merged games - no dbClear to avoid race window with callNumber
-    await dbPutMany('games', [...mergedGames, ...preservedOfflineGames]);
-    // Remove stale server games no longer present on server
-    for (const lg of localGames) {
-      const lgId = String(lg.id);
-      if (!lgId.startsWith('offline-') && !serverGameIds.has(lgId)) {
-        await dbDelete('games', lgId);
+    // Upsert merged games — only write if not in an active game session to avoid racing
+    // with callNumber writes. If _gameSessionActive is true, calledNumbers are already
+    // preserved above anyway, but skipping the write entirely is safest.
+    if (!_gameSessionActive) {
+      await dbPutMany('games', [...mergedGames, ...preservedOfflineGames]);
+      // Remove stale server games no longer present on server
+      for (const lg of localGames) {
+        const lgId = String(lg.id);
+        if (!lgId.startsWith('offline-') && !serverGameIds.has(lgId)) {
+          await dbDelete('games', lgId);
+        }
       }
     }
 
