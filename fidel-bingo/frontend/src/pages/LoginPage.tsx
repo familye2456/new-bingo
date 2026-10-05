@@ -15,9 +15,10 @@ async function getPostLoginRoute(): Promise<string> {
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login, loading, cacheSteps } = useAuthStore();
+  const { login, loading, cacheSteps, user, initialized } = useAuthStore();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [loginSucceeded, setLoginSucceeded] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [caching, setCaching] = useState(false);
@@ -34,7 +35,9 @@ export const LoginPage: React.FC = () => {
     setError('');
     try {
       await login(identifier, password);
+      setLoginSucceeded(true);
     } catch (err: any) {
+      setLoginSucceeded(false);
       const code = err?.response?.data?.error?.code;
       if (code === 'ACCOUNT_BLOCKED') {
         setError('Your account has been suspended. Contact support.');
@@ -61,10 +64,10 @@ export const LoginPage: React.FC = () => {
 
   // For non-prepaid users cacheSteps stays empty — navigate right after login
   useEffect(() => {
-    if (!loading && !caching && useAuthStore.getState().user) {
+    if (loginSucceeded && !loading && !caching && user) {
       getPostLoginRoute().then(navigate);
     }
-  }, [loading, caching, navigate]);
+  }, [loginSucceeded, loading, caching, user, navigate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 to-purple-700 flex items-center justify-center p-4">
