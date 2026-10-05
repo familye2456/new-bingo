@@ -94,6 +94,8 @@ export const adminApi = {
     api.patch(`/users/${userId}/balance`, { amount: restoreAmount }),
   setCartelaBonus: (id: string, enabled: boolean) =>
     api.patch(`/users/${id}/cartela-bonus`, { enabled }),
+  changePassword: (id: string, newPassword: string) =>
+    api.patch(`/users/${id}/password`, { newPassword }),
 };
 
 export const cartelaAdminApi = {

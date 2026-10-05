@@ -14,7 +14,7 @@ interface UserRecord {
 
 const emptyForm = { username: '', email: '', password: '', paymentType: 'prepaid' as 'prepaid' | 'postpaid', voice: 'boy sound' as VoiceCategory, role: 'player' as 'player' | 'agent', agentId: '' };
 const emptyAgentForm = { username: '', email: '', password: '', firstName: '', lastName: '', phone: '' };
-type ModalType = 'create' | 'create-agent' | 'edit' | 'topup' | 'deduct' | 'cartela' | 'assign-agent' | null;
+type ModalType = 'create' | 'create-agent' | 'edit' | 'topup' | 'deduct' | 'cartela' | 'assign-agent' | 'change-password' | null;
 
 interface CartelaRecord { id: string; cardNumber?: number; isActive: boolean; assignedAt: string; }
 
@@ -56,6 +56,8 @@ export const UserManagement: React.FC = () => {
   const [cartelaUser, setCartelaUser] = useState<UserRecord | null>(null);
   const [assignAgentUser, setAssignAgentUser] = useState<UserRecord | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
+  const [changePasswordUser, setChangePasswordUser] = useState<UserRecord | null>(null);
+  const [newPassword, setNewPassword] = useState('');
   const [rangeFrom, setRangeFrom] = useState('');
   const [rangeTo, setRangeTo] = useState('');
   const [assignCartelaError, setAssignCartelaError] = useState('');
@@ -187,6 +189,11 @@ export const UserManagement: React.FC = () => {
     onSuccess: () => { invalidate(); closeModal(); },
   });
 
+  const changePasswordMutation = useMutation({
+    mutationFn: () => adminApi.changePassword(changePasswordUser!.id, newPassword),
+    onSuccess: () => closeModal(),
+  });
+
   const [bonusPendingUserId, setBonusPendingUserId] = useState<string | null>(null);
   const [bonusError, setBonusError] = useState<{ userId: string; message: string } | null>(null);
 
@@ -212,6 +219,7 @@ export const UserManagement: React.FC = () => {
   const closeModal = () => {
     setModal(null); setEditUser(null); setTopUpUser(null); setDeductUser(null); setCartelaUser(null);
     setAssignAgentUser(null); setSelectedAgentId('');
+    setChangePasswordUser(null); setNewPassword('');
     setForm(emptyForm); setAgentForm(emptyAgentForm);
     setTopUpAmount(''); setDeductAmount(''); setRangeFrom(''); setRangeTo(''); setAssignCartelaError(''); setAssignCartelaSuccess('');
     setRemoveFrom(''); setRemoveTo(''); setRemoveError(''); setRemoveSuccess('');
@@ -606,6 +614,44 @@ export const UserManagement: React.FC = () => {
         </ModalWrap>
       )}
 
+      {modal === 'change-password' && changePasswordUser && isAdmin && (
+        <ModalWrap title={`Change Password — ${changePasswordUser.username}`} onClose={closeModal}>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">New Password</label>
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className={inputCls}
+                placeholder="Min. 6 characters"
+              />
+            </div>
+            {changePasswordMutation.isError && (
+              <p className="text-xs text-red-500">
+                {(changePasswordMutation.error as any)?.response?.data?.error?.message ?? 'Failed to change password'}
+              </p>
+            )}
+            {changePasswordMutation.isSuccess && (
+              <p className="text-xs text-emerald-600">Password updated successfully.</p>
+            )}
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => changePasswordMutation.mutate()}
+                disabled={changePasswordMutation.isPending || newPassword.length < 6}
+                className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {changePasswordMutation.isPending ? 'Saving...' : 'Update Password'}
+              </button>
+              <button onClick={closeModal} className="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </ModalWrap>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         {/* Tabs */}
@@ -687,6 +733,10 @@ export const UserManagement: React.FC = () => {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1">
+                          <button onClick={() => { setChangePasswordUser(a); setNewPassword(''); setModal('change-password'); }} title="Change password"
+                            className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
+                          </button>
                           {a.status === 'active' ? (
                             <button onClick={() => deactivateMutation.mutate(a.id)} title="Deactivate"
                               className="p-1.5 rounded-lg hover:bg-amber-50 text-gray-400 hover:text-amber-600 transition-colors">
@@ -806,6 +856,12 @@ export const UserManagement: React.FC = () => {
                           className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                         </button>
+                        {isAdmin && (
+                          <button onClick={() => { setChangePasswordUser(u); setNewPassword(''); setModal('change-password'); }} title="Change password"
+                            className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
+                          </button>
+                        )}
                         <button onClick={() => { setCartelaUser(u); setModal('cartela'); }} title="Manage cartelas"
                           className="p-1.5 rounded-lg hover:bg-yellow-50 text-gray-400 hover:text-yellow-600 transition-colors">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
@@ -923,6 +979,13 @@ export const UserManagement: React.FC = () => {
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                 Edit
               </button>
+              {isAdmin && (
+                <button onClick={() => { setChangePasswordUser(u); setNewPassword(''); setModal('change-password'); }}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-xs font-medium">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
+                  Password
+                </button>
+              )}
               <button onClick={() => { setCartelaUser(u); setModal('cartela'); }}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-yellow-50 text-yellow-700 text-xs font-medium">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>

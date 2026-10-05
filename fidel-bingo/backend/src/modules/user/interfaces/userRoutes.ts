@@ -147,6 +147,22 @@ router.get('/:id', authorize('admin', 'agent'), async (req: AuthRequest, res: Re
   res.json({ success: true, data: user.sanitize() });
 });
 
+// Change a user's password (admin only)
+router.patch('/:id/password', authorize('admin'), async (req: AuthRequest, res: Response) => {
+  const { newPassword } = req.body;
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'newPassword must be at least 6 characters');
+  }
+
+  const repo = AppDataSource.getRepository(User);
+  const user = await repo.findOne({ where: { id: req.params.id } });
+  if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
+
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  await repo.update(req.params.id, { passwordHash });
+  res.json({ success: true, message: 'Password updated' });
+});
+
 // Update a user
 router.patch('/:id', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(User);
