@@ -139,6 +139,32 @@ router.post('/', authorize('admin', 'agent'), async (req: AuthRequest, res: Resp
   res.status(201).json({ success: true, data: user.sanitize() });
 });
 
+// ─── Admin: list all negative-balance alerts (pending refund with NEGATIVE_BALANCE_ALERT) ───
+router.get('/negative-balance-alerts', authorize('admin', 'agent'), async (_req: AuthRequest, res: Response) => {
+  const txRepo = AppDataSource.getRepository(Transaction);
+  const alerts = await txRepo.find({
+    where: { transactionType: 'refund', description: 'NEGATIVE_BALANCE_ALERT', status: 'pending' },
+    order: { processedAt: 'DESC' },
+  });
+
+  // Enrich with user info
+  const userRepo = AppDataSource.getRepository(User);
+  const enriched = await Promise.all(
+    alerts.map(async (a) => {
+      const u = a.userId ? await userRepo.findOne({ where: { id: a.userId } }) : null;
+      return {
+        alertId: a.id,
+        userId: a.userId,
+        username: u?.username,
+        balance: u ? Number(u.balance) : null,
+        alertedAt: a.processedAt,
+      };
+    })
+  );
+
+  res.json({ success: true, data: enriched });
+});
+
 // Get a single user
 router.get('/:id', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
   const user = await AppDataSource.getRepository(User).findOne({ where: { id: req.params.id } });
@@ -569,32 +595,6 @@ router.post('/me/alert-negative-balance', async (req: AuthRequest, res: Response
   }
 
   return res.json({ success: true, alerted: true, balance });
-});
-
-// ─── Admin: list all negative-balance alerts (pending refund with NEGATIVE_BALANCE_ALERT) ───
-router.get('/negative-balance-alerts', authorize('admin', 'agent'), async (_req: AuthRequest, res: Response) => {
-  const txRepo = AppDataSource.getRepository(Transaction);
-  const alerts = await txRepo.find({
-    where: { transactionType: 'refund', description: 'NEGATIVE_BALANCE_ALERT', status: 'pending' },
-    order: { processedAt: 'DESC' },
-  });
-
-  // Enrich with user info
-  const userRepo = AppDataSource.getRepository(User);
-  const enriched = await Promise.all(
-    alerts.map(async (a) => {
-      const u = a.userId ? await userRepo.findOne({ where: { id: a.userId } }) : null;
-      return {
-        alertId: a.id,
-        userId: a.userId,
-        username: u?.username,
-        balance: u ? Number(u.balance) : null,
-        alertedAt: a.processedAt,
-      };
-    })
-  );
-
-  res.json({ success: true, data: enriched });
 });
 
 export default router;

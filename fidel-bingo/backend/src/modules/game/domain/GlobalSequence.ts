@@ -9,7 +9,7 @@ import { Entity, PrimaryColumn, Column, UpdateDateColumn } from 'typeorm';
  */
 @Entity('global_sequences')
 export class GlobalSequence {
-  @PrimaryColumn({ type: 'uuid' })
+  @PrimaryColumn({ type: 'varchar', length: 255 })
   id!: string;
 
   /** The pre-shuffled sequence of numbers 1–75 */

@@ -171,14 +171,14 @@ const start = async () => {
       ).catch(() => {});
 
       // Create global_sequences table for per-user pre-generated number sequences
-      // Drop and recreate if the primary key type is wrong (old VARCHAR(16) → UUID)
+      // Drop and recreate if the primary key type is wrong (uuid → varchar)
       await migDs.query(`
         DO $$ BEGIN
           IF EXISTS (
             SELECT 1 FROM information_schema.columns
             WHERE table_name = 'global_sequences'
             AND column_name = 'id'
-            AND data_type = 'character varying'
+            AND data_type = 'uuid'
           ) THEN
             DROP TABLE global_sequences;
           END IF;
@@ -186,7 +186,7 @@ const start = async () => {
       `).catch(() => {});
       await migDs.query(`
         CREATE TABLE IF NOT EXISTS global_sequences (
-          id UUID PRIMARY KEY,
+          id VARCHAR(255) PRIMARY KEY,
           sequence INTEGER[] NOT NULL DEFAULT '{}',
           generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
