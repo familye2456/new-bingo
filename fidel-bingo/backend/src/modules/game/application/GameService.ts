@@ -51,41 +51,48 @@ export class GameService {
     return arr;
   }
 
-  /** Get the current global sequence, creating one if it doesn't exist yet */
-  async getGlobalSequence(): Promise<GlobalSequence> {
-    let gs = await this.gsRepo.findOne({ where: { id: 'singleton' } });
+  /** Get the sequence for a specific user, creating one if it doesn't exist yet */
+  async getGlobalSequence(userId?: string): Promise<GlobalSequence> {
+    const key = userId ?? 'singleton';
+    let gs = await this.gsRepo.findOne({ where: { id: key } });
     if (!gs || gs.sequence.length !== 75) {
-      gs = this.gsRepo.create({ id: 'singleton', sequence: this.shuffleNumbers() });
+      gs = this.gsRepo.create({ id: key, sequence: this.shuffleNumbers() });
       await this.gsRepo.save(gs);
-      logger.info('Global sequence initialised');
+      logger.info('User sequence initialised', { userId: key });
     }
     return gs;
   }
 
-  /** Regenerate the global sequence (admin action) */
-  async regenerateGlobalSequence(): Promise<GlobalSequence> {
-    let gs = await this.gsRepo.findOne({ where: { id: 'singleton' } });
+  /** Regenerate the sequence for a specific user (or global singleton) */
+  async regenerateGlobalSequence(userId?: string): Promise<GlobalSequence> {
+    const key = userId ?? 'singleton';
+    let gs = await this.gsRepo.findOne({ where: { id: key } });
     if (!gs) {
-      gs = this.gsRepo.create({ id: 'singleton', sequence: this.shuffleNumbers() });
+      gs = this.gsRepo.create({ id: key, sequence: this.shuffleNumbers() });
     } else {
       gs.sequence = this.shuffleNumbers();
     }
     await this.gsRepo.save(gs);
-    logger.info('Global sequence regenerated');
+    logger.info('User sequence regenerated', { userId: key });
     return gs;
   }
 
   /**
-   * Given a list of user_cartela IDs and a win pattern, simulate the global
-   * sequence and return which cartela wins first and at what call number.
+   * Given a list of user_cartela IDs and a win pattern, simulate the user's
+   * pre-generated sequence and return which cartela wins first.
    */
-  async detectWinner(cartelaIds: string[], winPattern: string): Promise<{
+  async detectWinner(cartelaIds: string[], winPattern: string, userId?: string): Promise<{
     sequence: number[];
     generatedAt: Date;
     winner: { cardNumber: number; callsNeeded: number } | null;
     rankings: Array<{ cardNumber: number; callsNeeded: number }>;
   }> {
-    const gs = await this.getGlobalSequence();
+    // Use the cartela owner's sequence if userId not explicitly provided
+    const targetUserId = userId ?? (cartelaIds.length > 0
+      ? (await this.ucRepo.findOne({ where: { id: cartelaIds[0] } }))?.userId
+      : undefined);
+
+    const gs = await this.getGlobalSequence(targetUserId);
     const cartelas = await this.ucRepo.find({ where: { id: In(cartelaIds) } });
     if (cartelas.length === 0) {
       return { sequence: gs.sequence, generatedAt: gs.generatedAt, winner: null, rankings: [] };
@@ -161,8 +168,8 @@ export class GameService {
       throw new AppError(400, 'INSUFFICIENT_BALANCE', 'Insufficient balance');
 
     return AppDataSource.transaction(async (manager) => {
-      // Use the pre-generated global sequence so admin can predict the winner
-      const gs = await this.getGlobalSequence();
+      // Use the user's pre-generated sequence so admin can predict the winner
+      const gs = await this.getGlobalSequence(userId);
       const game = manager.create(Game, {
         creatorId: userId,
         gameNumber: userGameCount + 1,
@@ -179,6 +186,41 @@ export class GameService {
         houseCut,
         ...(dto.createdAt && { createdAt: new Date(dto.createdAt) }),
       });
+
+      const [savedGame] = await Promise.all([
+        manager.save(game),
+        manager.decrement(User, { id: userId }, 'balance', houseCut),
+      ]);
+
+      await Promise.all([
+        manager.save(
+          dto.cartelaIds.map((ucId) =>
+            manager.create(GameCartela, {
+              gameId: savedGame.id,
+              userCartelaId: ucId,
+              userId,
+              betAmount: dto.betAmountPerCartela,
+            })
+          )
+        ),
+        manager.save(
+          manager.create(Transaction, {
+            userId, gameId: savedGame.id, transactionType: 'bet',
+            amount: houseCut, status: 'completed',
+            description: `House fee for game ${savedGame.id}`,
+            processedAt: new Date(),
+          })
+        ),
+      ]);
+
+      // Regenerate this user's sequence immediately so the next game has a fresh one
+      // and the admin can check the new sequence for the next prediction
+      await this.regenerateGlobalSequence(userId);
+
+      activeGames.inc();
+      logger.info('Game created', { gameId: savedGame.id, userId });
+      return savedGame;
+    });
 
       const [savedGame] = await Promise.all([
         manager.save(game),

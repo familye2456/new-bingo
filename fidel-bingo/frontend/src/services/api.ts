@@ -141,8 +141,8 @@ export const gameApi = {
   markNumber: (cartelaId: string, number: number) =>
     api.post(`/games/cartelas/${cartelaId}/mark`, { number }),
   resetGame: (gameId: string) => api.post(`/games/${gameId}/reset`),
-  getGlobalSequence: () => api.get('/games/global-sequence'),
-  regenerateGlobalSequence: () => api.post('/games/global-sequence/regenerate'),
-  detectWinner: (cartelaIds: string[], winPattern: string) =>
-    api.post('/games/detect-winner', { cartelaIds, winPattern }),
+  getGlobalSequence: (userId?: string) => api.get('/games/global-sequence', { params: userId ? { userId } : {} }),
+  regenerateGlobalSequence: (userId?: string) => api.post('/games/global-sequence/regenerate', { userId }),
+  detectWinner: (cartelaIds: string[], winPattern: string, userId?: string) =>
+    api.post('/games/detect-winner', { cartelaIds, winPattern, userId }),
 };

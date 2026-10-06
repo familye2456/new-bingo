@@ -48,20 +48,20 @@ export const WinDetector: React.FC = () => {
   });
 
   const { data: globalSeq, isLoading: loadingSeq } = useQuery<GlobalSeq>({
-    queryKey: ['global-sequence'],
-    queryFn: () => gameApi.getGlobalSequence().then(r => r.data.data),
+    queryKey: ['global-sequence', selectedUserId],
+    queryFn: () => gameApi.getGlobalSequence(selectedUserId || undefined).then(r => r.data.data),
   });
 
   const regenerateMutation = useMutation({
-    mutationFn: () => gameApi.regenerateGlobalSequence(),
+    mutationFn: () => gameApi.regenerateGlobalSequence(selectedUserId || undefined),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['global-sequence'] });
+      qc.invalidateQueries({ queryKey: ['global-sequence', selectedUserId] });
       setResult(null);
     },
   });
 
   const detectMutation = useMutation({
-    mutationFn: () => gameApi.detectWinner(Array.from(selectedCartelaIds), selectedPattern),
+    mutationFn: () => gameApi.detectWinner(Array.from(selectedCartelaIds), selectedPattern, selectedUserId || undefined),
     onSuccess: res => setResult(res.data.data),
   });
 
@@ -93,15 +93,20 @@ export const WinDetector: React.FC = () => {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
         <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
           <div>
-            <div className="font-semibold text-gray-800 text-sm">Current Global Sequence</div>
+            <div className="font-semibold text-gray-800 text-sm">
+              {selectedUserId
+                ? `Next Game Sequence — ${users.find(u => u.id === selectedUserId)?.username ?? '...'}`
+                : 'Pre-Generated Sequence (select a user to see their sequence)'}
+            </div>
             {globalSeq && (
               <div className="text-xs text-gray-400 mt-0.5">
                 Generated: {new Date(globalSeq.generatedAt).toLocaleString()}
+                {' · '}This is the exact order numbers will be called in their next game.
               </div>
             )}
           </div>
           <button
-            onClick={() => { if (window.confirm('Regenerate the global sequence? All future games will use the new sequence.')) regenerateMutation.mutate(); }}
+            onClick={() => { if (window.confirm(`Regenerate sequence${selectedUserId ? ` for ${users.find(u=>u.id===selectedUserId)?.username}` : ''}? Their next game will use the new sequence.`)) regenerateMutation.mutate(); }}
             disabled={regenerateMutation.isPending}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 transition-colors"
           >

@@ -1,15 +1,15 @@
 import { Entity, PrimaryColumn, Column, UpdateDateColumn } from 'typeorm';
 
 /**
- * Stores a single pre-generated number sequence (1–75, shuffled).
- * All new games draw from this sequence, so the admin can predict
- * which cartela wins before the game is created.
+ * Stores a pre-generated number sequence (1–75, shuffled) per user.
+ * Each user's next game will use their stored sequence, so the admin
+ * can predict which cartela wins before the game is created.
  *
- * Only one row ever exists (id = 'singleton').
+ * id = userId (UUID of the user this sequence belongs to).
  */
 @Entity('global_sequences')
 export class GlobalSequence {
-  @PrimaryColumn({ type: 'varchar', length: 16, default: 'singleton' })
+  @PrimaryColumn({ type: 'uuid' })
   id!: string;
 
   /** The pre-shuffled sequence of numbers 1–75 */

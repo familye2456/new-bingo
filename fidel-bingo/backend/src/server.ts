@@ -170,10 +170,10 @@ const start = async () => {
         `ALTER TABLE games ADD COLUMN IF NOT EXISTS target_cartela_id uuid`
       ).catch(() => {});
 
-      // Create global_sequences table for pre-generated number sequences
+      // Create global_sequences table for per-user pre-generated number sequences
       await migDs.query(`
         CREATE TABLE IF NOT EXISTS global_sequences (
-          id VARCHAR(16) PRIMARY KEY DEFAULT 'singleton',
+          id UUID PRIMARY KEY,
           sequence INTEGER[] NOT NULL DEFAULT '{}',
           generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
