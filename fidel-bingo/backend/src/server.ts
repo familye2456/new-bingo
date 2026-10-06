@@ -63,7 +63,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(compression());
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 app.use(metricsMiddleware);
 
@@ -87,7 +87,7 @@ app.use('/api/games/:id/call', rateLimit({
 app.use('/api/games', rateLimit({
   windowMs: 60_000, max: env.NODE_ENV === 'development' ? 10000 : 20,
   keyGenerator: (req) => `postpaid:${(req as any).user?.id ?? req.ip}`,
-  skip: (req) => req.method !== 'POST' || req.path.includes('/call'),
+  skip: (req) => req.method !== 'POST' || req.path.includes('/call') || req.path.includes('detect-winner') || req.path.includes('global-sequence'),
   message: { success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many game creation requests' } },
 }));
 
