@@ -101,6 +101,9 @@ export class GameService {
     const rankings: Array<{ cardNumber: number; callsNeeded: number }> = [];
 
     for (const uc of cartelas) {
+      // Skip cartelas that have no numbers (unassigned / incomplete rows)
+      if (!uc.numbers || uc.numbers.length !== 25) continue;
+
       const mask: boolean[] = Array(25).fill(false);
       mask[12] = true; // free space
       let callsNeeded = 75; // worst case — never wins

@@ -86,6 +86,14 @@ export const regenerateGlobalSequence = async (req: AuthRequest, res: Response) 
 
 export const detectWinner = async (req: AuthRequest, res: Response) => {
   const { cartelaIds, winPattern = 'line1', userId } = req.body;
-  const result = await gameService.detectWinner(cartelaIds, winPattern, userId);
-  res.json({ success: true, data: result });
+  if (!Array.isArray(cartelaIds) || cartelaIds.length === 0) {
+    return res.status(400).json({ success: false, error: 'cartelaIds must be a non-empty array' });
+  }
+  try {
+    const result = await gameService.detectWinner(cartelaIds, winPattern, userId);
+    res.json({ success: true, data: result });
+  } catch (err: any) {
+    console.error('[detectWinner] error:', err);
+    res.status(500).json({ success: false, error: err?.message ?? 'Internal server error' });
+  }
 };
