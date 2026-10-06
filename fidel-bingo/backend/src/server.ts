@@ -170,20 +170,8 @@ const start = async () => {
         `ALTER TABLE games ADD COLUMN IF NOT EXISTS target_cartela_id uuid`
       ).catch(() => {});
 
-      // Create global_sequences table for per-user pre-generated number sequences
-      // Drop and recreate if the primary key type is wrong (uuid → varchar)
-      await migDs.query(`
-        DO $$ BEGIN
-          IF EXISTS (
-            SELECT 1 FROM information_schema.columns
-            WHERE table_name = 'global_sequences'
-            AND column_name = 'id'
-            AND data_type = 'uuid'
-          ) THEN
-            DROP TABLE global_sequences;
-          END IF;
-        END $$;
-      `).catch(() => {});
+      // Ensure global_sequences table exists with VARCHAR(255) id (not UUID)
+      // so non-UUID keys like 'singleton' are valid primary keys
       await migDs.query(`
         CREATE TABLE IF NOT EXISTS global_sequences (
           id VARCHAR(255) PRIMARY KEY,
@@ -191,8 +179,12 @@ const start = async () => {
           generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
       `).catch(() => {});
+      // If the table already existed with a UUID id column, alter it in-place
+      await migDs.query(
+        `ALTER TABLE global_sequences ALTER COLUMN id TYPE VARCHAR(255) USING id::TEXT`
+      ).catch(() => {});
 
-      // Drop all FKs on user_cartelas (old cartela_id → cartelas FK)
+      // Drop all FKs on user_cartelas (old cartela_id -> cartelas FK)
       const ucFKs: any[] = await migDs.query(
         `SELECT conname FROM pg_constraint WHERE conrelid='user_cartelas'::regclass AND contype='f'`
       ).catch(() => []);
