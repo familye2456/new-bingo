@@ -65,3 +65,25 @@ export const checkCartela = async (req: AuthRequest, res: Response) => {
   const result = await gameService.checkCartela(req.params.gameId, cardNumber);
   res.json({ success: true, data: result });
 };
+
+export const setTargetCartela = async (req: AuthRequest, res: Response) => {
+  const { cartelaId } = req.body; // null to clear
+  const game = await gameService.setTargetCartela(req.params.gameId, cartelaId ?? null);
+  res.json({ success: true, data: game });
+};
+
+export const getGlobalSequence = async (_req: AuthRequest, res: Response) => {
+  const gs = await gameService.getGlobalSequence();
+  res.json({ success: true, data: gs });
+};
+
+export const regenerateGlobalSequence = async (_req: AuthRequest, res: Response) => {
+  const gs = await gameService.regenerateGlobalSequence();
+  res.json({ success: true, data: gs });
+};
+
+export const detectWinner = async (req: AuthRequest, res: Response) => {
+  const { cartelaIds, winPattern = 'line1' } = req.body;
+  const result = await gameService.detectWinner(cartelaIds, winPattern);
+  res.json({ success: true, data: result });
+};

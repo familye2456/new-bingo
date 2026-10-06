@@ -9,6 +9,7 @@ import { Transaction } from '../modules/payment/domain/Transaction';
 import { Account } from '../modules/payment/domain/Account';
 import { AuditLog } from '../shared/domain/AuditLog';
 import { RefreshToken } from '../modules/auth/domain/RefreshToken';
+import { GlobalSequence } from '../modules/game/domain/GlobalSequence';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -22,8 +23,8 @@ export const AppDataSource = new DataSource({
     min: 2,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 5000,
-    statement_timeout: 60000,      // allow up to 60s for schema sync on startup
+    statement_timeout: 60000,
   },
-  entities: [User, Game, Cartela, UserCartela, GameCartela, Transaction, Account, AuditLog, RefreshToken],
+  entities: [User, Game, Cartela, UserCartela, GameCartela, Transaction, Account, AuditLog, RefreshToken, GlobalSequence],
   migrations: ['dist/migrations/*.js'],
 });

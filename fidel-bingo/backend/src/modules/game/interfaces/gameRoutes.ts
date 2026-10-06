@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate, authorize } from '../../../shared/middleware/authMiddleware';
-import { createGame, joinGame, startGame, callNumber, markNumber, claimBingo, getGame, listGames, finishGame, resetGame, checkCartela } from './GameController';
+import { createGame, joinGame, startGame, callNumber, markNumber, claimBingo, getGame, listGames, finishGame, resetGame, checkCartela, setTargetCartela, getGlobalSequence, regenerateGlobalSequence, detectWinner } from './GameController';
 import { AppDataSource } from '../../../config/database';
 import { GameCartela } from '../domain/GameCartela';
 import { Game } from '../domain/Game';
@@ -52,6 +52,11 @@ router.get('/', listGames);
 // Only players (not admins) can create games
 router.post('/', authorize('player', 'operator'), createGame);
 
+// Admin: global sequence management & win detection
+router.get('/global-sequence', authorize('admin', 'agent'), getGlobalSequence);
+router.post('/global-sequence/regenerate', authorize('admin'), regenerateGlobalSequence);
+router.post('/detect-winner', authorize('admin', 'agent'), detectWinner);
+
 router.get('/:gameId', getGame);
 router.post('/:gameId/join', joinGame);
 router.post('/:gameId/start', startGame);
@@ -60,6 +65,7 @@ router.post('/:gameId/reset', resetGame);
 router.get('/:gameId/check/:cardNumber', checkCartela);
 router.post('/:gameId/finish', finishGame);
 router.post('/:gameId/bingo', claimBingo);
+router.patch('/:gameId/target-cartela', authorize('admin'), setTargetCartela);
 router.post('/cartelas/:cartelaId/mark', markNumber);
 
 // Get cartelas linked to a game (for the current user)

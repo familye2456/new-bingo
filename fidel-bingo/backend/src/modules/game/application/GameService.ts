@@ -12,6 +12,7 @@ import { activeGames } from '../../../shared/infrastructure/metrics';
 import { logger } from '../../../shared/infrastructure/logger';
 import { env } from '../../../config/env';
 import { MoreThanOrEqual } from 'typeorm';
+import { GlobalSequence } from '../domain/GlobalSequence';
 
 export interface CreateGameDTO {
   /** IDs from user_cartelas (not the shared cartelas pool) */
@@ -35,8 +36,11 @@ export class GameService {
   private ucRepo = AppDataSource.getRepository(UserCartela);
   private gcRepo = AppDataSource.getRepository(GameCartela);
   private userRepo = AppDataSource.getRepository(User);
+  private gsRepo = AppDataSource.getRepository(GlobalSequence);
   private generator = new CartelaGenerator();
   private winDetector = new WinnerDetection();
+  // Per-game mutex: prevents concurrent callNumber executions from producing duplicates
+  private callLocks = new Map<string, Promise<unknown>>();
 
   private shuffleNumbers(): number[] {
     const arr = Array.from({ length: 75 }, (_, i) => i + 1);
@@ -45,6 +49,75 @@ export class GameService {
       [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     return arr;
+  }
+
+  /** Get the current global sequence, creating one if it doesn't exist yet */
+  async getGlobalSequence(): Promise<GlobalSequence> {
+    let gs = await this.gsRepo.findOne({ where: { id: 'singleton' } });
+    if (!gs || gs.sequence.length !== 75) {
+      gs = this.gsRepo.create({ id: 'singleton', sequence: this.shuffleNumbers() });
+      await this.gsRepo.save(gs);
+      logger.info('Global sequence initialised');
+    }
+    return gs;
+  }
+
+  /** Regenerate the global sequence (admin action) */
+  async regenerateGlobalSequence(): Promise<GlobalSequence> {
+    let gs = await this.gsRepo.findOne({ where: { id: 'singleton' } });
+    if (!gs) {
+      gs = this.gsRepo.create({ id: 'singleton', sequence: this.shuffleNumbers() });
+    } else {
+      gs.sequence = this.shuffleNumbers();
+    }
+    await this.gsRepo.save(gs);
+    logger.info('Global sequence regenerated');
+    return gs;
+  }
+
+  /**
+   * Given a list of user_cartela IDs and a win pattern, simulate the global
+   * sequence and return which cartela wins first and at what call number.
+   */
+  async detectWinner(cartelaIds: string[], winPattern: string): Promise<{
+    sequence: number[];
+    generatedAt: Date;
+    winner: { cardNumber: number; callsNeeded: number } | null;
+    rankings: Array<{ cardNumber: number; callsNeeded: number }>;
+  }> {
+    const gs = await this.getGlobalSequence();
+    const cartelas = await this.ucRepo.findByIds(cartelaIds);
+    if (cartelas.length === 0) {
+      return { sequence: gs.sequence, generatedAt: gs.generatedAt, winner: null, rankings: [] };
+    }
+
+    const rankings: Array<{ cardNumber: number; callsNeeded: number }> = [];
+
+    for (const uc of cartelas) {
+      const mask: boolean[] = Array(25).fill(false);
+      mask[12] = true; // free space
+      let callsNeeded = 75; // worst case — never wins
+
+      for (let i = 0; i < gs.sequence.length; i++) {
+        const called = gs.sequence[i];
+        for (let j = 0; j < 25; j++) {
+          if (j !== 12 && uc.numbers[j] === called) mask[j] = true;
+        }
+        if (this.winDetector.checkWin(mask, winPattern)) {
+          callsNeeded = i + 1;
+          break;
+        }
+      }
+      rankings.push({ cardNumber: uc.cardNumber ?? 0, callsNeeded });
+    }
+
+    rankings.sort((a, b) => a.callsNeeded - b.callsNeeded);
+    return {
+      sequence: gs.sequence,
+      generatedAt: gs.generatedAt,
+      winner: rankings[0] ?? null,
+      rankings,
+    };
   }
 
   async createGame(userId: string, dto: CreateGameDTO): Promise<Game> {
@@ -88,6 +161,8 @@ export class GameService {
       throw new AppError(400, 'INSUFFICIENT_BALANCE', 'Insufficient balance');
 
     return AppDataSource.transaction(async (manager) => {
+      // Use the pre-generated global sequence so admin can predict the winner
+      const gs = await this.getGlobalSequence();
       const game = manager.create(Game, {
         creatorId: userId,
         gameNumber: userGameCount + 1,
@@ -96,7 +171,7 @@ export class GameService {
         winPattern: dto.winPattern ?? 'any',
         status: 'active',
         calledNumbers: [],
-        numberSequence: this.shuffleNumbers(),
+        numberSequence: gs.sequence,
         winnerIds: [],
         cartelaCount: ownedUCs.length,
         totalBets: totalCost,
@@ -173,22 +248,90 @@ export class GameService {
   }
 
   async callNumber(gameId: string, userId: string): Promise<{ number: number; remaining: number }> {
+    // Serialize concurrent calls for the same game to prevent duplicate number emission
+    const prev = this.callLocks.get(gameId) ?? Promise.resolve();
+    let resolveLock!: () => void;
+    const lock = new Promise<void>((r) => { resolveLock = r; });
+    this.callLocks.set(gameId, prev.then(() => lock));
+
+    await prev;
+    try {
+      const game = await this.gameRepo.findOne({ where: { id: gameId } });
+      if (!game) throw new AppError(404, 'GAME_NOT_FOUND', 'Game not found');
+      if (game.creatorId !== userId) throw new AppError(403, 'FORBIDDEN', 'Only creator can call numbers');
+      if (game.status !== 'active') throw new AppError(400, 'INVALID_STATE', 'Game is not active');
+
+      const nextIndex = game.calledNumbers.length;
+      if (nextIndex >= 75) throw new AppError(400, 'NO_NUMBERS_LEFT', 'All numbers have been called');
+
+      const sequence = game.numberSequence?.length === 75 ? game.numberSequence : this.shuffleNumbers();
+      const number = sequence[nextIndex];
+      game.calledNumbers = [...game.calledNumbers, number];
+      if (game.numberSequence?.length !== 75) game.numberSequence = sequence;
+      await this.gameRepo.save(game);
+
+      try { await redisClient.setEx(`game:${gameId}`, 3600, JSON.stringify(game)); } catch {}
+      return { number, remaining: 75 - game.calledNumbers.length };
+    } finally {
+      resolveLock();
+    }
+  }
+
+  /**
+   * Admin-only: set a target cartela that should win next.
+   * Reorders the remaining (uncalled) portion of the sequence so that all
+   * numbers the target cartela still needs come first, in a random order,
+   * followed by the remaining numbers in their original shuffled order.
+   * The already-called portion of the sequence is never touched.
+   */
+  async setTargetCartela(gameId: string, cartelaId: string | null): Promise<Game> {
     const game = await this.gameRepo.findOne({ where: { id: gameId } });
     if (!game) throw new AppError(404, 'GAME_NOT_FOUND', 'Game not found');
-    if (game.creatorId !== userId) throw new AppError(403, 'FORBIDDEN', 'Only creator can call numbers');
-    if (game.status !== 'active') throw new AppError(400, 'INVALID_STATE', 'Game is not active');
+    if (game.status !== 'active') throw new AppError(400, 'INVALID_STATE', 'Game must be active');
 
+    // Clearing the target
+    if (cartelaId === null) {
+      game.targetCartelaId = null;
+      await this.gameRepo.save(game);
+      try { await redisClient.setEx(`game:${gameId}`, 3600, JSON.stringify(game)); } catch {}
+      return game;
+    }
+
+    const uc = await this.ucRepo.findOne({ where: { id: cartelaId } });
+    if (!uc) throw new AppError(404, 'CARTELA_NOT_FOUND', 'Cartela not found');
+
+    // Numbers this cartela still needs (not yet called, free space at index 12 excluded)
+    const needed = uc.numbers.filter((n, i) => i !== 12 && !game.calledNumbers.includes(n));
+
+    if (needed.length === 0) {
+      // Cartela already has all numbers — just record the target, no reorder needed
+      game.targetCartelaId = cartelaId;
+      await this.gameRepo.save(game);
+      return game;
+    }
+
+    // Build new sequence: keep already-called part, then needed numbers first, then the rest
     const nextIndex = game.calledNumbers.length;
-    if (nextIndex >= 75) throw new AppError(400, 'NO_NUMBERS_LEFT', 'All numbers have been called');
+    const remaining = game.numberSequence.slice(nextIndex).filter(n => !needed.includes(n));
 
-    const sequence = game.numberSequence?.length === 75 ? game.numberSequence : this.shuffleNumbers();
-    const number = sequence[nextIndex];
-    game.calledNumbers = [...game.calledNumbers, number];
-    if (game.numberSequence?.length !== 75) game.numberSequence = sequence;
+    // Shuffle the needed numbers so their order isn't predictable
+    const shuffledNeeded = [...needed];
+    for (let i = shuffledNeeded.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledNeeded[i], shuffledNeeded[j]] = [shuffledNeeded[j], shuffledNeeded[i]];
+    }
+
+    game.numberSequence = [
+      ...game.numberSequence.slice(0, nextIndex),
+      ...shuffledNeeded,
+      ...remaining,
+    ];
+    game.targetCartelaId = cartelaId;
+
     await this.gameRepo.save(game);
-
     try { await redisClient.setEx(`game:${gameId}`, 3600, JSON.stringify(game)); } catch {}
-    return { number, remaining: 75 - game.calledNumbers.length };
+    logger.info('Target cartela set', { gameId, cartelaId, neededCount: needed.length });
+    return game;
   }
 
   async markNumber(userCartelaId: string, userId: string, number: number): Promise<{ isWinner: boolean; pattern: string | null }> {

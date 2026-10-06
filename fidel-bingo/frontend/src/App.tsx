@@ -47,6 +47,7 @@ const UserDetail         = lazy(() => import('./pages/admin/UserDetail').then(m 
 const CartelaManagement  = lazy(() => import('./pages/admin/CartelaManagement').then(m => ({ default: m.CartelaManagement })));
 const PackageManagement  = lazy(() => import('./pages/admin/PackageManagement').then(m => ({ default: m.PackageManagement })));
 const AdminBalancePage   = lazy(() => import('./pages/admin/AdminBalancePage').then(m => ({ default: m.AdminBalancePage })));
+const WinDetector        = lazy(() => import('./pages/admin/WinDetector').then(m => ({ default: m.WinDetector })));
 
 const PageFallback = () => (
   <div className="flex items-center justify-center h-40 text-gray-400 text-sm">Loading…</div>
@@ -551,6 +552,7 @@ const AppRoutes: React.FC = () => {
             <Route path="cartelas" element={<CartelaManagement />} />
             <Route path="packages" element={<PackageManagement />} />
             <Route path="balance" element={<AdminBalancePage />} />
+            <Route path="win-detector" element={<WinDetector />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/play" replace />} />
