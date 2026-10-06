@@ -71,6 +71,10 @@ export class Game {
   @Column({ name: 'finished_at', nullable: true })
   finishedAt?: Date;
 
+  /** Admin-set target cartela card number — sequence is rigged so this cartela wins next */
+  @Column({ name: 'target_cartela_id', type: 'uuid', nullable: true, default: null })
+  targetCartelaId?: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 }
