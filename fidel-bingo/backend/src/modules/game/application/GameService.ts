@@ -221,37 +221,6 @@ export class GameService {
       logger.info('Game created', { gameId: savedGame.id, userId });
       return savedGame;
     });
-
-      const [savedGame] = await Promise.all([
-        manager.save(game),
-        manager.decrement(User, { id: userId }, 'balance', houseCut),
-      ]);
-
-      await Promise.all([
-        manager.save(
-          dto.cartelaIds.map((ucId) =>
-            manager.create(GameCartela, {
-              gameId: savedGame.id,
-              userCartelaId: ucId,
-              userId,
-              betAmount: dto.betAmountPerCartela,
-            })
-          )
-        ),
-        manager.save(
-          manager.create(Transaction, {
-            userId, gameId: savedGame.id, transactionType: 'bet',
-            amount: houseCut, status: 'completed',
-            description: `House fee for game ${savedGame.id}`,
-            processedAt: new Date(),
-          })
-        ),
-      ]);
-
-      activeGames.inc();
-      logger.info('Game created', { gameId: savedGame.id, userId });
-      return savedGame;
-    });
   }
 
   async checkCartela(gameId: string, cardNumber: number): Promise<{
