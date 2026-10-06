@@ -111,16 +111,26 @@ export const WinDetector: React.FC = () => {
         {loadingSeq ? (
           <div className="text-sm text-gray-400">Loading…</div>
         ) : globalSeq ? (
-          <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
-            {globalSeq.sequence.map((n, i) => (
-              <span key={i}
-                className="text-[11px] font-bold px-1.5 py-0.5 rounded-lg"
-                style={{ background: '#eef2ff', color: '#4338ca', minWidth: '26px', textAlign: 'center' }}>
-                {n}
-              </span>
-            ))}
+          <div>
+            <div className="text-xs text-gray-500 mb-2">
+              Numbers will be called in this exact order (1st → 75th):
+            </div>
+            <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+              {globalSeq.sequence.map((n, i) => (
+                <div key={i} className="flex flex-col items-center">
+                  <span className="text-[9px] text-gray-400 leading-none mb-0.5">{i + 1}</span>
+                  <span
+                    className="text-[11px] font-bold px-1.5 py-0.5 rounded-lg"
+                    style={{ background: '#eef2ff', color: '#4338ca', minWidth: '26px', textAlign: 'center' }}>
+                    {n}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-        ) : null}
+        ) : (
+          <div className="text-sm text-amber-500">No sequence generated yet. Click Regenerate to create one.</div>
+        )}
       </div>
 
       {/* Controls */}

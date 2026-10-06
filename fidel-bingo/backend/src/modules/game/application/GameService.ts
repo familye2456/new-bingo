@@ -11,7 +11,7 @@ import { redisClient } from '../../../config/redis';
 import { activeGames } from '../../../shared/infrastructure/metrics';
 import { logger } from '../../../shared/infrastructure/logger';
 import { env } from '../../../config/env';
-import { MoreThanOrEqual } from 'typeorm';
+import { In, MoreThanOrEqual } from 'typeorm';
 import { GlobalSequence } from '../domain/GlobalSequence';
 
 export interface CreateGameDTO {
@@ -86,7 +86,7 @@ export class GameService {
     rankings: Array<{ cardNumber: number; callsNeeded: number }>;
   }> {
     const gs = await this.getGlobalSequence();
-    const cartelas = await this.ucRepo.findByIds(cartelaIds);
+    const cartelas = await this.ucRepo.find({ where: { id: In(cartelaIds) } });
     if (cartelas.length === 0) {
       return { sequence: gs.sequence, generatedAt: gs.generatedAt, winner: null, rankings: [] };
     }
