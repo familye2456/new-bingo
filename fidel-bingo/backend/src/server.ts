@@ -165,6 +165,20 @@ const start = async () => {
       ];
       for (const sql of ucCols) { await migDs.query(sql).catch(() => {}); }
 
+      // Add target_cartela_id column to games table (for admin-set winner targeting)
+      await migDs.query(
+        `ALTER TABLE games ADD COLUMN IF NOT EXISTS target_cartela_id uuid`
+      ).catch(() => {});
+
+      // Create global_sequences table for pre-generated number sequences
+      await migDs.query(`
+        CREATE TABLE IF NOT EXISTS global_sequences (
+          id VARCHAR(16) PRIMARY KEY DEFAULT 'singleton',
+          sequence INTEGER[] NOT NULL DEFAULT '{}',
+          generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `).catch(() => {});
+
       // Drop all FKs on user_cartelas (old cartela_id → cartelas FK)
       const ucFKs: any[] = await migDs.query(
         `SELECT conname FROM pg_constraint WHERE conrelid='user_cartelas'::regclass AND contype='f'`
