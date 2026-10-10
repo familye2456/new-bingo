@@ -115,16 +115,27 @@ export const GamePage: React.FC = () => {
     });
 
     socket.on('number_called', ({ number }: { number: number }) => {
+      callingRef.current = false; // allow next call
       if (isReplayingRef.current) return; // ignore during replay
-      addCalledNumber(number);
-      setDisplayedNumbers(prev => [...prev, number]);
-      playNumberSoundQueued(number, voiceRef.current, volumeRef.current);
+      // Mark the board and play the sound in sync — onStart fires the moment
+      // audio begins so the visual highlight and the voice call happen together.
+      playNumberSoundQueued(number, voiceRef.current, volumeRef.current, () => {
+        addCalledNumber(number);
+        setDisplayedNumbers(prev => [...prev, number]);
+      });
     });
 
     socket.on('game_finished', () => {
       playRootSound('winner.wav', true);
       setAutoCall(false);
       setTimeout(() => navigate('/dashboard'), 3000);
+    });
+
+    socket.on('error', ({ code }: { code: string }) => {
+      // On any call-related error, release the in-flight lock so next call can proceed
+      if (code === 'CALL_FAILED' || code === 'NO_NUMBERS_LEFT') {
+        callingRef.current = false;
+      }
     });
 
     return () => {
@@ -134,12 +145,16 @@ export const GamePage: React.FC = () => {
       socket.off('game_state');
       socket.off('number_called');
       socket.off('game_finished');
+      socket.off('error');
     };
   }, [gameId, setGame, addCalledNumber, navigate]);
 
   // ── Auto-call ───────────────────────────────────────────────────────────────
+  const callingRef = useRef(false);
+
   const doCallNumber = useCallback(() => {
-    if (!gameId) return;
+    if (!gameId || callingRef.current) return;
+    callingRef.current = true;
     getSocket().emit('call_number', gameId);
   }, [gameId]);
 
@@ -174,7 +189,8 @@ export const GamePage: React.FC = () => {
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleCallNumber = useCallback(() => {
-    if (!gameId) return;
+    if (!gameId || callingRef.current) return;
+    callingRef.current = true;
     getSocket().emit('call_number', gameId);
   }, [gameId]);
 

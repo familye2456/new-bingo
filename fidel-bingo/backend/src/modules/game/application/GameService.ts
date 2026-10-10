@@ -78,44 +78,81 @@ export class GameService {
   }
 
   /**
-   * Given a list of user_cartela IDs and a win pattern, simulate the user's
-   * pre-generated sequence and return which cartela wins first.
+   * Given a list of user_cartela IDs and a win pattern, simulate the sequence
+   * and return which cartela wins first.
+   *
+   * If `gameId` is provided the function uses that game's actual numberSequence
+   * (already filtered to only the numbers NOT yet called, so already-called
+   * numbers count as already marked).  This is the correct mode when a game is
+   * in progress — it tells the admin which cartela will win first from the
+   * current state of the board.
+   *
+   * If `gameId` is omitted the function falls back to the user's pre-generated
+   * GlobalSequence, which is the sequence that will be used for their NEXT game.
    */
-  async detectWinner(cartelaIds: string[], winPattern: string, userId?: string): Promise<{
+  async detectWinner(cartelaIds: string[], winPattern: string, userId?: string, gameId?: string): Promise<{
     sequence: number[];
     generatedAt: Date;
+    calledNumbers: number[];
     winner: { cardNumber: number; callsNeeded: number } | null;
     rankings: Array<{ cardNumber: number; callsNeeded: number }>;
   }> {
-    // Use the cartela owner's sequence if userId not explicitly provided
-    const targetUserId = userId ?? (cartelaIds.length > 0
-      ? (await this.ucRepo.findOne({ where: { id: cartelaIds[0] } }))?.userId
-      : undefined);
+    let sequence: number[];
+    let generatedAt: Date;
+    let calledNumbers: number[] = [];
 
-    const gs = await this.getGlobalSequence(targetUserId);
-    const cartelas = await this.ucRepo.find({ where: { id: In(cartelaIds) } });
-    if (cartelas.length === 0) {
-      return { sequence: gs.sequence, generatedAt: gs.generatedAt, winner: null, rankings: [] };
+    if (gameId) {
+      // Use the CURRENT game's sequence so the admin sees real called numbers
+      const game = await this.gameRepo.findOne({ where: { id: gameId } });
+      if (!game) throw new AppError(404, 'GAME_NOT_FOUND', 'Game not found');
+      if (!game.numberSequence || game.numberSequence.length !== 75) {
+        throw new AppError(400, 'BAD_SEQUENCE', 'Game has no valid number sequence');
+      }
+      sequence = game.numberSequence;
+      calledNumbers = game.calledNumbers ?? [];
+      generatedAt = game.createdAt ?? new Date();
+    } else {
+      // Fallback: next-game prediction using GlobalSequence
+      const targetUserId = userId ?? (cartelaIds.length > 0
+        ? (await this.ucRepo.findOne({ where: { id: cartelaIds[0] } }))?.userId
+        : undefined);
+      const gs = await this.getGlobalSequence(targetUserId);
+      sequence = gs.sequence;
+      generatedAt = gs.generatedAt;
     }
 
+    const cartelas = await this.ucRepo.find({ where: { id: In(cartelaIds) } });
+    if (cartelas.length === 0) {
+      return { sequence, generatedAt, calledNumbers, winner: null, rankings: [] };
+    }
+
+    const calledSet = new Set(calledNumbers);
     const rankings: Array<{ cardNumber: number; callsNeeded: number }> = [];
 
     for (const uc of cartelas) {
       // Skip cartelas that have no numbers (unassigned / incomplete rows)
       if (!uc.numbers || uc.numbers.length !== 25) continue;
 
-      const mask: boolean[] = Array(25).fill(false);
-      mask[12] = true; // free space
-      let callsNeeded = 75; // worst case — never wins
+      // Pre-mark numbers already called in the current game
+      const mask: boolean[] = uc.numbers.map((n, i) => i === 12 || calledSet.has(n));
+      let callsNeeded: number;
 
-      for (let i = 0; i < gs.sequence.length; i++) {
-        const called = gs.sequence[i];
-        for (let j = 0; j < 25; j++) {
-          if (j !== 12 && uc.numbers[j] === called) mask[j] = true;
-        }
-        if (this.winDetector.checkWin(mask, winPattern)) {
-          callsNeeded = i + 1;
-          break;
+      // Check if already won with existing called numbers
+      if (this.winDetector.checkWin(mask, winPattern)) {
+        callsNeeded = calledNumbers.length;
+      } else {
+        callsNeeded = 75; // worst case — never wins within sequence
+
+        // Only iterate over numbers not yet called
+        for (let i = calledNumbers.length; i < sequence.length; i++) {
+          const called = sequence[i];
+          for (let j = 0; j < 25; j++) {
+            if (j !== 12 && uc.numbers[j] === called) mask[j] = true;
+          }
+          if (this.winDetector.checkWin(mask, winPattern)) {
+            callsNeeded = i + 1;
+            break;
+          }
         }
       }
       rankings.push({ cardNumber: uc.cardNumber ?? 0, callsNeeded });
@@ -123,8 +160,9 @@ export class GameService {
 
     rankings.sort((a, b) => a.callsNeeded - b.callsNeeded);
     return {
-      sequence: gs.sequence,
-      generatedAt: gs.generatedAt,
+      sequence,
+      generatedAt,
+      calledNumbers,
       winner: rankings[0] ?? null,
       rankings,
     };

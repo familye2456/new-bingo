@@ -85,12 +85,12 @@ export const regenerateGlobalSequence = async (req: AuthRequest, res: Response) 
 };
 
 export const detectWinner = async (req: AuthRequest, res: Response) => {
-  const { cartelaIds, winPattern = 'line1', userId } = req.body;
+  const { cartelaIds, winPattern = 'line1', userId, gameId } = req.body;
   if (!Array.isArray(cartelaIds) || cartelaIds.length === 0) {
     return res.status(400).json({ success: false, error: 'cartelaIds must be a non-empty array' });
   }
   try {
-    const result = await gameService.detectWinner(cartelaIds, winPattern, userId);
+    const result = await gameService.detectWinner(cartelaIds, winPattern, userId, gameId);
     res.json({ success: true, data: result });
   } catch (err: any) {
     console.error('[detectWinner] error:', err);

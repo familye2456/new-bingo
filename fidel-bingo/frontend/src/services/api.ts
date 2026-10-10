@@ -143,6 +143,6 @@ export const gameApi = {
   resetGame: (gameId: string) => api.post(`/games/${gameId}/reset`),
   getGlobalSequence: (userId?: string) => api.get('/games/global-sequence', { params: userId ? { userId } : {} }),
   regenerateGlobalSequence: (userId?: string) => api.post('/games/global-sequence/regenerate', { userId }),
-  detectWinner: (cartelaIds: string[], winPattern: string, userId?: string) =>
-    api.post('/games/detect-winner', { cartelaIds, winPattern, userId }),
+  detectWinner: (cartelaIds: string[], winPattern: string, userId?: string, gameId?: string) =>
+    api.post('/games/detect-winner', { cartelaIds, winPattern, userId, gameId }),
 };
