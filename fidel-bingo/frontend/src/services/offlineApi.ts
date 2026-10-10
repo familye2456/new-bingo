@@ -89,6 +89,36 @@ function shuffleSequence(): number[] {
   return arr;
 }
 
+/**
+ * Fetch the server's GlobalSequence for this user and store it in IDB.
+ * Called before game creation so the offline fallback uses the same sequence
+ * the server will assign to the next game. Also used by admin WinDetector to
+ * predict which cartela wins before the game is created.
+ *
+ * Returns the sequence array, or null if unreachable (caller should fall back
+ * to shuffleSequence()).
+ */
+export async function prefetchGlobalSequence(userId?: string): Promise<number[] | null> {
+  try {
+    const res = await api.get('/games/global-sequence', { params: userId ? { userId } : {} });
+    const seq: number[] = res.data?.data?.sequence ?? res.data?.sequence;
+    if (Array.isArray(seq) && seq.length === 75) {
+      const key = userId ?? 'singleton';
+      await dbPut('globalSequence', { sequence: seq, generatedAt: new Date().toISOString() }, key);
+      return seq;
+    }
+  } catch { /* server unreachable — use cached */ }
+  return null;
+}
+
+/** Read the most recently cached GlobalSequence for this user from IDB */
+export async function getCachedGlobalSequence(userId?: string): Promise<{ sequence: number[]; generatedAt: string } | null> {
+  const key = userId ?? 'singleton';
+  const cached = await dbGet<{ sequence: number[]; generatedAt: string }>('globalSequence', key);
+  if (cached?.sequence?.length === 75) return cached;
+  return null;
+}
+
 /** Safely extract an array from any response shape */
 function toList(data: any): any[] {
   if (Array.isArray(data)) return data;
@@ -339,6 +369,11 @@ export const offlineGameApi = {
 
     // When online, create directly on server (no temp ID, real game immediately)
     if (isOnline()) {
+      // Pre-fetch GlobalSequence before creating — stores it in IDB so:
+      // 1. Offline fallback uses the exact same sequence the server will assign
+      // 2. Admin WinDetector can predict winner using this sequence before game creation
+      await prefetchGlobalSequence(user?.id);
+
       const result = await tryApi(() => api.post('/games', data));
       if (result.ok) {
         const game = result.data.data.data ?? result.data.data ?? result.data;
@@ -347,6 +382,9 @@ export const offlineGameApi = {
           await dbPut('games', { ...game, cartelaIds: data.cartelaIds });
           await dbPut('gameCartelas', data.cartelaIds, game.id);
           await _writeBetTransactions(game.id, data.cartelaIds, data.betAmountPerCartela, Number(game.housePercentage ?? HOUSE_PCT));
+          // After game creation the server regenerates GlobalSequence for next game —
+          // immediately fetch and cache the NEW sequence so WinDetector is always current.
+          prefetchGlobalSequence(user?.id).catch(() => {});
           // Skip balance refresh during sync flush — refreshCache() will set the
           // correct server balance after all queued games are billed.
           if (!isFlushInProgress()) useAuthStore.getState().refreshBalance();
@@ -361,10 +399,16 @@ export const offlineGameApi = {
     const prizePool = totalBet - houseCut;
     const tempId = `offline-${Date.now()}`;
 
+    // Use the server's pre-fetched GlobalSequence if available — this ensures the
+    // offline game uses the exact same number order the server will assign when synced.
+    // Fall back to a local shuffle only if no cached sequence exists.
+    const cachedSeq = await getCachedGlobalSequence(user?.id);
+    const numberSequence = cachedSeq?.sequence ?? shuffleSequence();
+
     const game = {
       id: tempId, status: 'active', betAmount: data.betAmountPerCartela,
       cartelaCount: data.cartelaIds.length, totalBets: totalBet, prizePool, houseCut,
-      housePercentage: HOUSE_PCT, calledNumbers: [], numberSequence: shuffleSequence(),
+      housePercentage: HOUSE_PCT, calledNumbers: [], numberSequence,
       winnerIds: [], isWinner: false, winPattern: data.winPattern ?? 'any',
       creatorId: user?.id ?? '', createdAt: now, cartelaIds: data.cartelaIds,
     };
@@ -432,8 +476,28 @@ export const offlineGameApi = {
       }
 
       if (!game.numberSequence || game.numberSequence.length !== 75) {
-        console.log('[offlineApi.callNumber] Generating new sequence');
-        game.numberSequence = shuffleSequence();
+        // For postpaid users, fetch the sequence from the server rather than generating locally
+        const user = await dbGet<any>('user', 'me');
+        const isPostpaid = user?.paymentType === 'postpaid';
+        if (isPostpaid && !String(gameId).startsWith('offline-')) {
+          console.log('[offlineApi.callNumber] Fetching sequence from server for postpaid user');
+          try {
+            const res = await api.get(`/games/${gameId}`);
+            const serverGame = res.data?.data ?? res.data;
+            if (serverGame?.numberSequence?.length === 75) {
+              game.numberSequence = serverGame.numberSequence;
+              game.calledNumbers = serverGame.calledNumbers ?? game.calledNumbers;
+              await dbPut('games', game, gameId);
+            } else {
+              game.numberSequence = shuffleSequence();
+            }
+          } catch {
+            game.numberSequence = shuffleSequence();
+          }
+        } else {
+          console.log('[offlineApi.callNumber] Generating new sequence');
+          game.numberSequence = shuffleSequence();
+        }
       }
 
       const number = game.numberSequence[nextIndex];

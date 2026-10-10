@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { offlineUserApi, offlineGameApi } from '../../services/offlineApi';
+import { offlineUserApi, offlineGameApi, prefetchGlobalSequence } from '../../services/offlineApi';
 import { useGameSettings } from '../../store/gameSettingsStore';
 import { useAuthStore } from '../../store/authStore';
 import { playCachedSound, isVoiceFullyCached } from '../../services/db';
@@ -97,6 +97,14 @@ export const NewGame: React.FC = () => {
 
   // Persist whenever any selection changes
   useEffect(() => { savePrefs(bet, pattern, selectedIds, houseCut); }, [bet, pattern, selectedIds, houseCut]);
+
+  // Pre-fetch the server's GlobalSequence into IDB as soon as this page loads.
+  // This ensures:
+  // 1. Admin WinDetector can predict the winner before the game is created
+  // 2. Offline game creation uses the same sequence the server will assign
+  useEffect(() => {
+    if (user?.id) prefetchGlobalSequence(user.id).catch(() => {});
+  }, [user?.id]);
 
   const { data: cartelas = [], isLoading } = useQuery<CartelaRecord[]>({
     queryKey: ['my-cartelas', user?.id],

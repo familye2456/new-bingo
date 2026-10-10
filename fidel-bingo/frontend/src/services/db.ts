@@ -6,7 +6,7 @@ import { openDB, IDBPDatabase } from 'idb';
 
 
 const DB_NAME = 'fidel-bingo';
-const DB_VERSION = 3; // v3: added gameCartelas store for offline cartela membership check
+const DB_VERSION = 4; // v4: added globalSequence store for pre-game winner prediction
 const INLINE_KEY_PATH_STORES = new Set(['cartelas', 'games', 'transactions']);
 
 export interface SyncItem {
@@ -34,6 +34,13 @@ export async function getDB() {
         // Maps gameId → string[] of cartelaIds — never cleared by server refreshes
         if (!db.objectStoreNames.contains('gameCartelas')) {
           db.createObjectStore('gameCartelas');
+        }
+      }
+      if (oldVersion < 4) {
+        // Stores GlobalSequence per userId key — fetched from server before game creation
+        // so offline games use the same sequence the server will assign
+        if (!db.objectStoreNames.contains('globalSequence')) {
+          db.createObjectStore('globalSequence');
         }
       }
     },
