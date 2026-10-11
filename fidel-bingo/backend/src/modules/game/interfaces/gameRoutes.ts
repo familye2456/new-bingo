@@ -53,7 +53,9 @@ router.get('/', listGames);
 router.post('/', authorize('player', 'operator'), createGame);
 
 // Admin: global sequence management & win detection
-router.get('/global-sequence', authorize('admin', 'agent'), getGlobalSequence);
+// Players also need GET access — prefetchGlobalSequence is called before game creation
+// so offline games use the same sequence the server will assign.
+router.get('/global-sequence', authorize('admin', 'agent', 'player'), getGlobalSequence);
 router.post('/global-sequence/regenerate', authorize('admin'), regenerateGlobalSequence);
 router.post('/detect-winner', authorize('admin', 'agent'), detectWinner);
 
