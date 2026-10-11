@@ -10,6 +10,7 @@ interface UserRecord {
   status: string; paymentType: 'prepaid' | 'postpaid'; balance: number;
   agentUsername?: string | null;
   cartelaBonusEnabled: boolean;
+  lockedUntil?: string | null;
 }
 
 const emptyForm = { username: '', email: '', password: '', paymentType: 'prepaid' as 'prepaid' | 'postpaid', voice: 'boy sound' as VoiceCategory, role: 'player' as 'player' | 'agent', agentId: '' };
@@ -112,6 +113,7 @@ export const UserManagement: React.FC = () => {
   });
   const activateMutation = useMutation({ mutationFn: (id: string) => adminApi.activateUser(id), onSuccess: invalidate });
   const deactivateMutation = useMutation({ mutationFn: (id: string) => adminApi.deactivateUser(id), onSuccess: invalidate });
+  const unlockMutation = useMutation({ mutationFn: (id: string) => adminApi.unlockUser(id), onSuccess: invalidate });
   const deleteMutation = useMutation({ mutationFn: (id: string) => adminApi.deleteUser(id), onSuccess: invalidate });
   const topUpMutation = useMutation({
     mutationFn: () => adminApi.topUpBalance(topUpUser!.id, parseFloat(topUpAmount)),
@@ -902,6 +904,12 @@ export const UserManagement: React.FC = () => {
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
                           </button>
                         )}
+                        {u.lockedUntil && new Date(u.lockedUntil) > new Date() && (
+                          <button onClick={() => unlockMutation.mutate(u.id)} title="Unlock account"
+                            className="p-1.5 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 transition-colors">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
+                          </button>
+                        )}
                         {u.status === 'active' ? (
                           <button onClick={() => deactivateMutation.mutate(u.id)} title="Deactivate"
                             className="p-1.5 rounded-lg hover:bg-amber-50 text-gray-400 hover:text-amber-600 transition-colors">
@@ -1017,6 +1025,13 @@ export const UserManagement: React.FC = () => {
                   className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-50 text-red-500 text-xs font-medium">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
                   Deduct
+                </button>
+              )}
+              {u.lockedUntil && new Date(u.lockedUntil) > new Date() && (
+                <button onClick={() => unlockMutation.mutate(u.id)}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-orange-100 text-orange-600 text-xs font-medium">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
+                  Unlock
                 </button>
               )}
               {u.status === 'active' ? (

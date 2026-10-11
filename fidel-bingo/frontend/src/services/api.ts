@@ -82,6 +82,7 @@ export const adminApi = {
   setUserVoice: (id: string, voice: string) => api.patch(`/users/${id}/voice`, { voice }),
   activateUser: (id: string) => api.patch(`/users/${id}/activate`),
   deactivateUser: (id: string) => api.patch(`/users/${id}/deactivate`),
+  unlockUser: (id: string) => api.patch(`/users/${id}/unlock`),
   deleteUser: (id: string) => api.delete(`/users/${id}`),
   topUpBalance: (id: string, amount: number) => api.patch(`/users/${id}/balance`, { amount }),
   deductBalance: (id: string, amount: number) => api.patch(`/users/${id}/balance/deduct`, { amount }),

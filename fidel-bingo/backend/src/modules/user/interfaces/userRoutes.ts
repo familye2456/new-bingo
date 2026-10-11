@@ -288,6 +288,18 @@ router.patch('/:id/balance/deduct', authorize('admin', 'agent'), async (req: Aut
   res.json({ success: true, data: updated?.sanitize() });
 });
 
+// Unlock a locked user (clear login attempts and lockedUntil)
+router.patch('/:id/unlock', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
+  const repo = AppDataSource.getRepository(User);
+  const user = await repo.findOne({ where: { id: req.params.id } });
+  if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
+  if (user.role === 'admin') throw new AppError(403, 'FORBIDDEN', 'Cannot modify an admin');
+  assertAgentOwns(req.user!, user);
+
+  await repo.update(req.params.id, { loginAttempts: 0, lockedUntil: undefined });
+  res.json({ success: true, message: 'User unlocked' });
+});
+
 // Activate a user
 router.patch('/:id/activate', authorize('admin', 'agent'), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(User);
