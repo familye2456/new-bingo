@@ -180,13 +180,15 @@ export const PlayBingo: React.FC = () => {
       offlineGameApi.reset(game.id).then(() => setSessionCalledNumbers([])).catch(() => {});
     } else {
       // Mid-session re-mount (query invalidation, offline→online transition, etc.)
-      // Restore already-called numbers to avoid wiping the stack.
-      const existing = game.calledNumbers ?? [];
-      if (existing.length > 0) {
-        setSessionCalledNumbers(existing);
-      } else {
-        setSessionCalledNumbers([]);
-      }
+      // Read directly from IDB — the React Query cache may be stale and show fewer
+      // numbers than what was actually called, causing the board to appear to reset.
+      dbGet<any>('games', game.id).then((freshGame) => {
+        const existing = freshGame?.calledNumbers ?? game.calledNumbers ?? [];
+        setSessionCalledNumbers(existing.length > 0 ? existing : []);
+      }).catch(() => {
+        const existing = game.calledNumbers ?? [];
+        setSessionCalledNumbers(existing.length > 0 ? existing : []);
+      });
     }
     // Pre-cache cartelas for this game so offline check works
     offlineGameApi.getCartelas(game.id).catch(() => {});
