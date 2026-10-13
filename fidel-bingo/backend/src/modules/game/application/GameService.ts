@@ -517,7 +517,7 @@ export class GameService {
     if (!game) throw new AppError(404, 'GAME_NOT_FOUND', 'Game not found');
     if (game.status !== 'active') throw new AppError(400, 'INVALID_STATE', 'Game is not active');
     game.calledNumbers = [];
-    game.numberSequence = this.shuffleNumbers();
+    // Keep the existing numberSequence so the call order is preserved on reset
     await this.gameRepo.save(game);
     try { await redisClient.setEx(`game:${gameId}`, 3600, JSON.stringify(game)); } catch {}
   }
