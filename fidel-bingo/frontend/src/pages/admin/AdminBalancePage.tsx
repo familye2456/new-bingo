@@ -2,6 +2,8 @@ import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi, gameApi } from '../../services/api';
 
+type ModalMode = 'topup' | 'deduct';
+
 interface UserRecord {
   id: string; username: string; email: string;
   paymentType: 'prepaid' | 'postpaid'; balance: number; status: string; role?: string;
@@ -317,8 +319,10 @@ export const AdminBalancePage: React.FC = () => {
   const queryClient = useQueryClient();
   const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
   const [topUpUser, setTopUpUser] = useState<UserRecord | null>(null);
+  const [modalMode, setModalMode] = useState<ModalMode>('topup');
   const [amount, setAmount] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   const { data: allUsers = [], isLoading: loadingUsers } = useQuery<UserRecord[]>({
     queryKey: ['admin-users'],
@@ -336,10 +340,22 @@ export const AdminBalancePage: React.FC = () => {
     mutationFn: () => adminApi.topUpBalance(topUpUser!.id, parseFloat(amount)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      setSuccessMsg(`Balance updated for ${topUpUser?.username}`);
+      setSuccessMsg(`Balance added for ${topUpUser?.username}`);
       setAmount('');
       setTimeout(() => { setSuccessMsg(''); setTopUpUser(null); }, 3000);
     },
+    onError: (e: any) => setErrorMsg(e?.response?.data?.error?.message ?? 'Top-up failed'),
+  });
+
+  const deductMutation = useMutation({
+    mutationFn: () => adminApi.deductBalance(topUpUser!.id, parseFloat(amount)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      setSuccessMsg(`Balance deducted from ${topUpUser?.username}`);
+      setAmount('');
+      setTimeout(() => { setSuccessMsg(''); setTopUpUser(null); }, 3000);
+    },
+    onError: (e: any) => setErrorMsg(e?.response?.data?.error?.message ?? 'Deduction failed'),
   });
 
   const todayProfitMap = todayGames.reduce<Record<string, { games: number; totalBet: number; profit: number }>>((acc, g) => {
@@ -403,7 +419,10 @@ export const AdminBalancePage: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-1.5">
                     <button onClick={() => setSelectedUser(u)} className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 border border-blue-100 font-medium">Report</button>
-                    <button onClick={() => { setTopUpUser(u); setAmount(''); setSuccessMsg(''); }} className="text-xs px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 font-medium">Top Up</button>
+                    <button onClick={() => { setTopUpUser(u); setModalMode('topup'); setAmount(''); setSuccessMsg(''); setErrorMsg(''); }} className="text-xs px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 font-medium">Top Up</button>
+                    {u.paymentType === 'postpaid' && (
+                      <button onClick={() => { setTopUpUser(u); setModalMode('deduct'); setAmount(''); setSuccessMsg(''); setErrorMsg(''); }} className="text-xs px-2.5 py-1 rounded-lg bg-red-50 text-red-600 border border-red-100 font-medium">Deduct</button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -435,7 +454,10 @@ export const AdminBalancePage: React.FC = () => {
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-1.5">
                           <button onClick={() => setSelectedUser(u)} className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-100 transition-colors font-medium">Report</button>
-                          <button onClick={() => { setTopUpUser(u); setAmount(''); setSuccessMsg(''); }} className="text-xs px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-100 transition-colors font-medium">Top Up</button>
+                          <button onClick={() => { setTopUpUser(u); setModalMode('topup'); setAmount(''); setSuccessMsg(''); setErrorMsg(''); }} className="text-xs px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-100 transition-colors font-medium">Top Up</button>
+                          {u.paymentType === 'postpaid' && (
+                            <button onClick={() => { setTopUpUser(u); setModalMode('deduct'); setAmount(''); setSuccessMsg(''); setErrorMsg(''); }} className="text-xs px-2.5 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 transition-colors font-medium">Deduct</button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -447,15 +469,28 @@ export const AdminBalancePage: React.FC = () => {
         )}
       </div>
 
-      {/* Top-up modal */}
+      {/* Top-up / Deduct modal */}
       {topUpUser && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4"
           style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }} onClick={() => setTopUpUser(null)}>
           <div className="bg-white w-full sm:max-w-sm shadow-2xl p-5 sm:p-6" style={{ borderRadius: '16px 16px 0 0' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-gray-900">Add Balance</h3>
+              <h3 className="font-bold text-gray-900">{modalMode === 'topup' ? 'Add Balance' : 'Deduct Balance'}</h3>
               <button onClick={() => setTopUpUser(null)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
             </div>
+            {/* Mode toggle — only postpaid users have deduct option */}
+            {topUpUser.paymentType === 'postpaid' && (
+              <div className="flex gap-1 mb-4 p-1 rounded-xl bg-gray-100">
+                <button onClick={() => { setModalMode('topup'); setAmount(''); setErrorMsg(''); }}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${modalMode === 'topup' ? 'bg-emerald-600 text-white' : 'text-gray-500'}`}>
+                  Top Up
+                </button>
+                <button onClick={() => { setModalMode('deduct'); setAmount(''); setErrorMsg(''); }}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${modalMode === 'deduct' ? 'bg-red-500 text-white' : 'text-gray-500'}`}>
+                  Deduct
+                </button>
+              </div>
+            )}
             <div className="bg-gray-50 rounded-xl p-3 flex items-center gap-3 mb-4">
               <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-400 to-violet-600 flex items-center justify-center text-white text-sm font-bold shrink-0">{topUpUser.username[0].toUpperCase()}</div>
               <div className="flex-1 min-w-0">
@@ -463,13 +498,24 @@ export const AdminBalancePage: React.FC = () => {
                 <div className="text-xs text-gray-400">Current: {fmtBirr(Number(topUpUser.balance))} · {topUpUser.paymentType}</div>
               </div>
             </div>
-            <input type="number" min="1" step="1" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (Birr)"
+            <input type="number" min="1" step="1" value={amount} onChange={e => { setAmount(e.target.value); setErrorMsg(''); }} placeholder="Amount (Birr)"
               className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400" autoFocus />
-            {amount && parseFloat(amount) > 0 && <div className="text-xs text-blue-600 bg-blue-50 rounded-lg px-3 py-2 mb-3">New balance: {fmtBirr(Number(topUpUser.balance) + parseFloat(amount))}</div>}
+            {amount && parseFloat(amount) > 0 && (
+              <div className={`text-xs rounded-lg px-3 py-2 mb-3 ${modalMode === 'topup' ? 'text-blue-600 bg-blue-50' : 'text-red-600 bg-red-50'}`}>
+                New balance: {fmtBirr(modalMode === 'topup'
+                  ? Number(topUpUser.balance) + parseFloat(amount)
+                  : Number(topUpUser.balance) - parseFloat(amount))}
+              </div>
+            )}
             {successMsg && <div className="text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 mb-3">{successMsg}</div>}
-            <button onClick={() => topUpMutation.mutate()} disabled={!amount || parseFloat(amount) <= 0 || topUpMutation.isPending}
-              className="w-full bg-emerald-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors">
-              {topUpMutation.isPending ? 'Adding...' : 'Add Balance'}
+            {errorMsg && <div className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-3">{errorMsg}</div>}
+            <button
+              onClick={() => { setErrorMsg(''); modalMode === 'topup' ? topUpMutation.mutate() : deductMutation.mutate(); }}
+              disabled={!amount || parseFloat(amount) <= 0 || topUpMutation.isPending || deductMutation.isPending}
+              className={`w-full text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-colors ${modalMode === 'topup' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-500 hover:bg-red-600'}`}>
+              {topUpMutation.isPending || deductMutation.isPending
+                ? (modalMode === 'topup' ? 'Adding...' : 'Deducting...')
+                : (modalMode === 'topup' ? 'Add Balance' : 'Deduct Balance')}
             </button>
           </div>
         </div>
