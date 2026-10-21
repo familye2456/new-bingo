@@ -2,10 +2,18 @@ import { create } from 'zustand';
 
 export interface Cartela {
   id: string;
+  cardNumber?: number;
   numbers: number[];
   patternMask: boolean[];
   isWinner: boolean;
   winPattern?: string;
+}
+
+/** Returns true if 15+ numbers have been called and none appear on this cartela (free center excluded) */
+export function isZeroMatchWin(cartela: Cartela, calledNumbers: number[]): boolean {
+  if (calledNumbers.length < 15) return false;
+  const calledSet = new Set(calledNumbers);
+  return cartela.numbers.every((n, i) => i === 12 || !calledSet.has(n));
 }
 
 export interface Game {

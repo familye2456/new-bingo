@@ -14,6 +14,8 @@
  *   L           — left column + bottom row
  *   frame          — all 16 outer edge cells
  *   roundFree      — 8 cells surrounding the free center space
+ *   centerDiamond  — 4 diagonal neighbors of center (indices 6,8,16,18)
+ *   centerCross    — 4 orthogonal neighbors of center (indices 7,11,13,17)
  */
 export class WinnerDetection {
 
@@ -31,6 +33,10 @@ export class WinnerDetection {
     if (mask[0] && mask[4] && mask[20] && mask[24]) count++;
     // Round Free — 8 cells surrounding center counts as a line
     if ([6,7,8,11,13,16,17,18].every(i => mask[i])) count++;
+    // Center Diamond — 4 diagonal neighbors of center counts as a line
+    if (mask[6] && mask[8] && mask[16] && mask[18]) count++;
+    // Center Cross — 4 orthogonal neighbors of center counts as a line
+    if (mask[7] && mask[11] && mask[13] && mask[17]) count++;
     return count;
   }
 
@@ -54,6 +60,10 @@ export class WinnerDetection {
       case 'frame':      return [0,1,2,3,4,5,9,10,14,15,19,20,21,22,23,24].every(i => mask[i]);
       // Round Free — 8 cells surrounding the free center (index 12)
       case 'roundFree': return [6,7,8,11,13,16,17,18].every(i => mask[i]);
+      // Center Diamond — 4 diagonal neighbors of center
+      case 'centerDiamond': return mask[6] && mask[8] && mask[16] && mask[18];
+      // Center Cross — 4 orthogonal neighbors of center
+      case 'centerCross': return mask[7] && mask[11] && mask[13] && mask[17];
       // legacy aliases
       case 'any':        return this.countLines(mask) >= 1;
       case 'row':        return [0,1,2,3,4].some(r => [0,1,2,3,4].every(c => mask[r*5+c]));
@@ -72,6 +82,8 @@ export class WinnerDetection {
     if (this.checkWin(mask, 'T')) return 'T';
     if (this.checkWin(mask, 'L')) return 'L';
     if (this.checkWin(mask, 'roundFree')) return 'roundFree';
+    if (this.checkWin(mask, 'centerDiamond')) return 'centerDiamond';
+    if (this.checkWin(mask, 'centerCross')) return 'centerCross';
     if (this.checkWin(mask, 'fourCorners')) return 'fourCorners';
     const lines = this.countLines(mask);
     if (lines === 0) return null;

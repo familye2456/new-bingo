@@ -2,7 +2,7 @@ import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { gameApi } from '../services/api';
 import { getSocket } from '../services/socket';
-import { useGameStore } from '../store/gameStore';
+import { useGameStore, isZeroMatchWin } from '../store/gameStore';
 import { useAuthStore } from '../store/authStore';
 import { useGameSettings, ALL_VOICE_CATEGORIES, THEMES } from '../store/gameSettingsStore';
 import { playCachedSound, playNumberSoundQueued, downloadVoiceSounds, audioQueue, unlockAudioContext, stopAllAudio } from '../services/db';
@@ -227,12 +227,13 @@ export const GamePage: React.FC = () => {
   const myCartelas = (currentGame?.cartelas ?? []).filter((c) => (c as unknown as { userId: string }).userId === user?.id);
   useEffect(() => {
     for (const cartela of myCartelas) {
-      if (cartela.isWinner && !prevWinnerIds.current.has(cartela.id)) {
+      const won = cartela.isWinner || isZeroMatchWin(cartela, displayedNumbers);
+      if (won && !prevWinnerIds.current.has(cartela.id)) {
         prevWinnerIds.current.add(cartela.id);
         playRootSound('winner.wav', true);
       }
     }
-  }, [myCartelas]);
+  }, [myCartelas, displayedNumbers]);
 
   if (isLoading) return <div className="flex items-center justify-center h-screen">Loading game...</div>;
   if (!currentGame) return <div className="flex items-center justify-center h-screen">Game not found</div>;
@@ -343,16 +344,19 @@ export const GamePage: React.FC = () => {
               <div className="text-center py-8" style={{ color: theme.sectionEmpty }}>No cartelas yet</div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-6">
-                {myCartelas.map((cartela) => (
+                {myCartelas.map((cartela) => {
+                  const zeroMatch = isZeroMatchWin(cartela, displayedNumbers);
+                  const canClaim = cartela.isWinner || zeroMatch;
+                  return (
                   <div key={cartela.id}>
                     <CartelaCard
-                      cartela={cartela}
+                      cartela={{ ...cartela, isWinner: canClaim ? true : cartela.isWinner, winPattern: zeroMatch && !cartela.isWinner ? 'zeroMatch' : cartela.winPattern }}
                       calledNumbers={displayedNumbers}
                       onMark={handleMarkNumber}
                       disabled={currentGame.status !== 'active'}
                       theme={theme}
                     />
-                    {cartela.isWinner && (
+                    {canClaim && (
                       <button
                         onClick={() => handleClaimBingo(cartela.id)}
                         className="mt-2 w-full py-2 rounded-lg font-extrabold transition-colors"
@@ -362,7 +366,8 @@ export const GamePage: React.FC = () => {
                       </button>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

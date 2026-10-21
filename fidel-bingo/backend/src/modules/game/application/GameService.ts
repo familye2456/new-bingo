@@ -293,8 +293,15 @@ export class GameService {
       i === 12 ? true : game.calledNumbers.includes(n)
     );
 
-    const winPattern = this.winDetector.getWinPattern(mask);
-    const isWinner = this.winDetector.checkWin(mask, game.winPattern);
+    // Zero-match win: if 15+ numbers have been called and none appear on this cartela
+    // (excluding the free center), the cartela wins with pattern 'zeroMatch'
+    const calledSet = new Set(game.calledNumbers);
+    const nonCenterNumbers = uc.numbers.filter((_, i) => i !== 12);
+    const matchCount = nonCenterNumbers.filter(n => calledSet.has(n)).length;
+    const isZeroMatch = game.calledNumbers.length >= 15 && matchCount === 0;
+
+    const winPattern = isZeroMatch ? 'zeroMatch' : this.winDetector.getWinPattern(mask);
+    const isWinner = isZeroMatch || this.winDetector.checkWin(mask, game.winPattern);
 
     return { registered: true, cardNumber, numbers: uc.numbers, patternMask: mask, isWinner, winPattern };
   }
@@ -407,7 +414,13 @@ export class GameService {
     const game = await this.gameRepo.findOne({ where: { id: gameId } });
     if (!game || game.status !== 'active') throw new AppError(400, 'INVALID_CLAIM', 'Invalid game state');
 
-    const pattern = this.winDetector.getWinPattern(uc.patternMask);
+    // Zero-match win: 15+ numbers called and none match this cartela (excluding free center)
+    const calledSet = new Set(game.calledNumbers);
+    const nonCenterNumbers = uc.numbers.filter((_, i) => i !== 12);
+    const matchCount = nonCenterNumbers.filter(n => calledSet.has(n)).length;
+    const isZeroMatch = game.calledNumbers.length >= 15 && matchCount === 0;
+
+    const pattern = isZeroMatch ? 'zeroMatch' : this.winDetector.getWinPattern(uc.patternMask);
     if (!pattern) throw new AppError(400, 'NO_WIN', 'No winning pattern detected');
 
     return AppDataSource.transaction(async (manager) => {
