@@ -38,6 +38,10 @@ export class Game {
   @Column({ name: 'number_sequence', type: 'int', array: true, default: [] })
   numberSequence!: number[];
 
+  /** Sequence from the previous game (same creator), used to ensure a different sequence */
+  @Column({ name: 'previous_sequence', type: 'int', array: true, default: [] })
+  previousSequence!: number[];
+
   @Column({ type: 'decimal', precision: 10, scale: 2, name: 'bet_amount' })
   betAmount!: number;
 

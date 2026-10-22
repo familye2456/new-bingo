@@ -42,13 +42,28 @@ export class GameService {
   // Per-game mutex: prevents concurrent callNumber executions from producing duplicates
   private callLocks = new Map<string, Promise<unknown>>();
 
-  private shuffleNumbers(): number[] {
-    const arr = Array.from({ length: 75 }, (_, i) => i + 1);
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
+  private shuffleNumbers(previousSequence?: number[]): number[] {
+    const doShuffle = (): number[] => {
+      const arr = Array.from({ length: 75 }, (_, i) => i + 1);
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    };
+
+    if (!previousSequence || previousSequence.length === 0) return doShuffle();
+
+    // Keep shuffling until the first 15 numbers share no overlap with the previous sequence's first 15
+    const prevFirst = new Set(previousSequence.slice(0, 15));
+    let candidate: number[];
+    let attempts = 0;
+    do {
+      candidate = doShuffle();
+      attempts++;
+    } while (candidate.slice(0, 15).some((n) => prevFirst.has(n)) && attempts < 100);
+
+    return candidate;
   }
 
   /** Get the sequence for a specific user, creating one if it doesn't exist yet */
@@ -64,13 +79,13 @@ export class GameService {
   }
 
   /** Regenerate the sequence for a specific user (or global singleton) */
-  async regenerateGlobalSequence(userId?: string): Promise<GlobalSequence> {
+  async regenerateGlobalSequence(userId?: string, previousSequence?: number[]): Promise<GlobalSequence> {
     const key = userId ?? 'singleton';
     let gs = await this.gsRepo.findOne({ where: { id: key } });
     if (!gs) {
-      gs = this.gsRepo.create({ id: key, sequence: this.shuffleNumbers() });
+      gs = this.gsRepo.create({ id: key, sequence: this.shuffleNumbers(previousSequence) });
     } else {
-      gs.sequence = this.shuffleNumbers();
+      gs.sequence = this.shuffleNumbers(previousSequence);
     }
     await this.gsRepo.save(gs);
     logger.info('User sequence regenerated', { userId: key });
@@ -220,6 +235,7 @@ export class GameService {
         status: 'active',
         calledNumbers: [],
         numberSequence: gs.sequence,
+        previousSequence: gs.sequence,
         winnerIds: [],
         cartelaCount: ownedUCs.length,
         totalBets: totalCost,
@@ -255,8 +271,8 @@ export class GameService {
       ]);
 
       // Regenerate this user's sequence immediately so the next game has a fresh one
-      // and the admin can check the new sequence for the next prediction
-      await this.regenerateGlobalSequence(userId);
+      // Pass the current sequence so the new one is guaranteed to differ from it
+      await this.regenerateGlobalSequence(userId, gs.sequence);
 
       activeGames.inc();
       logger.info('Game created', { gameId: savedGame.id, userId });
@@ -323,7 +339,7 @@ export class GameService {
       const nextIndex = game.calledNumbers.length;
       if (nextIndex >= 75) throw new AppError(400, 'NO_NUMBERS_LEFT', 'All numbers have been called');
 
-      const sequence = game.numberSequence?.length === 75 ? game.numberSequence : this.shuffleNumbers();
+      const sequence = game.numberSequence?.length === 75 ? game.numberSequence : this.shuffleNumbers(game.previousSequence);
       const number = sequence[nextIndex];
       game.calledNumbers = [...game.calledNumbers, number];
       if (game.numberSequence?.length !== 75) game.numberSequence = sequence;
