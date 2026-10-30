@@ -170,8 +170,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ loading: true, cacheSteps: [] });
     try {
       const res = await authApi.login({ identifier, password });
-      const { user, accessToken } = res.data.data;
+      const { user, accessToken, refreshToken } = res.data.data;
       if (accessToken) localStorage.setItem('access_token', accessToken);
+      if (refreshToken) localStorage.setItem('refresh_token', refreshToken);
       await dbPut('user', user, 'me');
 
       // Apply admin-set default voice
@@ -360,6 +361,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     try { await authApi.logout(); } catch {}
     localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
     localStorage.removeItem(NEG_BAL_LOCKED_KEY);
     await Promise.all([
       dbClear('user'),

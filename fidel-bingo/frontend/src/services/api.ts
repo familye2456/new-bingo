@@ -29,15 +29,19 @@ api.interceptors.response.use(
     ) {
       original._retry = true;
       try {
-        const res = await api.post('/auth/refresh');
+        const refreshToken = localStorage.getItem('refresh_token');
+        const res = await api.post('/auth/refresh', refreshToken ? { refreshToken } : {});
         const newToken = res.data?.data?.accessToken;
+        const newRefreshToken = res.data?.data?.refreshToken;
         if (newToken) localStorage.setItem('access_token', newToken);
+        if (newRefreshToken) localStorage.setItem('refresh_token', newRefreshToken);
         return api(original);
       } catch (refreshErr: any) {
         // Only logout if refresh explicitly returned 401 (token truly invalid)
         // Don't logout on network errors, 429, 500, etc.
         if (refreshErr?.response?.status === 401) {
           localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
           // Clear stale game/cartela data so next user doesn't see previous user's data
           import('./db').then(({ dbClear }) => {
             Promise.all([dbClear('games'), dbClear('cartelas'), dbClear('user'), dbClear('transactions')]);
@@ -53,6 +57,7 @@ api.interceptors.response.use(
     // Account suspended/banned — force logout immediately
     if (error.response?.status === 403 && error.response?.data?.error?.code === 'ACCOUNT_BLOCKED') {
       localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
       import('./db').then(({ dbClear }) => {
         Promise.all([dbClear('games'), dbClear('cartelas'), dbClear('user'), dbClear('transactions')]);
       });
