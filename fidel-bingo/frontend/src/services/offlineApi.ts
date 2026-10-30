@@ -753,8 +753,13 @@ export const offlineGameApi = {
             return null;
           };
 
-          const isWinner = checkWinFromMask(requiredPattern);
-          const achievedPattern = getAchievedPattern();
+          // Zero-match win: 15+ numbers called and none appear on this cartela (free center excluded)
+          const calledSetL = new Set(serverData.calledNumbers ?? called);
+          const nonCenterL = (serverData.numbers as number[]).filter((_: number, i: number) => i !== 12);
+          const isZeroMatchL = (serverData.calledNumbers?.length ?? called.length) >= 15 && nonCenterL.every((n: number) => !calledSetL.has(n));
+
+          const isWinner = isZeroMatchL || checkWinFromMask(requiredPattern);
+          const achievedPattern = isZeroMatchL ? 'zeroMatch' : getAchievedPattern();
           return { ...serverData, patternMask: mask, isWinner, winPattern: achievedPattern };
         }
         return serverData;
@@ -855,9 +860,16 @@ export const offlineGameApi = {
     };
 
     const winPattern = getWinPattern();
-    const isWinner = checkWin(game.winPattern ?? 'line1');
 
-    return { registered: true, cardNumber, numbers: cartela.numbers, patternMask: mask, isWinner, winPattern };
+    // Zero-match win: 15+ numbers called and none appear on this cartela (free center excluded)
+    const calledSet = new Set(called);
+    const nonCenter = (cartela.numbers as number[]).filter((_: number, i: number) => i !== 12);
+    const isZeroMatch = called.length >= 15 && nonCenter.every((n: number) => !calledSet.has(n));
+
+    const isWinner = isZeroMatch || checkWin(game.winPattern ?? 'line1');
+    const finalPattern = isZeroMatch ? 'zeroMatch' : winPattern;
+
+    return { registered: true, cardNumber, numbers: cartela.numbers, patternMask: mask, isWinner, winPattern: finalPattern };
   },
 };
 
