@@ -710,6 +710,8 @@ export const offlineGameApi = {
             if ([4,8,12,16,20].every(i => mask[i])) n++;
             if (mask[0] && mask[4] && mask[20] && mask[24]) n++;
             if ([6,7,8,11,13,16,17,18].every(i => mask[i])) n++;
+            if (mask[6] && mask[8] && mask[16] && mask[18]) n++;
+            if (mask[7] && mask[11] && mask[13] && mask[17]) n++;
             return n;
           };
           const checkWinFromMask = (pattern: string): boolean => {
@@ -725,6 +727,11 @@ export const offlineGameApi = {
               case 'L': return [0,5,10,15,20].every(i=>mask[i]) && [20,21,22,23,24].every(i=>mask[i]);
               case 'frame': return [0,1,2,3,4,5,9,10,14,15,19,20,21,22,23,24].every(i=>mask[i]);
               case 'roundFree': return [6,7,8,11,13,16,17,18].every(i=>mask[i]);
+              case 'centerDiamond': return mask[6] && mask[8] && mask[16] && mask[18];
+              case 'centerCross': return mask[7] && mask[11] && mask[13] && mask[17];
+              case 'row': return [0,1,2,3,4].some(r => [0,1,2,3,4].every(c => mask[r*5+c]));
+              case 'column': return [0,1,2,3,4].some(c => [0,1,2,3,4].every(r => mask[r*5+c]));
+              case 'diagonal': return [0,6,12,18,24].every(i=>mask[i]) || [4,8,12,16,20].every(i=>mask[i]);
               default: return countL() >= 1;
             }
           };
@@ -736,6 +743,8 @@ export const offlineGameApi = {
             if (checkWinFromMask('T')) return 'T';
             if (checkWinFromMask('L')) return 'L';
             if (checkWinFromMask('roundFree')) return 'roundFree';
+            if (checkWinFromMask('centerDiamond')) return 'centerDiamond';
+            if (checkWinFromMask('centerCross')) return 'centerCross';
             if (checkWinFromMask('fourCorners')) return 'fourCorners';
             const lines = countL();
             if (lines >= 3) return 'line3';
@@ -785,7 +794,7 @@ export const offlineGameApi = {
       i === 12 ? true : called.includes(n)
     );
 
-    // Replicate WinnerDetection — a "line" is any row, column, diagonal, corners, or roundFree ring
+    // Replicate WinnerDetection — a "line" is any row, column, diagonal, corners, roundFree, centerDiamond, or centerCross
     const countLines = (): number => {
       let n = 0;
       for (let r = 0; r < 5; r++) if ([0,1,2,3,4].every(c => mask[r*5+c])) n++;
@@ -795,6 +804,10 @@ export const offlineGameApi = {
       if (mask[0] && mask[4] && mask[20] && mask[24]) n++;
       // Round Free ring (8 cells surrounding center) counts as a line — matches backend
       if ([6,7,8,11,13,16,17,18].every(i => mask[i])) n++;
+      // Center Diamond — 4 diagonal neighbors of center
+      if (mask[6] && mask[8] && mask[16] && mask[18]) n++;
+      // Center Cross — 4 orthogonal neighbors of center
+      if (mask[7] && mask[11] && mask[13] && mask[17]) n++;
       return n;
     };
 
@@ -806,12 +819,14 @@ export const offlineGameApi = {
         case 'fullhouse':
         case 'blackout': return mask.every(Boolean);
         case 'fourCorners': return mask[0] && mask[4] && mask[20] && mask[24];
-        case 'X':         return [0,6,12,18,24].every(i => mask[i]) && [4,8,12,16,20].every(i => mask[i]);
-        case 'plus':      return [10,11,12,13,14].every(i => mask[i]) && [2,7,12,17,22].every(i => mask[i]);
-        case 'T':         return [0,1,2,3,4].every(i => mask[i]) && [2,7,12,17,22].every(i => mask[i]);
-        case 'L':         return [0,5,10,15,20].every(i => mask[i]) && [20,21,22,23,24].every(i => mask[i]);
-        case 'frame':     return [0,1,2,3,4,5,9,10,14,15,19,20,21,22,23,24].every(i => mask[i]);
-        case 'roundFree': return [6,7,8,11,13,16,17,18].every(i => mask[i]);
+        case 'X':            return [0,6,12,18,24].every(i => mask[i]) && [4,8,12,16,20].every(i => mask[i]);
+        case 'plus':         return [10,11,12,13,14].every(i => mask[i]) && [2,7,12,17,22].every(i => mask[i]);
+        case 'T':            return [0,1,2,3,4].every(i => mask[i]) && [2,7,12,17,22].every(i => mask[i]);
+        case 'L':            return [0,5,10,15,20].every(i => mask[i]) && [20,21,22,23,24].every(i => mask[i]);
+        case 'frame':        return [0,1,2,3,4,5,9,10,14,15,19,20,21,22,23,24].every(i => mask[i]);
+        case 'roundFree':    return [6,7,8,11,13,16,17,18].every(i => mask[i]);
+        case 'centerDiamond': return mask[6] && mask[8] && mask[16] && mask[18];
+        case 'centerCross':   return mask[7] && mask[11] && mask[13] && mask[17];
         // Legacy aliases — match backend behaviour
         case 'any':      return countLines() >= 1;
         case 'row':      return [0,1,2,3,4].some(r => [0,1,2,3,4].every(c => mask[r*5+c]));
@@ -829,6 +844,8 @@ export const offlineGameApi = {
       if (checkWin('T')) return 'T';
       if (checkWin('L')) return 'L';
       if (checkWin('roundFree')) return 'roundFree';
+      if (checkWin('centerDiamond')) return 'centerDiamond';
+      if (checkWin('centerCross')) return 'centerCross';
       if (checkWin('fourCorners')) return 'fourCorners';
       const lines = countLines();
       if (lines === 0) return null;

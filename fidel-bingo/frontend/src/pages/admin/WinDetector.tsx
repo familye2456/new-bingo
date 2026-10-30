@@ -3,17 +3,19 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi, gameApi } from '../../services/api';
 
 const PATTERNS: { label: string; value: string }[] = [
-  { label: 'One Line',     value: 'line1' },
-  { label: 'Two Lines',    value: 'line2' },
-  { label: 'Three Lines',  value: 'line3' },
-  { label: 'Full House',   value: 'fullhouse' },
-  { label: 'Four Corners', value: 'fourCorners' },
-  { label: 'X Shape',      value: 'X' },
-  { label: 'Plus',         value: 'plus' },
-  { label: 'T Shape',      value: 'T' },
-  { label: 'L Shape',      value: 'L' },
-  { label: 'Frame',        value: 'frame' },
-  { label: 'Round Free',   value: 'roundFree' },
+  { label: 'One Line',       value: 'line1' },
+  { label: 'Two Lines',      value: 'line2' },
+  { label: 'Three Lines',    value: 'line3' },
+  { label: 'Full House',     value: 'fullhouse' },
+  { label: 'Four Corners',   value: 'fourCorners' },
+  { label: 'X Shape',        value: 'X' },
+  { label: 'Plus',           value: 'plus' },
+  { label: 'T Shape',        value: 'T' },
+  { label: 'L Shape',        value: 'L' },
+  { label: 'Frame',          value: 'frame' },
+  { label: 'Round Free',     value: 'roundFree' },
+  { label: 'Center Diamond', value: 'centerDiamond' },
+  { label: 'Center Cross',   value: 'centerCross' },
 ];
 
 interface UserRecord { id: string; username: string; }

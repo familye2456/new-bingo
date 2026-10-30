@@ -38,17 +38,19 @@ interface CartelaRecord {
 }
 
 const PATTERNS: { label: string; value: string; icon: string }[] = [
-  { label: 'One Line',     value: 'line1',       icon: '━' },
-  { label: 'Two Lines',    value: 'line2',       icon: '≡' },
-  { label: 'Three Lines',  value: 'line3',       icon: '☰' },
-  { label: 'Full House',   value: 'fullhouse',   icon: '⬛' },
-  { label: 'Four Corners', value: 'fourCorners', icon: '⬜' },
-  { label: 'X Shape',      value: 'X',           icon: '✕' },
-  { label: 'Plus',         value: 'plus',        icon: '✚' },
-  { label: 'T Shape',      value: 'T',           icon: '⊤' },
-  { label: 'L Shape',      value: 'L',           icon: '⌐' },
-  { label: 'Frame',        value: 'frame',         icon: '▣' },
-  { label: 'Round Free',    value: 'roundFree',     icon: '◎' },
+  { label: 'One Line',        value: 'line1',         icon: '━' },
+  { label: 'Two Lines',       value: 'line2',         icon: '≡' },
+  { label: 'Three Lines',     value: 'line3',         icon: '☰' },
+  { label: 'Full House',      value: 'fullhouse',     icon: '⬛' },
+  { label: 'Four Corners',    value: 'fourCorners',   icon: '⬜' },
+  { label: 'X Shape',         value: 'X',             icon: '✕' },
+  { label: 'Plus',            value: 'plus',          icon: '✚' },
+  { label: 'T Shape',         value: 'T',             icon: '⊤' },
+  { label: 'L Shape',         value: 'L',             icon: '⌐' },
+  { label: 'Frame',           value: 'frame',         icon: '▣' },
+  { label: 'Round Free',      value: 'roundFree',     icon: '◎' },
+  { label: 'Center Diamond',  value: 'centerDiamond', icon: '◇' },
+  { label: 'Center Cross',    value: 'centerCross',   icon: '⊹' },
 ];
 
 const MIN_CARTELAS = 3;
