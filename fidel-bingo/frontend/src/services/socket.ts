@@ -4,7 +4,7 @@ import { useAuthStore } from '../store/authStore';
 import { useGameSettings } from '../store/gameSettingsStore';
 
 let socket: Socket | null = null;
-const apiUrl = import.meta.env.VITE_API_URL || 'https://fidel-bingo.onrender.com/api';
+const apiUrl = import.meta.env.VITE_API_URL || 'https://new-bingo-0vz0.onrender.com/api';
 const socketUrl = apiUrl.replace(/\/api\/?$/, '');
 
 const bindSocketListeners = (socketInstance: Socket) => {

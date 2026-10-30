@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'https://fidel-bingo.onrender.com/api';
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://new-bingo-0vz0.onrender.com/api';
 
 export const api = axios.create({
   baseURL: BASE_URL,
