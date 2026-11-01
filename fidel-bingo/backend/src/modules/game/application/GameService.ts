@@ -41,6 +41,8 @@ export class GameService {
   private winDetector = new WinnerDetection();
   // Per-game mutex: prevents concurrent callNumber executions from producing duplicates
   private callLocks = new Map<string, Promise<unknown>>();
+  // Per-game mutex: prevents concurrent finishGame from double-crediting bonuses
+  private finishLocks = new Map<string, Promise<unknown>>();
 
   private shuffleNumbers(previousSequence?: number[]): number[] {
     const doShuffle = (): number[] => {
@@ -471,6 +473,24 @@ export class GameService {
   }
 
   async finishGame(gameId: string, userId: string): Promise<FinishGameResult> {
+    // Serialize concurrent finish requests for the same game to prevent
+    // double bonus credits or double status updates
+    const prev = this.finishLocks.get(gameId) ?? Promise.resolve();
+    let resolveLock!: () => void;
+    const lock = new Promise<void>((r) => { resolveLock = r; });
+    this.finishLocks.set(gameId, prev.then(() => lock));
+
+    await prev;
+    try {
+      return await this._finishGame(gameId, userId);
+    } finally {
+      resolveLock();
+      // Clean up the lock entry once settled so the map doesn't grow forever
+      this.finishLocks.delete(gameId);
+    }
+  }
+
+  private async _finishGame(gameId: string, userId: string): Promise<FinishGameResult> {
     const game = await this.gameRepo.findOne({ where: { id: gameId } });
     if (!game) throw new AppError(404, 'GAME_NOT_FOUND', 'Game not found');
     if (game.creatorId !== userId) throw new AppError(403, 'FORBIDDEN', 'Only creator can finish the game');

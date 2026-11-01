@@ -12,6 +12,12 @@ interface AuthSocket extends Socket {
 
 const gameService = new GameService();
 
+// Grace-period timers: when a socket disconnects we wait before removing the
+// user from the online-users set. If they reconnect within the window the
+// timer is cancelled and the session continues uninterrupted.
+const disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const DISCONNECT_GRACE_MS = 10_000; // 10 seconds
+
 export const setupGameGateway = (io: Server) => {
   // Auth middleware
   io.use(async (socket: AuthSocket, next) => {
@@ -32,7 +38,16 @@ export const setupGameGateway = (io: Server) => {
   io.on('connection', async (socket: AuthSocket) => {
     const userId = socket.user!.id;
     logger.info('WS connected', { userId, socketId: socket.id });
-    activePlayers.inc();
+
+    // Cancel any pending disconnect grace timer for this user (reconnect case)
+    const existingTimer = disconnectTimers.get(userId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      disconnectTimers.delete(userId);
+      // Not a new connection — don't double-increment active players
+    } else {
+      activePlayers.inc();
+    }
 
     // Track online status
     try {
@@ -117,14 +132,23 @@ export const setupGameGateway = (io: Server) => {
     });
 
     socket.on('disconnect', async () => {
-      activePlayers.dec();
-      try {
-        await redisClient.sRem('online_users', userId);
-        await redisClient.del(`user:${userId}`);
-      } catch (err) {
-        logger.warn('Redis online-user cleanup unavailable', { err, userId });
-      }
       logger.info('WS disconnected', { userId });
+
+      // Defer the actual cleanup so a rapid reconnect can cancel it.
+      // This prevents transient network blips from appearing as a logout
+      // and stops the online-user set from thrashing on mobile clients.
+      const timer = setTimeout(async () => {
+        disconnectTimers.delete(userId);
+        activePlayers.dec();
+        try {
+          await redisClient.sRem('online_users', userId);
+          await redisClient.del(`user:${userId}`);
+        } catch (err) {
+          logger.warn('Redis online-user cleanup unavailable', { err, userId });
+        }
+      }, DISCONNECT_GRACE_MS);
+
+      disconnectTimers.set(userId, timer);
     });
   });
 };

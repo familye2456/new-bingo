@@ -85,9 +85,23 @@ export const getSocket = (token?: string): Socket => {
   });
 
   // Join personal room so admin balance_updated events are received
+  // Also fires on every reconnect so the user room subscription is restored
   socket.on('connect', () => {
     const user = useAuthStore.getState().user;
-    if (user?.id) socket!.emit('join_user_room', user.id);
+    if (user?.id) {
+      socket!.emit('join_user_room', user.id);
+      // Refresh balance on reconnect to catch any changes that happened
+      // while the socket was disconnected
+      useAuthStore.getState().refreshBalance?.();
+    }
+  });
+
+  socket.on('connect_error', (err) => {
+    console.warn('[socket] Connection error:', err.message);
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.warn('[socket] Disconnected:', reason);
   });
 
   bindSocketListeners(socket);
