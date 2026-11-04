@@ -91,6 +91,14 @@ export class User {
   @Column({ name: 'assigned_voice', nullable: true, length: 50 })
   assignedVoice?: string;
 
+  /**
+   * Patterns that count as a completed "line" for this user.
+   * When null/empty, the system default behaviour applies (all patterns count).
+   * Admin sets this per user via the Pattern Configuration page.
+   */
+  @Column({ name: 'allowed_patterns', type: 'text', array: true, nullable: true, default: null })
+  allowedPatterns?: string[] | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 

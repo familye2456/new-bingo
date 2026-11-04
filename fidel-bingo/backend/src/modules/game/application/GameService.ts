@@ -143,6 +143,14 @@ export class GameService {
       return { sequence, generatedAt, calledNumbers, winner: null, rankings: [] };
     }
 
+    // Load the user's allowed patterns (per-user line count config)
+    const ownerUserId = userId ?? cartelas[0]?.userId;
+    let allowedPatterns: string[] | null = null;
+    if (ownerUserId) {
+      const owner = await AppDataSource.getRepository(User).findOne({ where: { id: ownerUserId } });
+      allowedPatterns = owner?.allowedPatterns ?? null;
+    }
+
     const calledSet = new Set(calledNumbers);
     const rankings: Array<{ cardNumber: number; callsNeeded: number }> = [];
 
@@ -155,7 +163,7 @@ export class GameService {
       let callsNeeded: number;
 
       // Check if already won with existing called numbers
-      if (this.winDetector.checkWin(mask, winPattern)) {
+      if (this.winDetector.checkWin(mask, winPattern, allowedPatterns)) {
         callsNeeded = calledNumbers.length;
       } else {
         callsNeeded = 75; // worst case — never wins within sequence
@@ -166,7 +174,7 @@ export class GameService {
           for (let j = 0; j < 25; j++) {
             if (j !== 12 && uc.numbers[j] === called) mask[j] = true;
           }
-          if (this.winDetector.checkWin(mask, winPattern)) {
+          if (this.winDetector.checkWin(mask, winPattern, allowedPatterns)) {
             callsNeeded = i + 1;
             break;
           }
@@ -318,8 +326,12 @@ export class GameService {
     const matchCount = nonCenterNumbers.filter(n => calledSet.has(n)).length;
     const isZeroMatch = game.calledNumbers.length >= 15 && matchCount === 0;
 
+    // Load per-user allowed patterns for line counting
+    const owner = await AppDataSource.getRepository(User).findOne({ where: { id: uc.userId } });
+    const allowedPatterns = owner?.allowedPatterns ?? null;
+
     const winPattern = isZeroMatch ? 'zeroMatch' : this.winDetector.getWinPattern(mask);
-    const isWinner = isZeroMatch || this.winDetector.checkWin(mask, game.winPattern);
+    const isWinner = isZeroMatch || this.winDetector.checkWin(mask, game.winPattern, allowedPatterns);
 
     return { registered: true, cardNumber, numbers: uc.numbers, patternMask: mask, isWinner, winPattern };
   }

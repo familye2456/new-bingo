@@ -19,32 +19,38 @@
  */
 export class WinnerDetection {
 
-  /** Returns how many distinct lines are complete on this mask */
-  countLines(mask: boolean[]): number {
+  /** Returns how many distinct lines are complete on this mask.
+   *  @param allowedPatterns  When provided, special patterns not in this list are skipped.
+   *                          Pass null/undefined to use the default (all special patterns count).
+   */
+  countLines(mask: boolean[], allowedPatterns?: string[] | null): number {
+    const allows = (p: string) => !allowedPatterns || allowedPatterns.includes(p);
+
     let count = 0;
+    // Rows
     for (let r = 0; r < 5; r++) {
       if ([0,1,2,3,4].every(c => mask[r*5+c])) count++;
     }
+    // Columns
     for (let c = 0; c < 5; c++) {
       if ([0,1,2,3,4].every(r => mask[r*5+c])) count++;
     }
+    // Main diagonals (always count — not configurable)
     if ([0,6,12,18,24].every(i => mask[i])) count++;
     if ([4,8,12,16,20].every(i => mask[i])) count++;
-    if (mask[0] && mask[4] && mask[20] && mask[24]) count++;
-    // Round Free — 8 cells surrounding center counts as a line
-    if ([6,7,8,11,13,16,17,18].every(i => mask[i])) count++;
-    // Center Diamond — 4 diagonal neighbors of center counts as a line
-    if (mask[6] && mask[8] && mask[16] && mask[18]) count++;
-    // Center Cross — 4 orthogonal neighbors of center counts as a line
-    if (mask[7] && mask[11] && mask[13] && mask[17]) count++;
+    // Special patterns — configurable per user
+    if (allows('fourCorners')   && mask[0] && mask[4] && mask[20] && mask[24]) count++;
+    if (allows('roundFree')     && [6,7,8,11,13,16,17,18].every(i => mask[i])) count++;
+    if (allows('centerDiamond') && mask[6] && mask[8] && mask[16] && mask[18]) count++;
+    if (allows('centerCross')   && mask[7] && mask[11] && mask[13] && mask[17]) count++;
     return count;
   }
 
-  checkWin(mask: boolean[], pattern: string = 'line1'): boolean {
+  checkWin(mask: boolean[], pattern: string = 'line1', allowedPatterns?: string[] | null): boolean {
     switch (pattern) {
-      case 'line1':      return this.countLines(mask) >= 1;
-      case 'line2':      return this.countLines(mask) >= 2;
-      case 'line3':      return this.countLines(mask) >= 3;
+      case 'line1':      return this.countLines(mask, allowedPatterns) >= 1;
+      case 'line2':      return this.countLines(mask, allowedPatterns) >= 2;
+      case 'line3':      return this.countLines(mask, allowedPatterns) >= 3;
       case 'fullhouse':
       case 'blackout':   return mask.every(Boolean);
       case 'fourCorners': return mask[0] && mask[4] && mask[20] && mask[24];

@@ -396,6 +396,34 @@ router.patch('/:id/voice', authorize('admin', 'agent'), async (req: AuthRequest,
   res.json({ success: true, data: updated?.sanitize() });
 });
 
+/**
+ * PATCH /users/:id/win-patterns
+ *
+ * Set which bingo patterns count as a completed "line" for this user.
+ * Pass an empty array (or null) to reset to system defaults (all patterns allowed).
+ */
+const ALL_PATTERNS = [
+  'line1','line2','line3','fullhouse','fourCorners','X','plus','T','L',
+  'frame','roundFree','centerDiamond','centerCross',
+];
+router.patch('/:id/win-patterns', authorize('admin'), async (req: AuthRequest, res: Response) => {
+  const { patterns } = req.body;
+
+  if (patterns !== null && patterns !== undefined) {
+    if (!Array.isArray(patterns)) throw new AppError(400, 'VALIDATION_ERROR', 'patterns must be an array or null');
+    const invalid = patterns.filter((p: string) => !ALL_PATTERNS.includes(p));
+    if (invalid.length) throw new AppError(400, 'VALIDATION_ERROR', `Invalid patterns: ${invalid.join(', ')}`);
+  }
+
+  const repo = AppDataSource.getRepository(User);
+  const user = await repo.findOne({ where: { id: req.params.id } });
+  if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
+
+  await repo.update(req.params.id, { allowedPatterns: patterns?.length ? patterns : null });
+  const updated = await repo.findOne({ where: { id: req.params.id } });
+  res.json({ success: true, data: updated!.sanitize() });
+});
+
 // Assign a user to an agent (admin only)
 router.patch('/:id/assign-agent', authorize('admin'), async (req: AuthRequest, res: Response) => {
   const repo = AppDataSource.getRepository(User);

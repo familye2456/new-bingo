@@ -102,6 +102,8 @@ export const adminApi = {
     api.patch(`/users/${id}/cartela-bonus`, { enabled }),
   changePassword: (id: string, newPassword: string) =>
     api.patch(`/users/${id}/password`, { newPassword }),
+  setWinPatterns: (id: string, patterns: string[] | null) =>
+    api.patch(`/users/${id}/win-patterns`, { patterns }),
 };
 
 export const cartelaAdminApi = {
