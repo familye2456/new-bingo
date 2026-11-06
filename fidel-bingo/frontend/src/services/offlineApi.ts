@@ -754,9 +754,9 @@ export const offlineGameApi = {
           };
 
           // Zero-match win: 15+ numbers called and none appear on this cartela (free center excluded)
-          const calledSetL = new Set(serverData.calledNumbers ?? called);
+          const calledSetL = new Set(serverData.calledNumbers ?? sessionCalledNumbers ?? []);
           const nonCenterL = (serverData.numbers as number[]).filter((_: number, i: number) => i !== 12);
-          const isZeroMatchL = (serverData.calledNumbers?.length ?? called.length) >= 15 && nonCenterL.every((n: number) => !calledSetL.has(n));
+          const isZeroMatchL = (serverData.calledNumbers?.length ?? sessionCalledNumbers?.length ?? 0) >= 15 && nonCenterL.every((n: number) => !calledSetL.has(n));
 
           const isWinner = isZeroMatchL || checkWinFromMask(requiredPattern);
           const achievedPattern = isZeroMatchL ? 'zeroMatch' : getAchievedPattern();
