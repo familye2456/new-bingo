@@ -17,13 +17,16 @@ export const AppDataSource = new DataSource({
   ssl: { rejectUnauthorized: false },
   synchronize: false,
   logging: false,
-  poolSize: 20,
+  poolSize: 10,
+  connectTimeoutMS: 30000,
   extra: {
-    max: 20,
-    min: 2,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000,
+    max: 10,
+    min: 0,                          // don't hold idle connections on free tier
+    idleTimeoutMillis: 10000,        // release idle connections faster
+    connectionTimeoutMillis: 30000,  // allow more time for cold-start wakeup
     statement_timeout: 60000,
+    keepAlive: true,                 // detect stale connections
+    keepAliveInitialDelayMillis: 10000,
   },
   entities: [User, Game, Cartela, UserCartela, GameCartela, Transaction, Account, AuditLog, RefreshToken, GlobalSequence],
   migrations: ['dist/migrations/*.js'],
