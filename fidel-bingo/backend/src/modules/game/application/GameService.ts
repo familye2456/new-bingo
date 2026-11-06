@@ -664,19 +664,14 @@ export class GameService {
 
     // When filtering by date, skip the take limit so all matching games are returned
     if (date === 'today') {
-      // Daily profit period: 6:00 AM – 6:00 AM Ethiopian time (EAT = UTC+3)
-      // 6:00 AM EAT = 03:00 UTC
-      const EAT_OFFSET_HOURS = 3;
-      const DAY_START_HOUR_EAT = 6;
+      // Daily profit period: 12:00 AM – 11:59 PM Ethiopian time (EAT = UTC+3)
+      // Midnight EAT (00:00) = 21:00 UTC of the previous calendar day
+      const EAT_OFFSET_MS = 3 * 60 * 60 * 1000;
       const now = new Date();
-      // Current hour in EAT
-      const nowEATHour = (now.getUTCHours() + EAT_OFFSET_HOURS) % 24;
-      // If current EAT time is before 6 AM, the period started yesterday at 6 AM EAT
-      const daysBack = nowEATHour < DAY_START_HOUR_EAT ? 1 : 0;
-      const periodStart = new Date(now);
-      periodStart.setUTCDate(periodStart.getUTCDate() - daysBack);
-      // Set to 03:00 UTC which equals 06:00 AM EAT
-      periodStart.setUTCHours(DAY_START_HOUR_EAT - EAT_OFFSET_HOURS, 0, 0, 0);
+      // Shift now to EAT, zero out time to get EAT midnight, then shift back to UTC
+      const nowEAT = new Date(now.getTime() + EAT_OFFSET_MS);
+      nowEAT.setUTCHours(0, 0, 0, 0); // midnight in EAT coordinates
+      const periodStart = new Date(nowEAT.getTime() - EAT_OFFSET_MS); // convert back to UTC
       where.createdAt = MoreThanOrEqual(periodStart);
       return this.gameRepo.find({ where, order: { createdAt: 'DESC' } });
     }
