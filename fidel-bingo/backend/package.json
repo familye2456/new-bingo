@@ -14,6 +14,7 @@
     "seed:cartelas": "ts-node src/scripts/seedCartelas.ts"
   },
   "dependencies": {
+    "reflect-metadata": "^0.1.13",
     "@types/bcryptjs": "^2.4.2",
     "@types/compression": "^1.7.2",
     "@types/cookie-parser": "^1.4.10",
