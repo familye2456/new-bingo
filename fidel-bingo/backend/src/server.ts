@@ -92,6 +92,21 @@ app.use('/api/games', rateLimit({
   message: { success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many game creation requests' } },
 }));
 
+// ── Database readiness guard ────────────────────────────────────────────────
+// The HTTP server starts listening immediately, but TypeORM only builds its
+// entity metadata once AppDataSource.initialize() completes. Requests arriving
+// before that (cold start / slow DB connect) must not reach the repository layer,
+// otherwise TypeORM throws EntityMetadataNotFoundError ("No metadata for X").
+app.use('/api', (_req, res, next) => {
+  if (!AppDataSource.isInitialized) {
+    return res.status(503).json({
+      success: false,
+      error: { code: 'DB_NOT_READY', message: 'Database is not ready yet' },
+    });
+  }
+  next();
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/games', gameRoutes);
 app.use('/api/users', userRoutes);

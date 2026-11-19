@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { EntityMetadataNotFoundError } from 'typeorm';
 import { logger } from '../infrastructure/logger';
 
 export class AppError extends Error {
@@ -17,6 +18,13 @@ export const errorHandler = (err: Error, req: Request, res: Response, _next: Nex
     return res.status(err.statusCode).json({
       success: false,
       error: { code: err.code, message: err.message },
+    });
+  }
+
+  if (err instanceof EntityMetadataNotFoundError) {
+    return res.status(503).json({
+      success: false,
+      error: { code: 'DB_NOT_READY', message: 'Database is not ready yet' },
     });
   }
 
