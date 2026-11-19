@@ -21,6 +21,18 @@ api.interceptors.response.use(
     const original = error.config;
     // Don't redirect if offline
     if (!navigator.onLine) return Promise.reject(error);
+    // Backend DB still initializing (cold start) — retry with exponential backoff
+    const retryCfg = original as any;
+    const isDbNotReady =
+      error.response?.status === 503 && error.response?.data?.error?.code === 'DB_NOT_READY';
+    if (isDbNotReady && !retryCfg?._retryDb) {
+      retryCfg._retryDb = true;
+      const attempt = retryCfg._dbAttempt ?? 0;
+      retryCfg._dbAttempt = attempt + 1;
+      const backoff = Math.min(8000, 500 * 2 ** attempt);
+      await new Promise((r) => setTimeout(r, backoff));
+      return api(retryCfg);
+    }
     // Only handle 401s, and don't retry refresh calls
     if (
       error.response?.status === 401 &&
